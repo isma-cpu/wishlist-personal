@@ -169,7 +169,11 @@
             {
                 groupTitle: "NICHOS DROPSHIPPING", groupId: "nichos",
                 collections: [
-                    { id: "nichos-sakura", name: "Sakura Kits" },
+                    { id: "nichos-sakura", name: "Sakura Kits", subCols: [
+                        { id: "sakura-sub-1", name: "Subcolección 1" },
+                        { id: "sakura-sub-2", name: "Subcolección 2" },
+                        { id: "sakura-sub-3", name: "Subcolección 3" }
+                    ] },
                     { id: "nichos-brasil", name: "Brasil Kits" },
                     { id: "nichos-spain", name: "Spain Kits" }
                 ]
@@ -214,6 +218,17 @@
                 groupTitle: "CONSEGUIDAS", groupId: "conseguidas",
                 collections: [{ id: CONSEGUIDAS_ID, name: "Conseguidas" }]
             });
+
+            // Sakura Kits: garantizar que tiene subcolecciones (sin tocar el resto)
+            const sakura = structure.flatMap(g => g.collections).find(c => c.id === 'nichos-sakura');
+            if (sakura && !Array.isArray(sakura.subCols)) {
+                sakura.subCols = [
+                    { id: "sakura-sub-1", name: "Subcolección 1" },
+                    { id: "sakura-sub-2", name: "Subcolección 2" },
+                    { id: "sakura-sub-3", name: "Subcolección 3" }
+                ];
+                changed = true;
+            }
 
             if (changed) { try { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); } catch(e) {} }
         })();
@@ -301,32 +316,35 @@
             }
 
             const zip = new JSZip();
+            const safe = (s) => s.replace(/[/\\?%*:|"<>]/g, '_');
+
+            const zipAddItems = (folder, items) => {
+                items.forEach((item, idx) => {
+                    if (item && item.src && item.src.includes('base64,')) {
+                        const parts = item.src.split(';base64,');
+                        const mime = parts[0].replace('data:', '');
+                        const ext = mime.includes('png') ? 'png' : 'jpg';
+                        let extraName = "";
+                        if (item.nameNumber) extraName += `_${safe(item.nameNumber)}`;
+                        if (item.patch) extraName += `_parche-${safe(item.patch)}`;
+                        folder.file(`foto_${idx + 1}${extraName}.${ext}`, parts[1], { base64: true });
+                    }
+                });
+            };
 
             structure.forEach(group => {
                 group.collections.forEach(col => {
                     const items = db[col.id] || [];
                     if (items.length > 0) {
-                        // Crear carpeta organizada con el nombre de la colección
-                        const folderName = col.name.replace(/[/\\?%*:|"<>]/g, '_');
-                        const folder = zip.folder(folderName);
-
-                        items.forEach((item, idx) => {
-                            if (item && item.src && item.src.includes('base64,')) {
-                                const parts = item.src.split(';base64,');
-                                const mime = parts[0].replace('data:', '');
-                                const ext = mime.includes('png') ? 'png' : 'jpg';
-                                const base64Data = parts[1];
-
-                                // Nombre descriptivo para el archivo
-                                let extraName = "";
-                                if (item.nameNumber) extraName += `_${item.nameNumber.replace(/[/\\?%*:|"<>]/g, '_')}`;
-                                if (item.patch) extraName += `_parche-${item.patch.replace(/[/\\?%*:|"<>]/g, '_')}`;
-
-                                const filename = `foto_${idx + 1}${extraName}.${ext}`;
-                                folder.file(filename, base64Data, { base64: true });
-                            }
-                        });
+                        zipAddItems(zip.folder(safe(col.name)), items);
                     }
+                    // Subcolecciones -> subcarpetas dentro de la colección
+                    (col.subCols || []).forEach(sub => {
+                        const sItems = db[sub.id] || [];
+                        if (sItems.length > 0) {
+                            zipAddItems(zip.folder(safe(col.name)).folder(safe(sub.name)), sItems);
+                        }
+                    });
                 });
             });
 
@@ -396,11 +414,18 @@
                 alert("Debes entrar a una colección (ej: Shorts, Camisetas...) para poder pegar una imagen.");
                 return;
             }
+            // Si la vista actual usa subcolecciones, pegar en la primera subcolección
+            let pasteTarget = currentView;
+            const cvCol = structure.flatMap(g => g.collections).find(c => c.id === currentView);
+            if (cvCol && Array.isArray(cvCol.subCols)) {
+                if (!cvCol.subCols.length) { alert("Crea primero una subcolección para poder pegar una imagen aquí."); return; }
+                pasteTarget = cvCol.subCols[0].id;
+            }
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             let foundImage = false;
             for (let index in items) {
                 if (items[index].kind === 'file' && items[index].type.startsWith('image/')) {
-                    handleFiles([items[index].getAsFile()], currentView);
+                    handleFiles([items[index].getAsFile()], pasteTarget);
                     foundImage = true;
                 }
             }
@@ -464,6 +489,10 @@
             e.stopPropagation(); e.preventDefault();
             e.currentTarget.classList.remove('sidebar-drag-over');
 
+            // Si la colección destino usa subcolecciones, redirigir a la primera
+            const tCol = structure.flatMap(g => g.collections).find(c => c.id === targetColId);
+            if (tCol && Array.isArray(tCol.subCols) && tCol.subCols.length) targetColId = tCol.subCols[0].id;
+
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 handleFiles(e.dataTransfer.files, targetColId);
                 return false;
@@ -501,6 +530,13 @@
                 const group = structure.find(g => g.groupId === targetId);
                 const col = group.collections.find(c => c.id === extraId);
                 inputEl.value = col.name;
+            } else if (action === 'add-subcollection') {
+                titleEl.innerHTML = "➕ NUEVA SUBCOLECCIÓN"; inputEl.placeholder = "Nombre de la subcolección...";
+            } else if (action === 'edit-subcollection') {
+                titleEl.innerHTML = "✏️ RENOMBRAR SUBCOLECCIÓN";
+                const parent = structure.flatMap(g => g.collections).find(c => c.id === targetId);
+                const sub = parent && (parent.subCols || []).find(s => s.id === extraId);
+                inputEl.value = sub ? sub.name : "";
             }
 
             modal.classList.remove('hidden');
@@ -539,6 +575,23 @@
                     col.name = val;
                     saveStructure(); init();
                 }
+            } else if (action === 'add-subcollection') {
+                if(val) {
+                    const parent = structure.flatMap(g => g.collections).find(c => c.id === targetId);
+                    if (parent) {
+                        if (!Array.isArray(parent.subCols)) parent.subCols = [];
+                        const newId = `sakura-sub-${Date.now()}`;
+                        parent.subCols.push({ id: newId, name: val });
+                        if (!db[newId]) db[newId] = [];
+                        saveStructure(); saveDB(); init(); showView(targetId);
+                    }
+                }
+            } else if (action === 'edit-subcollection') {
+                if(val) {
+                    const parent = structure.flatMap(g => g.collections).find(c => c.id === targetId);
+                    const sub = parent && (parent.subCols || []).find(s => s.id === extraId);
+                    if (sub) { sub.name = val; saveStructure(); init(); showView(targetId); }
+                }
             }
             closeCustomInput();
         };
@@ -553,6 +606,17 @@
         window.openBatchDeleteModal = function() {
             deleteContext = { mode: 'batch' };
             document.getElementById('delete-confirm-text').innerText = `¿Estás seguro de que deseas eliminar las ${selectedItems.size} imágenes seleccionadas?`;
+            document.getElementById('delete-confirm-modal').classList.remove('hidden');
+        };
+
+        window.deleteSubCollection = function(parentColId, subId, event) {
+            if (event) event.stopPropagation();
+            const parent = structure.flatMap(g => g.collections).find(c => c.id === parentColId);
+            const sub = parent && (parent.subCols || []).find(s => s.id === subId);
+            const n = (db[subId] || []).length;
+            deleteContext = { mode: 'subcollection', colId: parentColId, subId: subId };
+            document.getElementById('delete-confirm-text').innerText =
+                `¿Eliminar la subcolección «${sub ? sub.name : ''}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`);
             document.getElementById('delete-confirm-modal').classList.remove('hidden');
         };
 
@@ -577,8 +641,15 @@
                     toDelete[c].forEach(idx => db[c].splice(idx, 1));
                 }
                 selectedItems.clear();
-                toggleSelectMode(); 
+                toggleSelectMode();
                 saveDB();
+            } else if (deleteContext.mode === 'subcollection') {
+                const parent = structure.flatMap(g => g.collections).find(c => c.id === deleteContext.colId);
+                if (parent && Array.isArray(parent.subCols)) {
+                    parent.subCols = parent.subCols.filter(s => s.id !== deleteContext.subId);
+                }
+                delete db[deleteContext.subId];
+                saveStructure(); saveDB(); init();
             }
             closeDeleteModal();
         };
@@ -637,11 +708,21 @@
                 list.appendChild(title);
                 
                 group.collections.forEach(col => {
-                    const btn = document.createElement('button');
-                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
-                    btn.innerText = col.name;
-                    btn.onclick = () => moveSelectedTo(col.id);
-                    list.appendChild(btn);
+                    if (!Array.isArray(col.subCols)) {
+                        const btn = document.createElement('button');
+                        btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
+                        btn.innerText = col.name;
+                        btn.onclick = () => moveSelectedTo(col.id);
+                        list.appendChild(btn);
+                    } else {
+                        col.subCols.forEach(sub => {
+                            const btn = document.createElement('button');
+                            btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
+                            btn.innerText = `${col.name} · ${sub.name}`;
+                            btn.onclick = () => moveSelectedTo(sub.id);
+                            list.appendChild(btn);
+                        });
+                    }
                 });
             });
             document.getElementById('move-multi-modal').classList.remove('hidden');
@@ -710,6 +791,10 @@
             group.collections[index] = group.collections[newIndex];
             group.collections[newIndex] = temp;
             saveStructure(); init();
+        };
+
+        window.addSubCollection = function(parentColId, event) {
+            openInput('add-subcollection', parentColId, null, event);
         };
 
         // Reordenar bloques (grupos) enteros
@@ -830,7 +915,10 @@
             sidebarNav.innerHTML = ''; mainContent.innerHTML = '';
 
             structure.forEach((group, gi) => {
-                group.collections.forEach(col => { if (!db[col.id]) db[col.id] = []; });
+                group.collections.forEach(col => {
+                    if (!db[col.id]) db[col.id] = [];
+                    (col.subCols || []).forEach(sub => { if (!db[sub.id]) db[sub.id] = []; });
+                });
                 const groupMenu = document.createElement('div');
                 groupMenu.innerHTML = `
                     <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1 flex items-center justify-between gap-2">
@@ -864,22 +952,58 @@
                     ul.appendChild(li);
 
                     const colSection = document.createElement('section');
-                    colSection.id = `sec-${col.id}`; 
-                    colSection.className = "collection-section hidden p-4 -m-4 transition-all duration-300"; 
-                    colSection.innerHTML = `
+                    colSection.id = `sec-${col.id}`;
+                    colSection.className = "collection-section hidden p-4 -m-4 transition-all duration-300";
+
+                    const headerHTML = `
                         <div class="flex items-center gap-4 mb-6 border-b border-zinc-800 pb-4 transition-colors">
                             <div class="w-3 h-3 rounded-full bg-[#39FF14] shadow-[0_0_8px_#39FF14]"></div>
                             <h2 class="text-3xl font-black text-white tracking-wide uppercase transition-colors pointer-events-none">${col.name}</h2>
                             <span class="text-sm font-mono text-zinc-500 ml-auto pointer-events-none" id="count-${col.id}">0 u.</span>
-                        </div>
-                        <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-                            <div id="dropzone-${col.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-2 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none z-10 relative">
-                                <span class="text-xl mb-1 opacity-50 pointer-events-none">➕</span>
-                                <span class="text-[9px] text-zinc-500 uppercase tracking-wide pointer-events-none">Subir archivo</span>
+                        </div>`;
+
+                    if (Array.isArray(col.subCols)) {
+                        // --- Colección con SUBCOLECCIONES (columnas) ---
+                        const subCardsHTML = col.subCols.map(sub => `
+                            <div id="subsec-${sub.id}" class="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3 transition-all">
+                                <div class="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
+                                    <div class="w-2 h-2 rounded-full bg-[#39FF14]/70 shrink-0"></div>
+                                    <h3 class="font-bold text-white text-sm uppercase tracking-wide truncate flex-1">${sub.name}</h3>
+                                    <span class="text-[10px] font-mono text-zinc-500 shrink-0" id="count-${sub.id}">0</span>
+                                    <button onclick="openInput('edit-subcollection', '${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 transition-colors" title="Renombrar subcolección">✏️</button>
+                                    <button onclick="deleteSubCollection('${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 transition-colors" title="Eliminar subcolección">✕</button>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                    <div id="dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none">
+                                        <span class="text-lg opacity-50 pointer-events-none">➕</span>
+                                    </div>
+                                    <div id="grid-${sub.id}" class="contents"></div>
+                                </div>
+                            </div>`).join('');
+
+                        const emptyHTML = `<p class="text-zinc-600 font-mono text-sm">Aún no hay subcolecciones. Pulsa «➕ Nueva subcolección» para crear la primera.</p>`;
+
+                        colSection.innerHTML = `
+                            ${headerHTML}
+                            <button onclick="addSubCollection('${col.id}', event)" class="mb-5 px-4 py-2 border border-[#39FF14]/60 bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded hover:bg-[#39FF14] hover:text-black transition-all flex items-center gap-2 cursor-pointer">
+                                ➕ Nueva subcolección
+                            </button>
+                            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                ${col.subCols.length ? subCardsHTML : emptyHTML}
                             </div>
-                            <div id="grid-${col.id}" class="contents"></div>
-                        </div>
-                    `;
+                        `;
+                    } else {
+                        colSection.innerHTML = `
+                            ${headerHTML}
+                            <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+                                <div id="dropzone-${col.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-2 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none z-10 relative">
+                                    <span class="text-xl mb-1 opacity-50 pointer-events-none">➕</span>
+                                    <span class="text-[9px] text-zinc-500 uppercase tracking-wide pointer-events-none">Subir archivo</span>
+                                </div>
+                                <div id="grid-${col.id}" class="contents"></div>
+                            </div>
+                        `;
+                    }
                     mainContent.appendChild(colSection);
                 });
 
@@ -889,8 +1013,41 @@
                 groupMenu.appendChild(ul); sidebarNav.appendChild(groupMenu);
             });
 
-            structure.forEach(group => { group.collections.forEach(col => { setupDropzone(col.id); }); });
+            structure.forEach(group => { group.collections.forEach(col => {
+                if (Array.isArray(col.subCols)) { col.subCols.forEach(sub => setupSubDropzone(sub.id)); }
+                else { setupDropzone(col.id); }
+            }); });
             updateAll(); showView(currentView);
+        }
+
+        // Dropzone para cada subcolección (columna dentro de Sakura Kits)
+        function setupSubDropzone(subId) {
+            const box = document.getElementById(`subsec-${subId}`);
+            const dz = document.getElementById(`dropzone-${subId}`);
+            if (!box) return;
+
+            if (dz) {
+                dz.addEventListener('click', () => {
+                    const input = document.createElement('input');
+                    input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+                    input.onchange = () => handleFiles(input.files, subId);
+                    input.click();
+                });
+            }
+
+            ['dragenter', 'dragover'].forEach(eName => {
+                box.addEventListener(eName, e => {
+                    if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); box.classList.add('section-drop-active'); }
+                }, false);
+            });
+            ['dragleave', 'drop'].forEach(eName => {
+                box.addEventListener(eName, e => {
+                    if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); box.classList.remove('section-drop-active'); }
+                }, false);
+            });
+            box.addEventListener('drop', e => {
+                if (e.dataTransfer.types.includes('Files')) { e.stopPropagation(); handleFiles(e.dataTransfer.files, subId); }
+            });
         }
 
         // --- EVENTOS DROPZONE GLOBALES ---
@@ -975,6 +1132,34 @@
                             allImages.push({ ...item, colId: col.id, index: index });
                             grid.appendChild(createImageCard(item, col.id, index, false));
                         });
+                    }
+
+                    // --- SUBCOLECCIONES ---
+                    if (Array.isArray(col.subCols)) {
+                        let parentTotal = 0;
+                        col.subCols.forEach(sub => {
+                            const sItems = db[sub.id] || [];
+                            parentTotal += sItems.length;
+                            const sCount = document.getElementById(`count-${sub.id}`);
+                            if (sCount) sCount.innerText = sItems.length;
+                            const sGrid = document.getElementById(`grid-${sub.id}`);
+                            if (sGrid) {
+                                sGrid.innerHTML = '';
+                                sItems.forEach((item, index) => {
+                                    if (item.customization && !item.nameNumber) { item.nameNumber = item.customization; delete item.customization; }
+                                    allImages.push({ ...item, colId: sub.id, index: index });
+                                    sGrid.appendChild(createImageCard(item, sub.id, index, false));
+                                });
+                            }
+                        });
+                        const pCount = document.getElementById(`count-${col.id}`);
+                        if (pCount) pCount.innerText = `${parentTotal} u.`;
+                        const pBadge = document.getElementById(`badge-${col.id}`);
+                        if (pBadge) {
+                            pBadge.innerText = parentTotal;
+                            if (parentTotal > 0) { pBadge.classList.replace('bg-zinc-900', 'bg-neon-dim'); pBadge.classList.replace('text-zinc-600', 'text-neon'); }
+                            else { pBadge.classList.replace('bg-neon-dim', 'bg-zinc-900'); pBadge.classList.replace('text-neon', 'text-zinc-600'); }
+                        }
                     }
                 });
             });
