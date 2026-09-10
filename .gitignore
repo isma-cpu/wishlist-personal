@@ -1,0 +1,3 @@
+backups/
+*.json
+.DS_Store

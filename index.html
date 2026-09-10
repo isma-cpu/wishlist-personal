@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WISHLIST ⚽ - Pro Manager</title>
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👕</text></svg>">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        html { scroll-behavior: smooth; }
+        body { background-color: #000000; color: #e5e7eb; }
+        .hidden { display: none !important; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #000000; }
+        ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #39FF14; }
+
+        .text-neon { color: #39FF14; text-shadow: 0 0 5px rgba(57, 255, 20, 0.5); }
+        .border-neon { border-color: #39FF14; box-shadow: 0 0 8px rgba(57, 255, 20, 0.3); }
+        .hover-neon:hover { border-color: #39FF14; box-shadow: 0 0 12px rgba(57, 255, 20, 0.6); }
+        .bg-neon-dim { background-color: rgba(57, 255, 20, 0.1); }
+        
+        .dragging { opacity: 0.3; transform: scale(0.95); transition: transform 0.2s; }
+        .drag-over { border-color: #39FF14 !important; box-shadow: inset 0 0 20px rgba(57, 255, 20, 0.6) !important; transform: scale(0.98); }
+        .cursor-grab { cursor: grab; }
+        .cursor-grabbing { cursor: grabbing !important; }
+        
+        .sidebar-drag-over { background-color: rgba(57, 255, 20, 0.2) !important; border-right: 4px solid #39FF14; }
+
+        .selected-card { border-color: #39FF14 !important; box-shadow: 0 0 15px rgba(57, 255, 20, 0.5); transform: scale(0.97); }
+        .selected-card::after { content: '✓'; position: absolute; top: 10px; right: 10px; background: #39FF14; color: black; font-weight: bold; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 30; }
+        
+        .section-drop-active { background-color: rgba(57, 255, 20, 0.05); border: 2px dashed #39FF14; border-radius: 1rem; }
+    </style>
+</head>
+<body class="font-sans min-h-screen flex flex-col md:flex-row selection:bg-[#39FF14] selection:text-black">
+
+    <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
+        <button class="absolute top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer">&times;</button>
+        <div class="relative">
+            <img id="modal-img" class="max-h-[90vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-lg" />
+            <div id="modal-customization" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 border border-[#39FF14] text-center px-4 py-2 rounded-lg font-mono text-sm hidden shadow-[0_0_15px_rgba(0,0,0,0.8)]"></div>
+        </div>
+    </div>
+
+    <div id="custom-input-modal" class="fixed inset-0 bg-black/90 hidden z-[200] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
+        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-lg shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm transform scale-100 transition-all">
+            <h3 id="custom-input-title" class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase flex items-center gap-2"></h3>
+            <input type="text" id="custom-input-field" class="w-full bg-black border border-zinc-700 text-white px-4 py-3 font-mono focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14] rounded-md mb-6 transition-all placeholder:text-zinc-600" autocomplete="off">
+            <div class="flex justify-end gap-3">
+                <button onclick="closeCustomInput()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+                <button onclick="saveCustomInput()" class="px-5 py-2 text-xs font-bold font-mono bg-[#39FF14] text-black rounded-md hover:bg-white transition-colors shadow-[0_0_15px_rgba(57,255,20,0.4)] cursor-pointer">GUARDAR</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="delete-confirm-modal" class="fixed inset-0 bg-black/90 hidden z-[250] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
+        <div class="bg-[#0a0a0a] border border-red-500 p-6 rounded-lg shadow-[0_0_30px_rgba(239,68,68,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
+            <h3 class="text-xl font-black tracking-wider text-red-500 mb-3 uppercase flex flex-col items-center gap-2">
+                <span class="text-3xl">⚠️</span> Confirmar Eliminación
+            </h3>
+            <p id="delete-confirm-text" class="text-zinc-400 font-mono text-sm mb-6"></p>
+            <div class="flex justify-center gap-4">
+                <button onclick="closeDeleteModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+                <button id="delete-confirm-btn" class="px-5 py-2 text-xs font-bold font-mono bg-red-600 text-white rounded-md hover:bg-red-500 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.4)] cursor-pointer">ELIMINAR</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="move-multi-modal" class="fixed inset-0 bg-black/95 hidden z-[200] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-blue-400 p-6 rounded-lg shadow-[0_0_30px_rgba(96,165,250,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <h3 class="text-lg font-black tracking-wider text-blue-400 mb-4 uppercase">Mover a...</h3>
+            <div id="move-multi-list" class="space-y-2 mb-6"></div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeMoveMultiModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="multi-action-bar" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900 border border-[#39FF14] px-6 py-3 rounded-full shadow-[0_0_20px_rgba(57,255,20,0.4)] z-[90] hidden items-center gap-4 transition-all">
+        <span class="text-[#39FF14] font-mono text-sm font-bold"><span id="multi-count">0</span> seleccionados</span>
+        <div class="h-4 w-px bg-zinc-700"></div>
+        <button onclick="openMoveMultiModal()" class="text-blue-400 hover:text-blue-300 text-sm font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer">
+            Mover ➔
+        </button>
+        <button onclick="openBatchDeleteModal()" class="text-red-400 hover:text-red-300 text-sm font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer">
+            ✕ Eliminar
+        </button>
+    </div>
+
+    <aside class="w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-0 md:h-screen overflow-y-auto">
+        <div class="mb-6 cursor-pointer group" onclick="showView('home')" title="Volver al inicio">
+            <h1 class="text-3xl font-black tracking-tighter text-neon mb-1 flex items-center gap-2">
+                WISHLIST ⚽
+            </h1>
+            <p class="text-xs text-zinc-500 font-mono tracking-widest uppercase group-hover:text-[#39FF14] transition-colors">← Inicio (Últimas Añadidas)</p>
+        </div>
+
+        <button onclick="toggleSelectMode()" id="btn-select-mode" class="mb-4 w-full py-2 border border-zinc-700 text-zinc-400 font-mono text-xs uppercase tracking-widest rounded hover:border-[#39FF14] hover:text-[#39FF14] transition-colors flex justify-center items-center gap-2 cursor-pointer">
+            ☑️ Activar Selección
+        </button>
+
+        <div class="mb-8 space-y-2">
+            <button onclick="downloadAllImagesZip()" class="w-full py-2 border border-[#39FF14] bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded hover:bg-[#39FF14] hover:text-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_10px_rgba(57,255,20,0.2)]">
+                <span>🖼️</span> Descargar Fotos (ZIP)
+            </button>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="exportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guardar copia para importar más adelante">
+                    <span>💾</span>
+                    <span>Copia JSON</span>
+                </button>
+                <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar datos desde copia JSON">
+                    <span>📂</span>
+                    <span>Cargar JSON</span>
+                    <input type="file" accept=".json" class="hidden" id="import-input" onchange="importBackupJSON(event)">
+                </label>
+            </div>
+        </div>
+
+        <nav id="sidebar-nav" class="space-y-8 flex-1"></nav>
+    </aside>
+
+    <main class="flex-1 p-6 md:p-10 overflow-x-hidden relative" id="main-drop-area">
+        <section id="recent-section" class="mb-16 hidden">
+            <div class="flex items-center gap-3 mb-6 border-b border-zinc-800 pb-3">
+                <span class="text-2xl">⚡</span>
+                <h2 class="text-2xl font-bold text-white tracking-wide">Últimas Añadidas</h2>
+            </div>
+            <div id="recent-grid" class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3"></div>
+        </section>
+        <div id="main-content" class="space-y-10"></div>
+    </main>
+
+    <script>
+        localforage.config({ name: 'WishlistApp', storeName: 'images_db' });
+
+        const defaultStructure = [
+            {
+                groupTitle: "REVENTA", groupId: "reventa",
+                collections: [
+                    { id: "rev-retro", name: "Retro" }, { id: "rev-player", name: "Player Version" },
+                    { id: "rev-fan", name: "Fan Version" }, { id: "rev-personalizadas", name: "Personalizadas" }
+                ]
+            },
+            {
+                groupTitle: "PERSONAL", groupId: "personal",
+                collections: [
+                    { id: "per-camisetas", name: "Camisetas" }, { id: "per-cantantes", name: "Camisetas de cantantes" },
+                    { id: "per-entreno", name: "Camisetas Entreno" }, { id: "per-retro", name: "Camisetas Retro" },
+                    { id: "per-manega-llarga", name: "Camisetas Manga Larga" }, { id: "per-polos", name: "Polos" },
+                    { id: "per-entrenamiento-c", name: "Conjuntos Entreno Corto" }, { id: "per-entrenamiento-l", name: "Conjuntos Entreno Largos" },
+                    { id: "per-shorts", name: "Shorts" }, { id: "per-chaquetas", name: "Chaquetas/Cortavientos" },
+                    { id: "per-abrigos", name: "Abrigos" }, { id: "per-otros", name: "Otros" }
+                ]
+            }
+        ];
+
+        let structure;
+        try {
+            structure = JSON.parse(localStorage.getItem('wishlist_structure_v2'));
+            if (!structure || !Array.isArray(structure) || !structure[0].collections) structure = defaultStructure;
+        } catch(e) { structure = defaultStructure; }
+
+        let db = {};
+        let currentView = 'home';
+        let isSelectMode = false;
+        let selectedItems = new Set();
+        
+        let editContext = { action: null, targetId: null, extraId: null };
+        let deleteContext = { mode: null, colId: null, index: null };
+
+        let dragSrcEl = null; let dragSrcCol = null; let dragSrcIndex = null;
+
+        // --- CARGA Y RASTREO AUTOMÁTICO DE DATOS ---
+        async function loadDB() {
+            try {
+                let dbData = await localforage.getItem('ninjagoal_db_v3') || {};
+                
+                // Rastrear por si existen datos guardados en LocalStorage previo
+                let legacyKeys = ['futbol_gallery_db', 'wishlist-v1', 'ninjagoal_db_v2'];
+                
+                legacyKeys.forEach(lk => {
+                    try {
+                        let raw = localStorage.getItem(lk);
+                        if (raw) {
+                            let parsed = JSON.parse(raw);
+                            for (let key in parsed) {
+                                let items = parsed[key];
+                                if (Array.isArray(items)) {
+                                    items.forEach(item => {
+                                        let normalized = null;
+                                        if (typeof item === 'string' && item.startsWith('data:image')) {
+                                            normalized = { src: item, timestamp: Date.now(), nameNumber: "", patch: "" };
+                                        } else if (typeof item === 'object' && item !== null && item.src) {
+                                            normalized = { 
+                                                src: item.src, timestamp: item.timestamp || Date.now(), 
+                                                nameNumber: item.nameNumber || item.customization || "", patch: item.patch || "" 
+                                            };
+                                        }
+
+                                        if (normalized) {
+                                            let targetCol = key;
+                                            if (!structure.some(g => g.collections.some(c => c.id === key))) {
+                                                targetCol = 'per-camisetas'; // Fallback seguro
+                                            }
+                                            if (!dbData[targetCol]) dbData[targetCol] = [];
+                                            let isDup = dbData[targetCol].some(ex => ex.src.substring(0,100) === normalized.src.substring(0,100));
+                                            if (!isDup) dbData[targetCol].unshift(normalized);
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                });
+
+                db = dbData;
+                await saveDB(); 
+                init(); 
+            } catch(e) {
+                console.error("Error cargando DB:", e);
+                db = {}; init();
+            }
+        }
+
+        function saveStructure() { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); }
+        async function saveDB() { await localforage.setItem('ninjagoal_db_v3', db); updateAll(); }
+
+        // --- DESCARGAR TODAS LAS FOTOS EN UN ARCHIVO ZIP DE FOTOS REALES (JPG/PNG) ---
+        async function downloadAllImagesZip() {
+            if (!window.JSZip) {
+                alert("Cargando la herramienta de descarga... Inténtalo de nuevo en 2 segundos.");
+                return;
+            }
+
+            let totalImages = 0;
+            for (let colId in db) {
+                if (db[colId] && db[colId].length > 0) totalImages += db[colId].length;
+            }
+
+            if (totalImages === 0) {
+                alert("No tienes ninguna foto añadida todavía para descargar.");
+                return;
+            }
+
+            const zip = new JSZip();
+
+            structure.forEach(group => {
+                group.collections.forEach(col => {
+                    const items = db[col.id] || [];
+                    if (items.length > 0) {
+                        // Crear carpeta organizada con el nombre de la colección
+                        const folderName = col.name.replace(/[/\\?%*:|"<>]/g, '_');
+                        const folder = zip.folder(folderName);
+
+                        items.forEach((item, idx) => {
+                            if (item && item.src && item.src.includes('base64,')) {
+                                const parts = item.src.split(';base64,');
+                                const mime = parts[0].replace('data:', '');
+                                const ext = mime.includes('png') ? 'png' : 'jpg';
+                                const base64Data = parts[1];
+
+                                // Nombre descriptivo para el archivo
+                                let extraName = "";
+                                if (item.nameNumber) extraName += `_${item.nameNumber.replace(/[/\\?%*:|"<>]/g, '_')}`;
+                                if (item.patch) extraName += `_parche-${item.patch.replace(/[/\\?%*:|"<>]/g, '_')}`;
+
+                                const filename = `foto_${idx + 1}${extraName}.${ext}`;
+                                folder.file(filename, base64Data, { base64: true });
+                            }
+                        });
+                    }
+                });
+            });
+
+            alert(`📦 Generando paquete ZIP con ${totalImages} imágenes reales en formato JPG/PNG...\n\nPor favor espera unos segundos mientras se prepara la descarga.`);
+
+            try {
+                const content = await zip.generateAsync({ type: "blob" });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(content);
+                const fecha = new Date().toISOString().split('T')[0];
+                a.download = `WISHLIST_Fotos_${fecha}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(a.href);
+            } catch (err) {
+                alert("Ocurrió un error al empaquetar las fotos en ZIP.");
+                console.error(err);
+            }
+        }
+
+        // --- SISTEMA DE COPIA DE SEGURIDAD JSON (PARA RESTAURAR EN LA WEB) ---
+        function exportBackupJSON() {
+            try {
+                const dataStr = JSON.stringify(db);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const fecha = new Date().toISOString().split('T')[0];
+                a.download = `wishlist_respaldo_${fecha}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            } catch (error) {
+                alert("Error al guardar la copia JSON.");
+            }
+        }
+
+        function importBackupJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const importedDb = JSON.parse(e.target.result);
+                    if(confirm('⚠️ ¿Quieres restaurar esta copia de seguridad? Se reemplazarán los datos actuales.')) {
+                        db = importedDb;
+                        await saveDB();
+                        alert('✅ ¡Datos cargados con éxito!');
+                        location.reload();
+                    }
+                } catch(error) {
+                    alert('❌ Archivo de copia no válido.');
+                }
+                document.getElementById('import-input').value = "";
+            };
+            reader.readAsText(file);
+        }
+
+        // --- PASTE GLOBAL ---
+        document.addEventListener('paste', e => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            if (currentView === 'home') {
+                alert("Debes entrar a una colección (ej: Shorts, Camisetas...) para poder pegar una imagen.");
+                return;
+            }
+            const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+            let foundImage = false;
+            for (let index in items) {
+                if (items[index].kind === 'file' && items[index].type.startsWith('image/')) {
+                    handleFiles([items[index].getAsFile()], currentView);
+                    foundImage = true;
+                }
+            }
+            if(foundImage) {
+                const header = document.querySelector(`#sec-${currentView} h2`);
+                if(header) {
+                    header.classList.add('text-[#39FF14]');
+                    setTimeout(() => header.classList.remove('text-[#39FF14]'), 500);
+                }
+            }
+        });
+
+        // --- DRAG & DROP FOTOS ---
+        window.handleDragStart = function(e, colId, index) {
+            if (e.target.closest('.action-btn')) { e.preventDefault(); return; }
+            dragSrcEl = e.currentTarget; dragSrcCol = colId; dragSrcIndex = index;
+            e.dataTransfer.effectAllowed = 'copyMove';
+            e.dataTransfer.setData('text/plain', index);
+            setTimeout(() => { if (dragSrcEl) dragSrcEl.classList.add('dragging'); }, 0);
+        };
+
+        window.handleDragOver = function(e) {
+            e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+            if (e.currentTarget !== dragSrcEl) e.currentTarget.classList.add('drag-over');
+            return false;
+        };
+
+        window.handleDragLeave = function(e) { e.currentTarget.classList.remove('drag-over'); };
+
+        window.handleDrop = function(e, targetColId, targetIndex) {
+            e.stopPropagation(); e.preventDefault();
+            e.currentTarget.classList.remove('drag-over');
+            if (dragSrcEl) dragSrcEl.classList.remove('dragging');
+
+            if (dragSrcCol === targetColId && dragSrcIndex !== targetIndex && dragSrcIndex !== null) {
+                const arr = db[targetColId];
+                const itemToMove = arr.splice(dragSrcIndex, 1)[0];
+                arr.splice(targetIndex, 0, itemToMove);
+                saveDB();
+            }
+            dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
+            return false;
+        };
+
+        window.handleDragEnd = function(e) {
+            if (dragSrcEl) dragSrcEl.classList.remove('dragging');
+            document.querySelectorAll('.image-card-draggable').forEach(el => el.classList.remove('drag-over'));
+            document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('sidebar-drag-over'));
+            dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
+        };
+
+        window.handleSidebarDragOver = function(e, targetColId) {
+            e.preventDefault(); e.dataTransfer.dropEffect = 'copyMove';
+            e.currentTarget.classList.add('sidebar-drag-over');
+            return false;
+        };
+
+        window.handleSidebarDragLeave = function(e) { e.currentTarget.classList.remove('sidebar-drag-over'); };
+
+        window.handleSidebarDrop = function(e, targetColId) {
+            e.stopPropagation(); e.preventDefault();
+            e.currentTarget.classList.remove('sidebar-drag-over');
+
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFiles(e.dataTransfer.files, targetColId);
+                return false;
+            }
+
+            if (dragSrcCol && dragSrcCol !== targetColId && dragSrcIndex !== null) {
+                const itemToMove = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
+                db[targetColId].unshift(itemToMove);
+                saveDB();
+            }
+            if (dragSrcEl) dragSrcEl.classList.remove('dragging');
+            dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
+            return false;
+        };
+
+        // --- MODALES Y TEXTOS ---
+        window.openInput = function(action, targetId, extraId, event) {
+            if(event) event.stopPropagation();
+            editContext = { action, targetId, extraId };
+            const modal = document.getElementById('custom-input-modal');
+            const titleEl = document.getElementById('custom-input-title');
+            const inputEl = document.getElementById('custom-input-field');
+            
+            inputEl.value = "";
+            if (action === 'name') {
+                titleEl.innerHTML = "📝 NOMBRE Y NÚMERO"; inputEl.placeholder = "Ej: MESSI 10";
+                inputEl.value = db[targetId][extraId].nameNumber || "";
+            } else if (action === 'patch') {
+                titleEl.innerHTML = "🛡️ PARCHE"; inputEl.placeholder = "Ej: Champions League 2015";
+                inputEl.value = db[targetId][extraId].patch || "";
+            } else if (action === 'add-collection') {
+                titleEl.innerHTML = "➕ NUEVA COLECCIÓN"; inputEl.placeholder = "Nombre de la colección...";
+            } else if (action === 'edit-collection') {
+                titleEl.innerHTML = "✏️ EDITAR COLECCIÓN";
+                const group = structure.find(g => g.groupId === targetId);
+                const col = group.collections.find(c => c.id === extraId);
+                inputEl.value = col.name;
+            }
+
+            modal.classList.remove('hidden');
+            inputEl.focus();
+            inputEl.onkeydown = function(e) {
+                if (e.key === 'Enter') saveCustomInput();
+                if (e.key === 'Escape') closeCustomInput();
+            };
+        };
+
+        window.closeCustomInput = function() {
+            document.getElementById('custom-input-modal').classList.add('hidden');
+            editContext = { action: null, targetId: null, extraId: null };
+        };
+
+        window.saveCustomInput = function() {
+            const val = document.getElementById('custom-input-field').value.trim();
+            const { action, targetId, extraId } = editContext;
+
+            if (action === 'name') {
+                db[targetId][extraId].nameNumber = val; saveDB();
+            } else if (action === 'patch') {
+                db[targetId][extraId].patch = val; saveDB();
+            } else if (action === 'add-collection') {
+                if(val) {
+                    const group = structure.find(g => g.groupId === targetId);
+                    const newId = `custom-${Date.now()}`;
+                    group.collections.push({ id: newId, name: val });
+                    if (!db[newId]) db[newId] = [];
+                    saveStructure(); saveDB(); init(); showView(newId);
+                }
+            } else if (action === 'edit-collection') {
+                if(val) {
+                    const group = structure.find(g => g.groupId === targetId);
+                    const col = group.collections.find(c => c.id === extraId);
+                    col.name = val;
+                    saveStructure(); init();
+                }
+            }
+            closeCustomInput();
+        };
+
+        window.openDeleteModal = function(colId, index, event) {
+            if (event) event.stopPropagation();
+            deleteContext = { mode: 'single', colId, index };
+            document.getElementById('delete-confirm-text').innerText = "¿Estás seguro de que deseas eliminar esta imagen de forma permanente?";
+            document.getElementById('delete-confirm-modal').classList.remove('hidden');
+        };
+
+        window.openBatchDeleteModal = function() {
+            deleteContext = { mode: 'batch' };
+            document.getElementById('delete-confirm-text').innerText = `¿Estás seguro de que deseas eliminar las ${selectedItems.size} imágenes seleccionadas?`;
+            document.getElementById('delete-confirm-modal').classList.remove('hidden');
+        };
+
+        window.closeDeleteModal = function() {
+            document.getElementById('delete-confirm-modal').classList.add('hidden');
+            deleteContext = { mode: null, colId: null, index: null };
+        };
+
+        document.getElementById('delete-confirm-btn').onclick = function() {
+            if (deleteContext.mode === 'single') {
+                db[deleteContext.colId].splice(deleteContext.index, 1);
+                saveDB();
+            } else if (deleteContext.mode === 'batch') {
+                let toDelete = {};
+                selectedItems.forEach(key => {
+                    let [c, i] = key.split('|');
+                    if(!toDelete[c]) toDelete[c] = [];
+                    toDelete[c].push(parseInt(i));
+                });
+                for(let c in toDelete) {
+                    toDelete[c].sort((a,b) => b - a);
+                    toDelete[c].forEach(idx => db[c].splice(idx, 1));
+                }
+                selectedItems.clear();
+                toggleSelectMode(); 
+                saveDB();
+            }
+            closeDeleteModal();
+        };
+
+        // --- SELECCIÓN MÚLTIPLE ---
+        window.toggleSelectMode = function() {
+            isSelectMode = !isSelectMode;
+            const btn = document.getElementById('btn-select-mode');
+            
+            if(isSelectMode) {
+                btn.classList.replace('text-zinc-400', 'text-[#39FF14]');
+                btn.classList.replace('border-zinc-700', 'border-[#39FF14]');
+                btn.classList.add('bg-zinc-900');
+                btn.innerHTML = "☑️ Desactivar Selección";
+            } else {
+                btn.classList.replace('text-[#39FF14]', 'text-zinc-400');
+                btn.classList.replace('border-[#39FF14]', 'border-zinc-700');
+                btn.classList.remove('bg-zinc-900');
+                btn.innerHTML = "☑️ Activar Selección";
+                selectedItems.clear();
+                updateActionBar();
+            }
+            updateAll(); 
+        };
+
+        window.toggleSelection = function(colId, index, element) {
+            const key = `${colId}|${index}`;
+            if (selectedItems.has(key)) {
+                selectedItems.delete(key);
+                element.classList.remove('selected-card');
+            } else {
+                selectedItems.add(key);
+                element.classList.add('selected-card');
+            }
+            updateActionBar();
+        };
+
+        function updateActionBar() {
+            const bar = document.getElementById('multi-action-bar');
+            document.getElementById('multi-count').innerText = selectedItems.size;
+            if(selectedItems.size > 0) {
+                bar.classList.remove('hidden'); bar.classList.add('flex');
+            } else {
+                bar.classList.add('hidden'); bar.classList.remove('flex');
+            }
+        }
+
+        window.openMoveMultiModal = function() {
+            const list = document.getElementById('move-multi-list');
+            list.innerHTML = '';
+            
+            structure.forEach(group => {
+                const title = document.createElement('div');
+                title.className = "text-[10px] text-zinc-500 font-bold mt-4 mb-2 tracking-widest uppercase";
+                title.innerText = group.groupTitle;
+                list.appendChild(title);
+                
+                group.collections.forEach(col => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
+                    btn.innerText = col.name;
+                    btn.onclick = () => moveSelectedTo(col.id);
+                    list.appendChild(btn);
+                });
+            });
+            document.getElementById('move-multi-modal').classList.remove('hidden');
+        };
+
+        window.closeMoveMultiModal = function() { document.getElementById('move-multi-modal').classList.add('hidden'); };
+
+        function moveSelectedTo(targetColId) {
+            let toMove = {};
+            selectedItems.forEach(key => {
+                let [c, i] = key.split('|');
+                if(!toMove[c]) toMove[c] = [];
+                toMove[c].push(parseInt(i));
+            });
+
+            let itemsToTransfer = [];
+            for(let c in toMove) {
+                toMove[c].sort((a,b) => b - a); 
+                toMove[c].forEach(idx => {
+                    if (c !== targetColId) itemsToTransfer.push(db[c].splice(idx, 1)[0]);
+                });
+            }
+            itemsToTransfer.reverse();
+            db[targetColId].unshift(...itemsToTransfer);
+
+            selectedItems.clear();
+            closeMoveMultiModal();
+            toggleSelectMode();
+            saveDB();
+        }
+
+        function showView(viewId) {
+            currentView = viewId;
+            document.querySelectorAll('.sidebar-link').forEach(el => {
+                el.classList.remove('bg-zinc-900', 'text-[#39FF14]');
+                el.classList.add('text-zinc-400');
+            });
+
+            if (viewId === 'home') {
+                document.querySelectorAll('.collection-section').forEach(el => el.classList.add('hidden'));
+                const allImagesCount = Object.values(db).flat().length;
+                if (allImagesCount > 0) document.getElementById('recent-section').classList.remove('hidden');
+            } else {
+                document.getElementById('recent-section').classList.add('hidden');
+                document.querySelectorAll('.collection-section').forEach(el => el.classList.add('hidden'));
+                const targetSection = document.getElementById('sec-' + viewId);
+                if (targetSection) targetSection.classList.remove('hidden');
+                
+                const activeLink = document.getElementById('link-' + viewId);
+                if (activeLink) {
+                    activeLink.classList.add('bg-zinc-900', 'text-[#39FF14]');
+                    activeLink.classList.remove('text-zinc-400');
+                }
+            }
+        }
+
+        window.moveCollection = function(groupId, colId, direction, event) {
+            event.stopPropagation(); event.preventDefault();
+            const group = structure.find(g => g.groupId === groupId);
+            if (!group) return;
+            const index = group.collections.findIndex(c => c.id === colId);
+            if (index === -1) return;
+            const newIndex = index + direction;
+            if (newIndex < 0 || newIndex >= group.collections.length) return;
+            const temp = group.collections[index];
+            group.collections[index] = group.collections[newIndex];
+            group.collections[newIndex] = temp;
+            saveStructure(); init();
+        };
+
+        function openModal(imgSrc, nameNum, patch, event) {
+            event.stopPropagation();
+            const modal = document.getElementById('image-modal');
+            const modalImg = document.getElementById('modal-img');
+            const modalCust = document.getElementById('modal-customization');
+            
+            modalImg.src = imgSrc;
+            let textHtml = [];
+            if (nameNum) textHtml.push(`<div class="text-[#39FF14] mb-1">📝 ${nameNum}</div>`);
+            if (patch) textHtml.push(`<div class="text-blue-400">🛡️ ${patch}</div>`);
+            
+            if (textHtml.length > 0) {
+                modalCust.innerHTML = textHtml.join('');
+                modalCust.classList.remove('hidden');
+            } else {
+                modalCust.classList.add('hidden');
+            }
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            document.getElementById('image-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                if(!document.getElementById('custom-input-modal').classList.contains('hidden')) closeCustomInput();
+                if(!document.getElementById('move-multi-modal').classList.contains('hidden')) closeMoveMultiModal();
+                if(!document.getElementById('delete-confirm-modal').classList.contains('hidden')) closeDeleteModal();
+            }
+        });
+
+        // --- INICIALIZACIÓN INTERFAZ ---
+        function init() {
+            const sidebarNav = document.getElementById('sidebar-nav');
+            const mainContent = document.getElementById('main-content');
+            
+            sidebarNav.innerHTML = ''; mainContent.innerHTML = '';
+
+            structure.forEach(group => {
+                group.collections.forEach(col => { if (!db[col.id]) db[col.id] = []; });
+                const groupMenu = document.createElement('div');
+                groupMenu.innerHTML = `<h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1">${group.groupTitle}</h3>`;
+                const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6";
+
+                group.collections.forEach(col => {
+                    const li = document.createElement('li');
+                    
+                    li.innerHTML = `
+                        <a href="#" id="link-${col.id}" 
+                           ondragover="handleSidebarDragOver(event, '${col.id}')" 
+                           ondragleave="handleSidebarDragLeave(event)" 
+                           ondrop="handleSidebarDrop(event, '${col.id}')"
+                           onclick="showView('${col.id}'); return false;" 
+                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-[#39FF14] hover:bg-zinc-900 rounded transition-all group select-none relative">
+                            <span class="truncate pointer-events-none">${col.name}</span>
+                            <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
+                                <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
+                                <button onclick="moveCollection('${group.groupId}', '${col.id}', -1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">▲</button>
+                                <button onclick="moveCollection('${group.groupId}', '${col.id}', 1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">▼</button>
+                                <span id="badge-${col.id}" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
+                            </div>
+                        </a>
+                    `;
+                    ul.appendChild(li);
+
+                    const colSection = document.createElement('section');
+                    colSection.id = `sec-${col.id}`; 
+                    colSection.className = "collection-section hidden p-4 -m-4 transition-all duration-300"; 
+                    colSection.innerHTML = `
+                        <div class="flex items-center gap-4 mb-6 border-b border-zinc-800 pb-4 transition-colors">
+                            <div class="w-3 h-3 rounded-full bg-[#39FF14] shadow-[0_0_8px_#39FF14]"></div>
+                            <h2 class="text-3xl font-black text-white tracking-wide uppercase transition-colors pointer-events-none">${col.name}</h2>
+                            <span class="text-sm font-mono text-zinc-500 ml-auto pointer-events-none" id="count-${col.id}">0 u.</span>
+                        </div>
+                        <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+                            <div id="dropzone-${col.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-2 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none z-10 relative">
+                                <span class="text-xl mb-1 opacity-50 pointer-events-none">➕</span>
+                                <span class="text-[9px] text-zinc-500 uppercase tracking-wide pointer-events-none">Subir archivo</span>
+                            </div>
+                            <div id="grid-${col.id}" class="contents"></div>
+                        </div>
+                    `;
+                    mainContent.appendChild(colSection);
+                });
+
+                const addLi = document.createElement('li'); addLi.className = "pt-2";
+                addLi.innerHTML = `<button onclick="openInput('add-collection', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-[#39FF14] transition-colors flex items-center gap-1 font-mono uppercase tracking-wider">➕ Añadir Colección</button>`;
+                ul.appendChild(addLi);
+                groupMenu.appendChild(ul); sidebarNav.appendChild(groupMenu);
+            });
+
+            structure.forEach(group => { group.collections.forEach(col => { setupDropzone(col.id); }); });
+            updateAll(); showView(currentView);
+        }
+
+        // --- EVENTOS DROPZONE GLOBALES ---
+        function setupDropzone(colId) {
+            const sec = document.getElementById(`sec-${colId}`);
+            const dz = document.getElementById(`dropzone-${colId}`);
+            if (!sec) return;
+            
+            if (dz) {
+                dz.addEventListener('click', () => { 
+                    const input = document.createElement('input'); 
+                    input.type = 'file'; input.accept = 'image/*'; input.multiple = true; 
+                    input.onchange = () => handleFiles(input.files, colId); 
+                    input.click(); 
+                });
+            }
+
+            ['dragenter', 'dragover'].forEach(eName => { 
+                sec.addEventListener(eName, e => { 
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault(); 
+                        sec.classList.add('section-drop-active'); 
+                    }
+                }, false); 
+            });
+            
+            ['dragleave', 'drop'].forEach(eName => { 
+                sec.addEventListener(eName, e => { 
+                    if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault(); 
+                        sec.classList.remove('section-drop-active'); 
+                    }
+                }, false); 
+            });
+            
+            sec.addEventListener('drop', e => {
+                if (e.dataTransfer.types.includes('Files')) {
+                    handleFiles(e.dataTransfer.files, colId);
+                }
+            });
+        }
+
+        function handleFiles(files, colId) {
+            ([...files]).forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const max = 800; let w = img.width, h = img.height;
+                        if (w > h) { if (w > max) { h *= max/w; w = max; } } else { if (h > max) { w *= max/h; h = max; } }
+                        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        
+                        // Añadimos en primera posición
+                        db[colId].unshift({ src: canvas.toDataURL('image/jpeg', 0.8), timestamp: Date.now(), nameNumber: "", patch: "" });
+                        saveDB();
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function updateAll() {
+            let allImages = [];
+            structure.forEach(group => {
+                group.collections.forEach(col => {
+                    const items = db[col.id] || [];
+                    const countEl = document.getElementById(`count-${col.id}`); if (countEl) countEl.innerText = `${items.length} u.`;
+                    const badge = document.getElementById(`badge-${col.id}`);
+                    if (badge) {
+                        badge.innerText = items.length;
+                        if(items.length > 0) { badge.classList.replace('bg-zinc-900', 'bg-neon-dim'); badge.classList.replace('text-zinc-600', 'text-neon'); }
+                        else { badge.classList.replace('bg-neon-dim', 'bg-zinc-900'); badge.classList.replace('text-neon', 'text-zinc-600'); }
+                    }
+                    const grid = document.getElementById(`grid-${col.id}`);
+                    if (grid) {
+                        grid.innerHTML = '';
+                        items.forEach((item, index) => {
+                            if (item.customization && !item.nameNumber) { item.nameNumber = item.customization; delete item.customization; }
+                            allImages.push({ ...item, colId: col.id, index: index });
+                            grid.appendChild(createImageCard(item, col.id, index, false));
+                        });
+                    }
+                });
+            });
+            renderRecents(allImages);
+        }
+
+        function createImageCard(item, colId, index, isRecentView) {
+            const div = document.createElement('div');
+            
+            const dragAttrs = (isRecentView || isSelectMode) ? "" : `draggable="true" ondragstart="handleDragStart(event, '${colId}', ${index})" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${colId}', ${index})" ondragend="handleDragEnd(event)"`;
+            
+            const isSelected = selectedItems.has(`${colId}|${index}`);
+            
+            div.className = `image-card-draggable relative aspect-[3/4] bg-zinc-900 rounded-md overflow-hidden border border-zinc-800 transition-all ${isRecentView ? '' : 'hover:border-[#39FF14]'} group ${isSelected ? 'selected-card' : ''}`;
+            
+            if (!isRecentView && !isSelectMode) {
+                div.classList.add('cursor-grab', 'active:cursor-grabbing');
+            } else if (isSelectMode) {
+                div.classList.add('cursor-pointer');
+            }
+
+            div.onclick = (e) => { 
+                if(isSelectMode) {
+                    toggleSelection(colId, index, div);
+                } else {
+                    if(e.target.closest('.action-btn')) return; 
+                    openModal(item.src, item.nameNumber, item.patch, e); 
+                }
+            };
+            
+            let labelsHTML = '';
+            if (item.nameNumber || item.patch) {
+                labelsHTML += `<div class="absolute bottom-0 left-0 right-0 bg-black/90 border-t border-[#39FF14]/50 p-1 text-center truncate z-10 flex flex-col gap-0.5 pointer-events-none">`;
+                if (item.nameNumber) labelsHTML += `<span class="text-[9px] font-mono text-[#39FF14] uppercase tracking-wider leading-tight">📝 ${item.nameNumber}</span>`;
+                if (item.patch) labelsHTML += `<span class="text-[9px] font-mono text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>`;
+                labelsHTML += `</div>`;
+            }
+
+            const actionButtonsVisible = isSelectMode ? "hidden" : "flex";
+
+            div.innerHTML = `
+                <div class="absolute inset-0 z-0" ${dragAttrs}></div>
+                <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none relative z-0" alt="Producto">
+                ${labelsHTML}
+                <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 ${actionButtonsVisible} flex-col justify-between p-2 transition-opacity z-20 pointer-events-none">
+                    <div class="flex justify-end w-full">
+                        <span class="text-white bg-black/80 p-1.5 rounded-md text-[10px] shadow-lg pointer-events-none">🔍</span>
+                    </div>
+                    <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
+                        <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-md text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
+                        <button onclick="openInput('patch', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-md text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
+                        <button onclick="openDeleteModal('${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-red-900/80 border border-red-500/50 text-red-300 rounded-md text-xs hover:bg-red-500 hover:text-white transition-all mt-1" title="Eliminar">✕</button>
+                    </div>
+                </div>
+            `;
+            return div;
+        }
+
+        function renderRecents(allImages) {
+            const recentSection = document.getElementById('recent-section');
+            const recentGrid = document.getElementById('recent-grid');
+            recentGrid.innerHTML = '';
+            if (allImages.length === 0) { recentSection.classList.add('hidden'); return; }
+            allImages.sort((a, b) => b.timestamp - a.timestamp);
+            const top10 = allImages.slice(0, 10);
+            top10.forEach(item => {
+                const card = createImageCard(item, item.colId, item.index, true);
+                card.classList.add('border-[#39FF14]/30'); 
+                recentGrid.appendChild(card);
+            });
+            if (currentView === 'home') { recentSection.classList.remove('hidden'); } else { recentSection.classList.add('hidden'); }
+        }
+
+        window.onload = loadDB;
+    </script>
+</body>
+</html>
