@@ -53,10 +53,9 @@
             <div id="modal-toolbar" class="flex flex-wrap justify-center gap-4 sm:gap-6" onclick="event.stopPropagation()">
                 <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
                 <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
-                <button id="modal-related-btn" onclick="addRelatedImages(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-sky-400 text-sky-400 hover:bg-sky-400 hover:text-black shadow-[0_0_15px_rgba(56,189,248,0.3)]">🔗 Relacionadas</button>
             </div>
 
-            <div id="modal-related" class="w-full max-w-3xl hidden mt-2 mb-4" onclick="event.stopPropagation()"></div>
+            <div id="modal-related" class="w-[92vw] max-w-3xl hidden mt-2 mb-4 rounded-xl transition-all" onclick="event.stopPropagation()"></div>
         </div>
     </div>
 
@@ -426,6 +425,19 @@
         // --- PASTE GLOBAL ---
         document.addEventListener('paste', e => {
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // Si el visor de imagen está abierto, pegar como imagen RELACIONADA
+            const imgModalOpen = !document.getElementById('image-modal').classList.contains('hidden');
+            if (imgModalOpen && getModalItem()) {
+                const cbItems = (e.clipboardData || e.originalEvent.clipboardData).items;
+                const files = [];
+                for (let k in cbItems) {
+                    if (cbItems[k].kind === 'file' && cbItems[k].type.startsWith('image/')) files.push(cbItems[k].getAsFile());
+                }
+                if (files.length) { e.preventDefault(); addRelatedFromFiles(files); }
+                return;
+            }
+
             if (currentView === 'home') {
                 alert("Debes entrar a una colección (ej: Shorts, Camisetas...) para poder pegar una imagen.");
                 return;
@@ -860,10 +872,10 @@
                 obtainedBtn.innerHTML = '✅ Conseguida';
             }
 
-            renderModalRelated();
-
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
+
+            renderModalRelated();
         }
 
         function closeModal() {
@@ -944,20 +956,28 @@
             return db[colId][index];
         }
 
+        // Añade imágenes relacionadas desde una lista de File (subir / arrastrar / pegar)
+        async function addRelatedFromFiles(fileList) {
+            const item = getModalItem();
+            if (!item) return 0;
+            const files = [...(fileList || [])].filter(f => f && f.type && f.type.startsWith('image/'));
+            if (!files.length) return 0;
+            if (!Array.isArray(item.related)) item.related = [];
+            let added = 0;
+            for (const f of files) {
+                try { item.related.push(await fileToResizedDataURL(f)); added++; } catch (e) {}
+            }
+            if (added) await saveDB();
+            renderModalRelated();
+            return added;
+        }
+
         window.addRelatedImages = function(event) {
             if (event) event.stopPropagation();
-            const item = getModalItem();
-            if (!item) return;
+            if (!getModalItem()) return;
             const input = document.createElement('input');
             input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
-            input.onchange = async () => {
-                if (!Array.isArray(item.related)) item.related = [];
-                for (const f of [...input.files]) {
-                    try { item.related.push(await fileToResizedDataURL(f)); } catch (e) {}
-                }
-                await saveDB();
-                renderModalRelated();
-            };
+            input.onchange = () => addRelatedFromFiles(input.files);
             input.click();
         };
 
@@ -983,23 +1003,29 @@
             showMainImage();
         };
 
+        window.relScroll = function(dir) {
+            const track = document.getElementById('modal-related-track');
+            if (track) track.scrollBy({ left: dir * 260, behavior: 'smooth' });
+        };
+
         function renderModalRelated() {
             const box = document.getElementById('modal-related');
-            const relBtn = document.getElementById('modal-related-btn');
             const item = getModalItem();
-            const rel = (item && Array.isArray(item.related)) ? item.related : [];
-            if (relBtn) relBtn.innerHTML = rel.length ? `🔗 Relacionadas (${rel.length})` : '🔗 Relacionadas';
 
             if (!item) { box.classList.add('hidden'); box.innerHTML = ''; return; }
 
+            const rel = Array.isArray(item.related) ? item.related : [];
             const currentSrc = document.getElementById('modal-img').src;
             const viewingRelated = currentSrc && currentSrc !== modalContext.mainSrc;
 
-            if (!rel.length && !viewingRelated) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-
             box.classList.remove('hidden');
+
+            const addTile = `
+                <button onclick="event.stopPropagation(); addRelatedImages(event)" title="Añadir imágenes relacionadas"
+                        class="shrink-0 snap-start h-28 sm:h-36 w-24 sm:w-28 rounded-lg border-2 border-dashed border-zinc-600 bg-zinc-900/50 text-zinc-500 hover:border-[#39FF14] hover:text-[#39FF14] transition-all flex items-center justify-center text-4xl font-thin cursor-pointer">＋</button>`;
+
             const thumbs = rel.map((src, i) => `
-                <div class="relative group shrink-0">
+                <div class="relative group shrink-0 snap-start">
                     <img src="${src}" onclick="event.stopPropagation(); openRelatedImage(${i})"
                          class="h-28 sm:h-36 w-auto rounded-lg border ${src === currentSrc ? 'border-[#39FF14]' : 'border-zinc-700'} object-cover cursor-pointer hover:border-[#39FF14] transition-colors">
                     <button onclick="event.stopPropagation(); removeRelatedImage(${i})" title="Quitar"
@@ -1011,10 +1037,55 @@
                     <span class="text-[11px] font-mono uppercase tracking-widest text-zinc-500">🔗 Imágenes relacionadas${rel.length ? ` (${rel.length})` : ''}</span>
                     ${viewingRelated ? `<button onclick="event.stopPropagation(); showMainImage()" class="text-[11px] font-mono uppercase tracking-widest text-[#39FF14] hover:text-white transition-colors">↩︎ Ver principal</button>` : ''}
                 </div>
-                <div class="flex flex-wrap justify-center gap-4 sm:gap-5 pb-2">
-                    ${thumbs || '<span class="text-zinc-600 font-mono text-xs">Sin imágenes relacionadas todavía.</span>'}
-                </div>`;
+                <div class="relative">
+                    <button id="rel-nav-prev" onclick="event.stopPropagation(); relScroll(-1)" class="hidden absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 z-10 w-8 h-8 rounded-full bg-black/80 border border-zinc-700 text-[#39FF14] items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all">‹</button>
+                    <div id="modal-related-track" class="flex gap-4 sm:gap-5 overflow-x-auto snap-x scroll-smooth py-1 px-1">
+                        ${addTile}
+                        ${thumbs}
+                    </div>
+                    <button id="rel-nav-next" onclick="event.stopPropagation(); relScroll(1)" class="hidden absolute right-0 top-1/2 -translate-y-1/2 translate-x-1 z-10 w-8 h-8 rounded-full bg-black/80 border border-zinc-700 text-[#39FF14] items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all">›</button>
+                </div>
+                <p class="text-center text-[10px] text-zinc-600 font-mono mt-2">Arrastra, pega (Ctrl+V) o pulsa ＋ para añadir</p>`;
+
+            // Mostrar flechas solo si el carrusel se desborda (tras el layout / carga de imgs)
+            const track = document.getElementById('modal-related-track');
+            requestAnimationFrame(updateRelNav);
+            if (track) track.querySelectorAll('img').forEach(im => im.addEventListener('load', updateRelNav, { once: true }));
         }
+
+        function updateRelNav() {
+            const track = document.getElementById('modal-related-track');
+            const overflow = !!track && track.scrollWidth > track.clientWidth + 4;
+            ['rel-nav-prev', 'rel-nav-next'].forEach(id => {
+                const b = document.getElementById(id);
+                if (!b) return;
+                b.classList.toggle('hidden', !overflow);
+                b.classList.toggle('flex', overflow);
+            });
+        }
+
+        // Añadir relacionadas ARRASTRANDO ficheros sobre el visor de imagen abierto
+        (function wireRelatedDrop() {
+            const modal = document.getElementById('image-modal');
+            const box = document.getElementById('modal-related');
+            if (!modal || !box) return;
+            const ringOn = () => box.classList.add('ring-2', 'ring-[#39FF14]', 'ring-offset-2', 'ring-offset-black');
+            const ringOff = () => box.classList.remove('ring-2', 'ring-[#39FF14]', 'ring-offset-2', 'ring-offset-black');
+            const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
+
+            ['dragenter', 'dragover'].forEach(n => modal.addEventListener(n, e => {
+                if (!getModalItem() || !hasFiles(e)) return;
+                e.preventDefault(); e.stopPropagation();
+                ringOn();
+            }));
+            modal.addEventListener('dragleave', e => { if (e.target === modal) ringOff(); });
+            modal.addEventListener('drop', e => {
+                if (!getModalItem() || !hasFiles(e)) return;
+                e.preventDefault(); e.stopPropagation();
+                ringOff();
+                if (e.dataTransfer.files && e.dataTransfer.files.length) addRelatedFromFiles(e.dataTransfer.files);
+            });
+        })();
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
