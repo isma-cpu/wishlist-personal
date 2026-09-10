@@ -41,17 +41,22 @@
 </head>
 <body class="font-sans min-h-screen flex flex-col md:flex-row selection:bg-[#39FF14] selection:text-black">
 
-    <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
-        <button class="absolute top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer">&times;</button>
+    <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
+        <button class="fixed top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer z-[120]">&times;</button>
 
-        <div id="modal-toolbar" class="absolute top-5 left-1/2 -translate-x-1/2 flex gap-2 sm:gap-3 z-[110]" onclick="event.stopPropagation()">
-            <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-3 sm:px-4 py-2 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
-            <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-3 sm:px-4 py-2 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
-        </div>
+        <div class="flex flex-col items-center gap-6 max-h-[92vh] overflow-y-auto py-6 px-2">
+            <div class="relative shrink-0">
+                <img id="modal-img" class="max-h-[65vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-lg" />
+                <div id="modal-customization" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 border border-[#39FF14] text-center px-4 py-2 rounded-lg font-mono text-sm hidden shadow-[0_0_15px_rgba(0,0,0,0.8)]"></div>
+            </div>
 
-        <div class="relative">
-            <img id="modal-img" class="max-h-[90vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-lg" />
-            <div id="modal-customization" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 border border-[#39FF14] text-center px-4 py-2 rounded-lg font-mono text-sm hidden shadow-[0_0_15px_rgba(0,0,0,0.8)]"></div>
+            <div id="modal-toolbar" class="flex flex-wrap justify-center gap-4 sm:gap-6" onclick="event.stopPropagation()">
+                <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
+                <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
+                <button id="modal-related-btn" onclick="addRelatedImages(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-sky-400 text-sky-400 hover:bg-sky-400 hover:text-black shadow-[0_0_15px_rgba(56,189,248,0.3)]">🔗 Relacionadas</button>
+            </div>
+
+            <div id="modal-related" class="w-full max-w-3xl hidden mt-2 mb-4" onclick="event.stopPropagation()"></div>
         </div>
     </div>
 
@@ -328,6 +333,17 @@
                         if (item.nameNumber) extraName += `_${safe(item.nameNumber)}`;
                         if (item.patch) extraName += `_parche-${safe(item.patch)}`;
                         folder.file(`foto_${idx + 1}${extraName}.${ext}`, parts[1], { base64: true });
+                    }
+                    // Imágenes relacionadas -> subcarpeta propia
+                    if (item && Array.isArray(item.related) && item.related.length) {
+                        const rf = folder.folder(`foto_${idx + 1}_relacionadas`);
+                        item.related.forEach((rsrc, ri) => {
+                            if (rsrc && rsrc.includes('base64,')) {
+                                const rp = rsrc.split(';base64,');
+                                const rext = rp[0].includes('png') ? 'png' : 'jpg';
+                                rf.file(`rel_${ri + 1}.${rext}`, rp[1], { base64: true });
+                            }
+                        });
                     }
                 });
             };
@@ -810,7 +826,7 @@
             saveStructure(); init();
         };
 
-        let modalContext = { src: null, colId: null, index: null };
+        let modalContext = { src: null, mainSrc: null, colId: null, index: null };
 
         function openModal(imgSrc, nameNum, patch, event, colId, index) {
             event.stopPropagation();
@@ -818,7 +834,7 @@
             const modalImg = document.getElementById('modal-img');
             const modalCust = document.getElementById('modal-customization');
 
-            modalContext = { src: imgSrc, colId: (colId ?? null), index: (index ?? null) };
+            modalContext = { src: imgSrc, mainSrc: imgSrc, colId: (colId ?? null), index: (index ?? null) };
 
             modalImg.src = imgSrc;
             let textHtml = [];
@@ -844,6 +860,8 @@
                 obtainedBtn.innerHTML = '✅ Conseguida';
             }
 
+            renderModalRelated();
+
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
         }
@@ -857,7 +875,7 @@
         window.copyModalImage = async function(event) {
             if (event) event.stopPropagation();
             const btn = document.getElementById('modal-copy-btn');
-            const src = modalContext.src || document.getElementById('modal-img').src;
+            const src = document.getElementById('modal-img').src || modalContext.src;
             try {
                 const blob = await (await fetch(src)).blob();
                 let outBlob = blob;
@@ -897,6 +915,106 @@
             saveDB();
             closeModal();
         };
+
+        // --- IMÁGENES RELACIONADAS ---
+        function fileToResizedDataURL(file) {
+            return new Promise((resolve, reject) => {
+                if (!file || !file.type.startsWith('image/')) { reject(new Error('no image')); return; }
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const max = 800; let w = img.width, h = img.height;
+                        if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } }
+                        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        resolve(canvas.toDataURL('image/jpeg', 0.8));
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function getModalItem() {
+            const { colId, index } = modalContext;
+            if (colId == null || index == null || !db[colId] || !db[colId][index]) return null;
+            return db[colId][index];
+        }
+
+        window.addRelatedImages = function(event) {
+            if (event) event.stopPropagation();
+            const item = getModalItem();
+            if (!item) return;
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+            input.onchange = async () => {
+                if (!Array.isArray(item.related)) item.related = [];
+                for (const f of [...input.files]) {
+                    try { item.related.push(await fileToResizedDataURL(f)); } catch (e) {}
+                }
+                await saveDB();
+                renderModalRelated();
+            };
+            input.click();
+        };
+
+        window.openRelatedImage = function(i) {
+            const item = getModalItem();
+            if (!item || !Array.isArray(item.related) || !item.related[i]) return;
+            document.getElementById('modal-img').src = item.related[i];
+            renderModalRelated();
+        };
+
+        window.showMainImage = function() {
+            document.getElementById('modal-img').src = modalContext.mainSrc;
+            renderModalRelated();
+        };
+
+        window.removeRelatedImage = function(i) {
+            const item = getModalItem();
+            if (!item || !Array.isArray(item.related)) return;
+            if (!confirm('¿Quitar esta imagen relacionada?')) return;
+            item.related.splice(i, 1);
+            if (!item.related.length) delete item.related;
+            saveDB();
+            showMainImage();
+        };
+
+        function renderModalRelated() {
+            const box = document.getElementById('modal-related');
+            const relBtn = document.getElementById('modal-related-btn');
+            const item = getModalItem();
+            const rel = (item && Array.isArray(item.related)) ? item.related : [];
+            if (relBtn) relBtn.innerHTML = rel.length ? `🔗 Relacionadas (${rel.length})` : '🔗 Relacionadas';
+
+            if (!item) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+            const currentSrc = document.getElementById('modal-img').src;
+            const viewingRelated = currentSrc && currentSrc !== modalContext.mainSrc;
+
+            if (!rel.length && !viewingRelated) { box.classList.add('hidden'); box.innerHTML = ''; return; }
+
+            box.classList.remove('hidden');
+            const thumbs = rel.map((src, i) => `
+                <div class="relative group shrink-0">
+                    <img src="${src}" onclick="event.stopPropagation(); openRelatedImage(${i})"
+                         class="h-28 sm:h-36 w-auto rounded-lg border ${src === currentSrc ? 'border-[#39FF14]' : 'border-zinc-700'} object-cover cursor-pointer hover:border-[#39FF14] transition-colors">
+                    <button onclick="event.stopPropagation(); removeRelatedImage(${i})" title="Quitar"
+                            class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">✕</button>
+                </div>`).join('');
+
+            box.innerHTML = `
+                <div class="flex items-center justify-center gap-3 mb-3">
+                    <span class="text-[11px] font-mono uppercase tracking-widest text-zinc-500">🔗 Imágenes relacionadas${rel.length ? ` (${rel.length})` : ''}</span>
+                    ${viewingRelated ? `<button onclick="event.stopPropagation(); showMainImage()" class="text-[11px] font-mono uppercase tracking-widest text-[#39FF14] hover:text-white transition-colors">↩︎ Ver principal</button>` : ''}
+                </div>
+                <div class="flex flex-wrap justify-center gap-4 sm:gap-5 pb-2">
+                    ${thumbs || '<span class="text-zinc-600 font-mono text-xs">Sin imágenes relacionadas todavía.</span>'}
+                </div>`;
+        }
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -1199,10 +1317,14 @@
             }
 
             const actionButtonsVisible = isSelectMode ? "hidden" : "flex";
+            const relBadge = (Array.isArray(item.related) && item.related.length)
+                ? `<span class="absolute top-1 left-1 z-10 bg-black/80 text-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded pointer-events-none">🔗 ${item.related.length}</span>`
+                : '';
 
             div.innerHTML = `
                 <div class="absolute inset-0 z-0" ${dragAttrs}></div>
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none relative z-0" alt="Producto">
+                ${relBadge}
                 ${labelsHTML}
                 <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 ${actionButtonsVisible} flex-col justify-between p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex justify-end w-full">
