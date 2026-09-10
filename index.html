@@ -44,6 +44,9 @@
     <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
         <button class="fixed top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer z-[120]">&times;</button>
 
+        <button id="modal-nav-prev" onclick="navModal(-1, event)" title="Foto anterior" class="fixed left-2 sm:left-5 top-1/2 -translate-y-1/2 z-[120] w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/80 border border-[#39FF14] text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)]">‹</button>
+        <button id="modal-nav-next" onclick="navModal(1, event)" title="Foto siguiente" class="fixed right-2 sm:right-5 top-1/2 -translate-y-1/2 z-[120] w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/80 border border-[#39FF14] text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)]">›</button>
+
         <div class="flex flex-col items-center gap-6 max-h-[92vh] overflow-y-auto py-6 px-2">
             <div class="relative shrink-0">
                 <img id="modal-img" class="max-h-[65vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-lg" />
@@ -838,20 +841,46 @@
             saveStructure(); init();
         };
 
+        // Destacar / quitar destacado de una foto (estrella en la esquina)
+        window.toggleFav = function(colId, index, event) {
+            if (event) event.stopPropagation();
+            const it = Array.isArray(db[colId]) ? db[colId][index] : null;
+            if (!it) return;
+            if (it.fav) delete it.fav; else it.fav = true;
+            saveDB();
+        };
+
         let modalContext = { src: null, mainSrc: null, colId: null, index: null };
 
         function openModal(imgSrc, nameNum, patch, event, colId, index) {
-            event.stopPropagation();
+            if (event) event.stopPropagation();
+            const item = (colId != null && db[colId] && db[colId][index])
+                ? db[colId][index]
+                : { src: imgSrc, nameNumber: nameNum, patch: patch };
+            populateModal(item, (colId ?? null), (index ?? null));
+        }
+
+        // Navegar a la foto anterior / siguiente dentro de la misma colección
+        window.navModal = function(dir, event) {
+            if (event) event.stopPropagation();
+            const { colId, index } = modalContext;
+            if (colId == null || index == null || !Array.isArray(db[colId])) return;
+            const ni = index + dir;
+            if (ni < 0 || ni >= db[colId].length) return;
+            populateModal(db[colId][ni], colId, ni);
+        };
+
+        function populateModal(item, colId, index) {
             const modal = document.getElementById('image-modal');
             const modalImg = document.getElementById('modal-img');
             const modalCust = document.getElementById('modal-customization');
 
-            modalContext = { src: imgSrc, mainSrc: imgSrc, colId: (colId ?? null), index: (index ?? null) };
+            modalContext = { src: item.src, mainSrc: item.src, colId: (colId ?? null), index: (index ?? null) };
 
-            modalImg.src = imgSrc;
+            modalImg.src = item.src;
             let textHtml = [];
-            if (nameNum) textHtml.push(`<div class="text-[#39FF14] mb-1">📝 ${nameNum}</div>`);
-            if (patch) textHtml.push(`<div class="text-blue-400">🛡️ ${patch}</div>`);
+            if (item.nameNumber) textHtml.push(`<div class="text-[#39FF14] mb-1">📝 ${item.nameNumber}</div>`);
+            if (item.patch) textHtml.push(`<div class="text-blue-400">🛡️ ${item.patch}</div>`);
 
             if (textHtml.length > 0) {
                 modalCust.innerHTML = textHtml.join('');
@@ -871,6 +900,13 @@
                 obtainedBtn.classList.remove('hidden');
                 obtainedBtn.innerHTML = '✅ Conseguida';
             }
+
+            // Flechas laterales para pasar de foto
+            const list = (modalContext.colId != null && Array.isArray(db[modalContext.colId])) ? db[modalContext.colId] : [];
+            const prevBtn = document.getElementById('modal-nav-prev');
+            const nextBtn = document.getElementById('modal-nav-next');
+            if (prevBtn) prevBtn.classList.toggle('invisible', !(index > 0));
+            if (nextBtn) nextBtn.classList.toggle('invisible', !(index != null && index < list.length - 1));
 
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
@@ -1093,6 +1129,12 @@
                 if(!document.getElementById('custom-input-modal').classList.contains('hidden')) closeCustomInput();
                 if(!document.getElementById('move-multi-modal').classList.contains('hidden')) closeMoveMultiModal();
                 if(!document.getElementById('delete-confirm-modal').classList.contains('hidden')) closeDeleteModal();
+            }
+            // Flechas del teclado para pasar de foto en el visor
+            const imgModalOpen = !document.getElementById('image-modal').classList.contains('hidden');
+            if (imgModalOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+                navModal(e.key === 'ArrowRight' ? 1 : -1);
             }
         });
 
@@ -1389,13 +1431,17 @@
 
             const actionButtonsVisible = isSelectMode ? "hidden" : "flex";
             const relBadge = (Array.isArray(item.related) && item.related.length)
-                ? `<span class="absolute top-1 left-1 z-10 bg-black/80 text-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded pointer-events-none">🔗 ${item.related.length}</span>`
+                ? `<span class="bg-black/80 text-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded pointer-events-none">🔗 ${item.related.length}</span>`
                 : '';
+            const favActive = !!item.fav;
+            const favBtn = isSelectMode ? '' : `<button onclick="event.stopPropagation(); toggleFav('${colId}', ${index}, event)" title="Destacar"
+                    class="action-btn w-7 h-7 flex items-center justify-center rounded-md text-sm leading-none transition-all ${favActive ? 'bg-black/70 opacity-100 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]' : 'bg-black/40 opacity-30 grayscale hover:opacity-90 hover:grayscale-0'}">⭐</button>`;
+            const cornerTL = `<div class="absolute top-1 left-1 z-30 flex flex-col items-start gap-1">${favBtn}${relBadge}</div>`;
 
             div.innerHTML = `
                 <div class="absolute inset-0 z-0" ${dragAttrs}></div>
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none relative z-0" alt="Producto">
-                ${relBadge}
+                ${cornerTL}
                 ${labelsHTML}
                 <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 ${actionButtonsVisible} flex-col justify-between p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex justify-end w-full">
