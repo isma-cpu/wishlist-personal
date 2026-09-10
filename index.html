@@ -167,7 +167,10 @@
                     { id: "per-camisetas", name: "Camisetas" }, { id: "per-cantantes", name: "Camisetas de cantantes" },
                     { id: "per-entreno", name: "Camisetas Entreno" }, { id: "per-retro", name: "Camisetas Retro" },
                     { id: "per-manega-llarga", name: "Camisetas Manga Larga" }, { id: "per-polos", name: "Polos" },
-                    { id: "per-entrenamiento-c", name: "Conjuntos Entreno Corto" }, { id: "per-entrenamiento-l", name: "Conjuntos Entreno Largos" },
+                    { id: "per-entrenamiento-c", name: "CONJUNTOS", subCols: [
+                        { id: "conjuntos-cortos", name: "Cortos" },
+                        { id: "conjuntos-largos", name: "Largos" }
+                    ] },
                     { id: "per-shorts", name: "Shorts" }, { id: "per-chaquetas", name: "Chaquetas/Cortavientos" },
                     { id: "per-abrigos", name: "Abrigos" }, { id: "per-otros", name: "Otros" }
                 ]
@@ -293,12 +296,37 @@
                 });
 
                 db = dbData;
-                await saveDB(); 
-                init(); 
+                if (migrateMergeConjuntos()) saveStructure();
+                await saveDB();
+                init();
             } catch(e) {
                 console.error("Error cargando DB:", e);
                 db = {}; init();
             }
+        }
+
+        // Fusiona "Conjuntos Entreno Corto" + "Largos" en una única "CONJUNTOS"
+        // con subcolecciones "Cortos" y "Largos" (una sola vez, sin perder fotos).
+        function migrateMergeConjuntos() {
+            let cShort = null, cLong = null;
+            structure.forEach(g => g.collections.forEach(c => {
+                if (c.id === 'per-entrenamiento-c') cShort = c;
+                if (c.id === 'per-entrenamiento-l') cLong = c;
+            }));
+            if (!cShort || !cLong) return false; // ya fusionadas o no existen
+
+            cShort.name = 'CONJUNTOS';
+            cShort.subCols = [
+                { id: 'conjuntos-cortos', name: 'Cortos' },
+                { id: 'conjuntos-largos', name: 'Largos' }
+            ];
+            db['conjuntos-cortos'] = [...(db['per-entrenamiento-c'] || []), ...(db['conjuntos-cortos'] || [])];
+            db['conjuntos-largos'] = [...(db['per-entrenamiento-l'] || []), ...(db['conjuntos-largos'] || [])];
+            delete db['per-entrenamiento-c'];
+            delete db['per-entrenamiento-l'];
+
+            structure.forEach(g => { g.collections = g.collections.filter(c => c.id !== 'per-entrenamiento-l'); });
+            return true;
         }
 
         function saveStructure() { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); }
