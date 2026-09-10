@@ -43,6 +43,12 @@
 
     <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
         <button class="absolute top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer">&times;</button>
+
+        <div id="modal-toolbar" class="absolute top-5 left-1/2 -translate-x-1/2 flex gap-2 sm:gap-3 z-[110]" onclick="event.stopPropagation()">
+            <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-3 sm:px-4 py-2 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
+            <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-3 sm:px-4 py-2 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
+        </div>
+
         <div class="relative">
             <img id="modal-img" class="max-h-[90vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-lg" />
             <div id="modal-customization" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 border border-[#39FF14] text-center px-4 py-2 rounded-lg font-mono text-sm hidden shadow-[0_0_15px_rgba(0,0,0,0.8)]"></div>
@@ -159,14 +165,34 @@
                     { id: "per-shorts", name: "Shorts" }, { id: "per-chaquetas", name: "Chaquetas/Cortavientos" },
                     { id: "per-abrigos", name: "Abrigos" }, { id: "per-otros", name: "Otros" }
                 ]
+            },
+            {
+                groupTitle: "CONSEGUIDAS", groupId: "conseguidas",
+                collections: [
+                    { id: "conseguidas-main", name: "Conseguidas" }
+                ]
             }
         ];
+
+        const CONSEGUIDAS_ID = 'conseguidas-main';
 
         let structure;
         try {
             structure = JSON.parse(localStorage.getItem('wishlist_structure_v2'));
             if (!structure || !Array.isArray(structure) || !structure[0].collections) structure = defaultStructure;
         } catch(e) { structure = defaultStructure; }
+
+        // Garantiza que el bloque CONSEGUIDAS existe (para datos guardados de antes)
+        (function ensureConseguidas() {
+            const exists = structure.some(g => g.collections.some(c => c.id === CONSEGUIDAS_ID));
+            if (!exists) {
+                structure.push({
+                    groupTitle: "CONSEGUIDAS", groupId: "conseguidas",
+                    collections: [{ id: CONSEGUIDAS_ID, name: "Conseguidas" }]
+                });
+                try { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); } catch(e) {}
+            }
+        })();
 
         let db = {};
         let currentView = 'home';
@@ -662,23 +688,40 @@
             saveStructure(); init();
         };
 
-        function openModal(imgSrc, nameNum, patch, event) {
+        let modalContext = { src: null, colId: null, index: null };
+
+        function openModal(imgSrc, nameNum, patch, event, colId, index) {
             event.stopPropagation();
             const modal = document.getElementById('image-modal');
             const modalImg = document.getElementById('modal-img');
             const modalCust = document.getElementById('modal-customization');
-            
+
+            modalContext = { src: imgSrc, colId: (colId ?? null), index: (index ?? null) };
+
             modalImg.src = imgSrc;
             let textHtml = [];
             if (nameNum) textHtml.push(`<div class="text-[#39FF14] mb-1">📝 ${nameNum}</div>`);
             if (patch) textHtml.push(`<div class="text-blue-400">🛡️ ${patch}</div>`);
-            
+
             if (textHtml.length > 0) {
                 modalCust.innerHTML = textHtml.join('');
                 modalCust.classList.remove('hidden');
             } else {
                 modalCust.classList.add('hidden');
             }
+
+            // Reiniciar estado de los botones
+            const copyBtn = document.getElementById('modal-copy-btn');
+            copyBtn.innerHTML = '📋 Copiar';
+            const obtainedBtn = document.getElementById('modal-obtained-btn');
+            // Ocultar "Conseguida" si ya está en esa carpeta o si no sabemos de dónde viene
+            if (modalContext.colId === CONSEGUIDAS_ID || modalContext.colId === null) {
+                obtainedBtn.classList.add('hidden');
+            } else {
+                obtainedBtn.classList.remove('hidden');
+                obtainedBtn.innerHTML = '✅ Conseguida';
+            }
+
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
         }
@@ -687,6 +730,51 @@
             document.getElementById('image-modal').classList.add('hidden');
             document.body.style.overflow = 'auto';
         }
+
+        // --- COPIAR IMAGEN AL PORTAPAPELES ---
+        window.copyModalImage = async function(event) {
+            if (event) event.stopPropagation();
+            const btn = document.getElementById('modal-copy-btn');
+            const src = modalContext.src || document.getElementById('modal-img').src;
+            try {
+                const blob = await (await fetch(src)).blob();
+                let outBlob = blob;
+                if (blob.type !== 'image/png') {
+                    outBlob = await new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            const c = document.createElement('canvas');
+                            c.width = img.naturalWidth; c.height = img.naturalHeight;
+                            c.getContext('2d').drawImage(img, 0, 0);
+                            c.toBlob(b => b ? resolve(b) : reject(new Error('toBlob null')), 'image/png');
+                        };
+                        img.onerror = reject;
+                        img.src = src;
+                    });
+                }
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': outBlob })]);
+                btn.innerHTML = '✔ ¡Copiada!';
+                setTimeout(() => { btn.innerHTML = '📋 Copiar'; }, 1600);
+            } catch (err) {
+                console.error('Error copiando imagen:', err);
+                btn.innerHTML = '✖ No se pudo';
+                setTimeout(() => { btn.innerHTML = '📋 Copiar'; }, 1600);
+            }
+        };
+
+        // --- MARCAR COMO CONSEGUIDA (mover a la carpeta Conseguidas) ---
+        window.markAsObtained = function(event) {
+            if (event) event.stopPropagation();
+            const { colId, index } = modalContext;
+            if (colId == null || index == null || !db[colId] || !db[colId][index]) return;
+            if (colId === CONSEGUIDAS_ID) { closeModal(); return; }
+            const item = db[colId].splice(index, 1)[0];
+            if (!db[CONSEGUIDAS_ID]) db[CONSEGUIDAS_ID] = [];
+            item.timestamp = Date.now();
+            db[CONSEGUIDAS_ID].unshift(item);
+            saveDB();
+            closeModal();
+        };
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
@@ -868,8 +956,8 @@
                 if(isSelectMode) {
                     toggleSelection(colId, index, div);
                 } else {
-                    if(e.target.closest('.action-btn')) return; 
-                    openModal(item.src, item.nameNumber, item.patch, e); 
+                    if(e.target.closest('.action-btn')) return;
+                    openModal(item.src, item.nameNumber, item.patch, e, colId, index);
                 }
             };
             
