@@ -444,13 +444,7 @@
                 alert("Debes entrar a una colección (ej: Shorts, Camisetas...) para poder pegar una imagen.");
                 return;
             }
-            // Si la vista actual usa subcolecciones, pegar en la primera subcolección
-            let pasteTarget = currentView;
-            const cvCol = structure.flatMap(g => g.collections).find(c => c.id === currentView);
-            if (cvCol && Array.isArray(cvCol.subCols)) {
-                if (!cvCol.subCols.length) { alert("Crea primero una subcolección para poder pegar una imagen aquí."); return; }
-                pasteTarget = cvCol.subCols[0].id;
-            }
+            const pasteTarget = currentView;
             const items = (e.clipboardData || e.originalEvent.clipboardData).items;
             let foundImage = false;
             for (let index in items) {
@@ -518,10 +512,6 @@
         window.handleSidebarDrop = function(e, targetColId) {
             e.stopPropagation(); e.preventDefault();
             e.currentTarget.classList.remove('sidebar-drag-over');
-
-            // Si la colección destino usa subcolecciones, redirigir a la primera
-            const tCol = structure.flatMap(g => g.collections).find(c => c.id === targetColId);
-            if (tCol && Array.isArray(tCol.subCols) && tCol.subCols.length) targetColId = tCol.subCols[0].id;
 
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 handleFiles(e.dataTransfer.files, targetColId);
@@ -610,7 +600,7 @@
                     const parent = structure.flatMap(g => g.collections).find(c => c.id === targetId);
                     if (parent) {
                         if (!Array.isArray(parent.subCols)) parent.subCols = [];
-                        const newId = `sakura-sub-${Date.now()}`;
+                        const newId = `sub-${Date.now()}`;
                         parent.subCols.push({ id: newId, name: val });
                         if (!db[newId]) db[newId] = [];
                         saveStructure(); saveDB(); init(); showView(targetId);
@@ -677,6 +667,7 @@
                 const parent = structure.flatMap(g => g.collections).find(c => c.id === deleteContext.colId);
                 if (parent && Array.isArray(parent.subCols)) {
                     parent.subCols = parent.subCols.filter(s => s.id !== deleteContext.subId);
+                    if (!parent.subCols.length) delete parent.subCols;
                 }
                 delete db[deleteContext.subId];
                 saveStructure(); saveDB(); init();
@@ -738,21 +729,18 @@
                 list.appendChild(title);
                 
                 group.collections.forEach(col => {
-                    if (!Array.isArray(col.subCols)) {
-                        const btn = document.createElement('button');
-                        btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
-                        btn.innerText = col.name;
-                        btn.onclick = () => moveSelectedTo(col.id);
-                        list.appendChild(btn);
-                    } else {
-                        col.subCols.forEach(sub => {
-                            const btn = document.createElement('button');
-                            btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
-                            btn.innerText = `${col.name} · ${sub.name}`;
-                            btn.onclick = () => moveSelectedTo(sub.id);
-                            list.appendChild(btn);
-                        });
-                    }
+                    const btn = document.createElement('button');
+                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
+                    btn.innerText = col.name;
+                    btn.onclick = () => moveSelectedTo(col.id);
+                    list.appendChild(btn);
+                    (col.subCols || []).forEach(sub => {
+                        const sbtn = document.createElement('button');
+                        sbtn.className = "w-full text-left pl-6 pr-3 py-1.5 bg-zinc-900/60 hover:bg-blue-900/50 text-zinc-400 hover:text-blue-300 rounded transition-colors text-xs font-bold truncate";
+                        sbtn.innerText = `↳ ${sub.name}`;
+                        sbtn.onclick = () => moveSelectedTo(sub.id);
+                        list.appendChild(sbtn);
+                    });
                 });
             });
             document.getElementById('move-multi-modal').classList.remove('hidden');
@@ -1204,9 +1192,9 @@
                             <span class="text-sm font-mono text-zinc-500 ml-auto pointer-events-none" id="count-${col.id}">0 u.</span>
                         </div>`;
 
-                    if (Array.isArray(col.subCols)) {
-                        // --- Colección con SUBCOLECCIONES (columnas) ---
-                        const subCardsHTML = col.subCols.map(sub => `
+                    const hasSubs = Array.isArray(col.subCols);
+
+                    const subCardsHTML = hasSubs ? col.subCols.map(sub => `
                             <div id="subsec-${sub.id}" class="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3 transition-all">
                                 <div class="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
                                     <div class="w-2 h-2 rounded-full bg-[#39FF14]/70 shrink-0"></div>
@@ -1221,31 +1209,32 @@
                                     </div>
                                     <div id="grid-${sub.id}" class="contents"></div>
                                 </div>
-                            </div>`).join('');
+                            </div>`).join('') : '';
 
-                        const emptyHTML = `<p class="text-zinc-600 font-mono text-sm">Aún no hay subcolecciones. Pulsa «➕ Nueva subcolección» para crear la primera.</p>`;
+                    const columnsHTML = hasSubs ? `
+                            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+                                ${col.subCols.length ? subCardsHTML : `<p class="text-zinc-600 font-mono text-sm">Aún no hay subcolecciones. Pulsa «➕ Nueva subcolección» para crear una.</p>`}
+                            </div>` : '';
 
-                        colSection.innerHTML = `
-                            ${headerHTML}
-                            <button onclick="addSubCollection('${col.id}', event)" class="mb-5 px-4 py-2 border border-[#39FF14]/60 bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded hover:bg-[#39FF14] hover:text-black transition-all flex items-center gap-2 cursor-pointer">
-                                ➕ Nueva subcolección
-                            </button>
-                            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                ${col.subCols.length ? subCardsHTML : emptyHTML}
+                    const looseLabelHTML = hasSubs
+                        ? `<div class="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-3 border-t border-zinc-800 pt-4">Sin clasificar</div>`
+                        : '';
+
+                    colSection.innerHTML = `
+                        ${headerHTML}
+                        <button onclick="addSubCollection('${col.id}', event)" class="mb-5 px-4 py-2 border border-[#39FF14]/60 bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded hover:bg-[#39FF14] hover:text-black transition-all flex items-center gap-2 cursor-pointer">
+                            ➕ Nueva subcolección
+                        </button>
+                        ${columnsHTML}
+                        ${looseLabelHTML}
+                        <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
+                            <div id="dropzone-${col.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-2 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none z-10 relative">
+                                <span class="text-xl mb-1 opacity-50 pointer-events-none">➕</span>
+                                <span class="text-[9px] text-zinc-500 uppercase tracking-wide pointer-events-none">Subir archivo</span>
                             </div>
-                        `;
-                    } else {
-                        colSection.innerHTML = `
-                            ${headerHTML}
-                            <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-                                <div id="dropzone-${col.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-2 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none z-10 relative">
-                                    <span class="text-xl mb-1 opacity-50 pointer-events-none">➕</span>
-                                    <span class="text-[9px] text-zinc-500 uppercase tracking-wide pointer-events-none">Subir archivo</span>
-                                </div>
-                                <div id="grid-${col.id}" class="contents"></div>
-                            </div>
-                        `;
-                    }
+                            <div id="grid-${col.id}" class="contents"></div>
+                        </div>
+                    `;
                     mainContent.appendChild(colSection);
                 });
 
@@ -1256,8 +1245,8 @@
             });
 
             structure.forEach(group => { group.collections.forEach(col => {
-                if (Array.isArray(col.subCols)) { col.subCols.forEach(sub => setupSubDropzone(sub.id)); }
-                else { setupDropzone(col.id); }
+                setupDropzone(col.id);
+                (col.subCols || []).forEach(sub => setupSubDropzone(sub.id));
             }); });
             updateAll(); showView(currentView);
         }
@@ -1359,13 +1348,8 @@
             structure.forEach(group => {
                 group.collections.forEach(col => {
                     const items = db[col.id] || [];
-                    const countEl = document.getElementById(`count-${col.id}`); if (countEl) countEl.innerText = `${items.length} u.`;
-                    const badge = document.getElementById(`badge-${col.id}`);
-                    if (badge) {
-                        badge.innerText = items.length;
-                        if(items.length > 0) { badge.classList.replace('bg-zinc-900', 'bg-neon-dim'); badge.classList.replace('text-zinc-600', 'text-neon'); }
-                        else { badge.classList.replace('bg-neon-dim', 'bg-zinc-900'); badge.classList.replace('text-neon', 'text-zinc-600'); }
-                    }
+
+                    // Fotos sueltas ("Sin clasificar" si la colección tiene subcolecciones)
                     const grid = document.getElementById(`grid-${col.id}`);
                     if (grid) {
                         grid.innerHTML = '';
@@ -1376,32 +1360,31 @@
                         });
                     }
 
-                    // --- SUBCOLECCIONES ---
-                    if (Array.isArray(col.subCols)) {
-                        let parentTotal = 0;
-                        col.subCols.forEach(sub => {
-                            const sItems = db[sub.id] || [];
-                            parentTotal += sItems.length;
-                            const sCount = document.getElementById(`count-${sub.id}`);
-                            if (sCount) sCount.innerText = sItems.length;
-                            const sGrid = document.getElementById(`grid-${sub.id}`);
-                            if (sGrid) {
-                                sGrid.innerHTML = '';
-                                sItems.forEach((item, index) => {
-                                    if (item.customization && !item.nameNumber) { item.nameNumber = item.customization; delete item.customization; }
-                                    allImages.push({ ...item, colId: sub.id, index: index });
-                                    sGrid.appendChild(createImageCard(item, sub.id, index, false));
-                                });
-                            }
-                        });
-                        const pCount = document.getElementById(`count-${col.id}`);
-                        if (pCount) pCount.innerText = `${parentTotal} u.`;
-                        const pBadge = document.getElementById(`badge-${col.id}`);
-                        if (pBadge) {
-                            pBadge.innerText = parentTotal;
-                            if (parentTotal > 0) { pBadge.classList.replace('bg-zinc-900', 'bg-neon-dim'); pBadge.classList.replace('text-zinc-600', 'text-neon'); }
-                            else { pBadge.classList.replace('bg-neon-dim', 'bg-zinc-900'); pBadge.classList.replace('text-neon', 'text-zinc-600'); }
+                    // Subcolecciones (columnas)
+                    let total = items.length;
+                    (col.subCols || []).forEach(sub => {
+                        const sItems = db[sub.id] || [];
+                        total += sItems.length;
+                        const sCount = document.getElementById(`count-${sub.id}`);
+                        if (sCount) sCount.innerText = sItems.length;
+                        const sGrid = document.getElementById(`grid-${sub.id}`);
+                        if (sGrid) {
+                            sGrid.innerHTML = '';
+                            sItems.forEach((item, index) => {
+                                if (item.customization && !item.nameNumber) { item.nameNumber = item.customization; delete item.customization; }
+                                allImages.push({ ...item, colId: sub.id, index: index });
+                                sGrid.appendChild(createImageCard(item, sub.id, index, false));
+                            });
                         }
+                    });
+
+                    const countEl = document.getElementById(`count-${col.id}`);
+                    if (countEl) countEl.innerText = `${total} u.`;
+                    const badge = document.getElementById(`badge-${col.id}`);
+                    if (badge) {
+                        badge.innerText = total;
+                        if (total > 0) { badge.classList.replace('bg-zinc-900', 'bg-neon-dim'); badge.classList.replace('text-zinc-600', 'text-neon'); }
+                        else { badge.classList.replace('bg-neon-dim', 'bg-zinc-900'); badge.classList.replace('text-neon', 'text-zinc-600'); }
                     }
                 });
             });
