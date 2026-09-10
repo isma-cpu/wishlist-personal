@@ -1373,7 +1373,7 @@
                                     <button onclick="openInput('edit-subcollection', '${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 transition-colors" title="Renombrar subcolección">✏️</button>
                                     <button onclick="deleteSubCollection('${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 transition-colors" title="Eliminar subcolección">✕</button>
                                 </div>
-                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
                                     <div id="dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none">
                                         <span class="text-lg opacity-50 pointer-events-none">➕</span>
                                     </div>
