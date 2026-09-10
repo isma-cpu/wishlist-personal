@@ -157,16 +157,24 @@
             {
                 groupTitle: "REVENTA", groupId: "reventa",
                 collections: [
-                    { id: "rev-retro", name: "Retro" }, { id: "rev-player", name: "Player Version" },
-                    { id: "rev-fan", name: "Fan Version" }, { id: "rev-personalizadas", name: "Personalizadas" }
+                    { id: "reventa-camisetas", name: "Camisetas", subCols: [
+                        { id: "reventa-retro", name: "Retro" },
+                        { id: "reventa-player", name: "Player Version" },
+                        { id: "reventa-fan", name: "Fan Version" },
+                        { id: "reventa-personalizadas", name: "Personalizadas" }
+                    ] }
                 ]
             },
             {
                 groupTitle: "PERSONAL", groupId: "personal",
                 collections: [
                     { id: "per-camisetas", name: "Camisetas" }, { id: "per-cantantes", name: "Camisetas de cantantes" },
-                    { id: "per-entreno", name: "Camisetas Entreno" }, { id: "per-retro", name: "Camisetas Retro" },
-                    { id: "per-manega-llarga", name: "Camisetas Manga Larga" }, { id: "per-polos", name: "Polos" },
+                    { id: "per-entreno", name: "Camisetas Entreno" },
+                    { id: "per-retro", name: "Otras Camisetas", subCols: [
+                        { id: "otras-retro", name: "Retro" },
+                        { id: "otras-polos", name: "Polos" }
+                    ] },
+                    { id: "per-manega-llarga", name: "Camisetas Manga Larga" },
                     { id: "per-entrenamiento-c", name: "CONJUNTOS", subCols: [
                         { id: "conjuntos-cortos", name: "Cortos" },
                         { id: "conjuntos-largos", name: "Largos" }
@@ -296,7 +304,12 @@
                 });
 
                 db = dbData;
-                if (migrateMergeConjuntos()) saveStructure();
+                let migrated = false;
+                if (migrateMergeConjuntos()) migrated = true;
+                if (migrateMergePair('per-retro', 'per-polos', 'Otras Camisetas',
+                        [{ id: 'otras-retro', name: 'Retro' }, { id: 'otras-polos', name: 'Polos' }])) migrated = true;
+                if (migrateMergeReventa()) migrated = true;
+                if (migrated) saveStructure();
                 await saveDB();
                 init();
             } catch(e) {
@@ -305,27 +318,46 @@
             }
         }
 
-        // Fusiona "Conjuntos Entreno Corto" + "Largos" en una única "CONJUNTOS"
-        // con subcolecciones "Cortos" y "Largos" (una sola vez, sin perder fotos).
-        function migrateMergeConjuntos() {
-            let cShort = null, cLong = null;
+        // Fusiona la colección `keepId` + `dropId` en una sola (renombrada `newName`)
+        // con dos subcolecciones `subs` [{id,name}] (una vez, idempotente, sin perder fotos).
+        function migrateMergePair(keepId, dropId, newName, subs) {
+            let keep = null, drop = null;
             structure.forEach(g => g.collections.forEach(c => {
-                if (c.id === 'per-entrenamiento-c') cShort = c;
-                if (c.id === 'per-entrenamiento-l') cLong = c;
+                if (c.id === keepId) keep = c;
+                if (c.id === dropId) drop = c;
             }));
-            if (!cShort || !cLong) return false; // ya fusionadas o no existen
+            if (!keep || !drop) return false;
 
-            cShort.name = 'CONJUNTOS';
-            cShort.subCols = [
-                { id: 'conjuntos-cortos', name: 'Cortos' },
-                { id: 'conjuntos-largos', name: 'Largos' }
-            ];
-            db['conjuntos-cortos'] = [...(db['per-entrenamiento-c'] || []), ...(db['conjuntos-cortos'] || [])];
-            db['conjuntos-largos'] = [...(db['per-entrenamiento-l'] || []), ...(db['conjuntos-largos'] || [])];
-            delete db['per-entrenamiento-c'];
-            delete db['per-entrenamiento-l'];
+            keep.name = newName;
+            keep.subCols = subs.map(s => ({ id: s.id, name: s.name }));
+            db[subs[0].id] = [...(db[keepId] || []), ...(db[subs[0].id] || [])];
+            db[subs[1].id] = [...(db[dropId] || []), ...(db[subs[1].id] || [])];
+            delete db[keepId];
+            delete db[dropId];
+            structure.forEach(g => { g.collections = g.collections.filter(c => c.id !== dropId); });
+            return true;
+        }
 
-            structure.forEach(g => { g.collections = g.collections.filter(c => c.id !== 'per-entrenamiento-l'); });
+        function migrateMergeConjuntos() {
+            return migrateMergePair('per-entrenamiento-c', 'per-entrenamiento-l', 'CONJUNTOS',
+                [{ id: 'conjuntos-cortos', name: 'Cortos' }, { id: 'conjuntos-largos', name: 'Largos' }]);
+        }
+
+        // Convierte las colecciones sueltas del grupo REVENTA en subcolecciones
+        // de una única colección "Camisetas" (idempotente, sin perder fotos).
+        function migrateMergeReventa() {
+            const g = structure.find(gr => gr.groupId === 'reventa');
+            if (!g || !Array.isArray(g.collections) || !g.collections.length) return false;
+            if (g.collections.some(c => c.id === 'reventa-camisetas')) return false; // ya fusionado
+
+            const subCols = [];
+            g.collections.forEach(c => {
+                const subId = 'reventa-' + c.id.replace(/^rev-/, '');
+                subCols.push({ id: subId, name: c.name });
+                db[subId] = [...(db[c.id] || []), ...(db[subId] || [])];
+                if (subId !== c.id) delete db[c.id];
+            });
+            g.collections = [{ id: 'reventa-camisetas', name: 'Camisetas', subCols }];
             return true;
         }
 
@@ -513,9 +545,16 @@
             if (dragSrcEl) dragSrcEl.classList.remove('dragging');
 
             if (dragSrcCol === targetColId && dragSrcIndex !== targetIndex && dragSrcIndex !== null) {
+                // Reordenar dentro de la misma (sub)colección
                 const arr = db[targetColId];
                 const itemToMove = arr.splice(dragSrcIndex, 1)[0];
                 arr.splice(targetIndex, 0, itemToMove);
+                saveDB();
+            } else if (dragSrcCol && dragSrcCol !== targetColId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
+                // Mover a otra (sub)colección
+                const itemToMove = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
+                if (!Array.isArray(db[targetColId])) db[targetColId] = [];
+                db[targetColId].splice(targetIndex, 0, itemToMove);
                 saveDB();
             }
             dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
@@ -664,7 +703,20 @@
             const n = (db[subId] || []).length;
             deleteContext = { mode: 'subcollection', colId: parentColId, subId: subId };
             document.getElementById('delete-confirm-text').innerText =
-                `¿Eliminar la subcolección «${sub ? sub.name : ''}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`);
+                `¿Eliminar la subcolección «${sub ? sub.name : ''}»` + (n > 0 ? ` y ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`);
+            document.getElementById('delete-confirm-modal').classList.remove('hidden');
+        };
+
+        window.deleteCollection = function(groupId, colId, event) {
+            if (event) event.stopPropagation();
+            const g = structure.find(x => x.groupId === groupId);
+            const col = g && g.collections.find(c => c.id === colId);
+            if (!col) return;
+            let n = (db[colId] || []).length;
+            (col.subCols || []).forEach(s => { n += (db[s.id] || []).length; });
+            deleteContext = { mode: 'collection', groupId: groupId, colId: colId };
+            document.getElementById('delete-confirm-text').innerText =
+                `¿Eliminar la colección «${col.name}»` + (n > 0 ? ` y ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`);
             document.getElementById('delete-confirm-modal').classList.remove('hidden');
         };
 
@@ -699,6 +751,16 @@
                 }
                 delete db[deleteContext.subId];
                 saveStructure(); saveDB(); init();
+            } else if (deleteContext.mode === 'collection') {
+                const g = structure.find(x => x.groupId === deleteContext.groupId);
+                const col = g && g.collections.find(c => c.id === deleteContext.colId);
+                if (g && col) {
+                    (col.subCols || []).forEach(s => { delete db[s.id]; });
+                    delete db[deleteContext.colId];
+                    g.collections = g.collections.filter(c => c.id !== deleteContext.colId);
+                    if (currentView === deleteContext.colId) currentView = 'home';
+                    saveStructure(); saveDB(); init();
+                }
             }
             closeDeleteModal();
         };
@@ -1201,6 +1263,7 @@
                             <span class="truncate pointer-events-none">${col.name}</span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
                                 <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
+                                <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">🗑️</button>
                                 <button onclick="moveCollection('${group.groupId}', '${col.id}', -1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">▲</button>
                                 <button onclick="moveCollection('${group.groupId}', '${col.id}', 1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">▼</button>
                                 <span id="badge-${col.id}" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
@@ -1239,8 +1302,14 @@
                                 </div>
                             </div>`).join('') : '';
 
+                    const nSubs = hasSubs ? col.subCols.length : 0;
+                    let colsGridCls = 'grid-cols-1';
+                    if (nSubs === 2) colsGridCls = 'grid-cols-1 sm:grid-cols-2';
+                    else if (nSubs === 3) colsGridCls = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+                    else if (nSubs >= 4) colsGridCls = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+
                     const columnsHTML = hasSubs ? `
-                            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
+                            <div class="grid ${colsGridCls} gap-4 mb-8 items-start">
                                 ${col.subCols.length ? subCardsHTML : `<p class="text-zinc-600 font-mono text-sm">Aún no hay subcolecciones. Pulsa «➕ Nueva subcolección» para crear una.</p>`}
                             </div>` : '';
 
@@ -1296,16 +1365,31 @@
 
             ['dragenter', 'dragover'].forEach(eName => {
                 box.addEventListener(eName, e => {
-                    if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); box.classList.add('section-drop-active'); }
+                    // Aceptar tanto ficheros como una foto arrastrada de otra (sub)colección
+                    if (e.dataTransfer.types.includes('Files') || (dragSrcCol && dragSrcCol !== subId)) {
+                        e.preventDefault(); box.classList.add('section-drop-active');
+                    }
                 }, false);
             });
             ['dragleave', 'drop'].forEach(eName => {
-                box.addEventListener(eName, e => {
-                    if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); box.classList.remove('section-drop-active'); }
-                }, false);
+                box.addEventListener(eName, e => { box.classList.remove('section-drop-active'); }, false);
             });
             box.addEventListener('drop', e => {
-                if (e.dataTransfer.types.includes('Files')) { e.stopPropagation(); handleFiles(e.dataTransfer.files, subId); }
+                box.classList.remove('section-drop-active');
+                if (e.dataTransfer.files && e.dataTransfer.files.length) {
+                    e.preventDefault(); e.stopPropagation();
+                    handleFiles(e.dataTransfer.files, subId);
+                    return;
+                }
+                // Mover una foto arrastrada desde otra (sub)colección a esta subcolección
+                if (dragSrcCol && dragSrcCol !== subId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
+                    e.preventDefault(); e.stopPropagation();
+                    const it = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
+                    if (!Array.isArray(db[subId])) db[subId] = [];
+                    db[subId].unshift(it);
+                    dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
+                    saveDB();
+                }
             });
         }
 
@@ -1324,27 +1408,33 @@
                 });
             }
 
-            ['dragenter', 'dragover'].forEach(eName => { 
-                sec.addEventListener(eName, e => { 
-                    if (e.dataTransfer.types.includes('Files')) {
-                        e.preventDefault(); 
-                        sec.classList.add('section-drop-active'); 
+            ['dragenter', 'dragover'].forEach(eName => {
+                sec.addEventListener(eName, e => {
+                    if (e.dataTransfer.types.includes('Files') || (dragSrcCol && dragSrcCol !== colId)) {
+                        e.preventDefault();
+                        sec.classList.add('section-drop-active');
                     }
-                }, false); 
+                }, false);
             });
-            
-            ['dragleave', 'drop'].forEach(eName => { 
-                sec.addEventListener(eName, e => { 
-                    if (e.dataTransfer.types.includes('Files')) {
-                        e.preventDefault(); 
-                        sec.classList.remove('section-drop-active'); 
-                    }
-                }, false); 
+
+            ['dragleave', 'drop'].forEach(eName => {
+                sec.addEventListener(eName, e => { sec.classList.remove('section-drop-active'); }, false);
             });
-            
+
             sec.addEventListener('drop', e => {
-                if (e.dataTransfer.types.includes('Files')) {
+                if (e.dataTransfer.files && e.dataTransfer.files.length) {
+                    e.preventDefault();
                     handleFiles(e.dataTransfer.files, colId);
+                    return;
+                }
+                // Foto arrastrada desde otra (sub)colección -> a las fotos sueltas de esta colección
+                if (dragSrcCol && dragSrcCol !== colId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
+                    e.preventDefault(); e.stopPropagation();
+                    const it = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
+                    if (!Array.isArray(db[colId])) db[colId] = [];
+                    db[colId].unshift(it);
+                    dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
+                    saveDB();
                 }
             });
         }
