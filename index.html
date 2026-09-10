@@ -212,6 +212,21 @@
             if (!structure || !Array.isArray(structure) || !structure[0].collections) structure = defaultStructure;
         } catch(e) { structure = defaultStructure; }
 
+        // Bloques minimizados (se recuerda entre sesiones)
+        let collapsedGroups = new Set();
+        try { collapsedGroups = new Set(JSON.parse(localStorage.getItem('wishlist_collapsed_groups') || '[]')); } catch(e) {}
+        function saveCollapsed() { try { localStorage.setItem('wishlist_collapsed_groups', JSON.stringify([...collapsedGroups])); } catch(e) {} }
+        window.toggleGroupCollapsed = function(groupId, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            if (collapsedGroups.has(groupId)) collapsedGroups.delete(groupId);
+            else collapsedGroups.add(groupId);
+            saveCollapsed();
+            const ul = document.getElementById('grouplist-' + groupId);
+            const chev = document.getElementById('groupchev-' + groupId);
+            if (ul) ul.classList.toggle('hidden', collapsedGroups.has(groupId));
+            if (chev) chev.textContent = collapsedGroups.has(groupId) ? '▸' : '▾';
+        };
+
         // Añade bloques nuevos a estructuras ya guardadas SIN tocar el resto.
         (function ensureBlocks() {
             let changed = false;
@@ -1268,26 +1283,30 @@
             renderModalRelated();
         };
 
-        // Añadir relacionadas ARRASTRANDO ficheros sobre el visor de imagen abierto
+        // Añadir relacionadas ARRASTRANDO (ficheros del ordenador o imágenes de otra web)
         (function wireRelatedDrop() {
             const modal = document.getElementById('image-modal');
             const box = document.getElementById('modal-related');
             if (!modal || !box) return;
             const ringOn = () => box.classList.add('ring-2', 'ring-[#39FF14]', 'ring-offset-2', 'ring-offset-black');
             const ringOff = () => box.classList.remove('ring-2', 'ring-[#39FF14]', 'ring-offset-2', 'ring-offset-black');
-            const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
 
             ['dragenter', 'dragover'].forEach(n => modal.addEventListener(n, e => {
-                if (!getModalItem() || !hasFiles(e)) return;
+                if (!getModalItem() || relDragIndex !== null || !dtHasDroppableImage(e.dataTransfer)) return;
                 e.preventDefault(); e.stopPropagation();
                 ringOn();
             }));
             modal.addEventListener('dragleave', e => { if (e.target === modal) ringOff(); });
-            modal.addEventListener('drop', e => {
-                if (!getModalItem() || !hasFiles(e)) return;
+            modal.addEventListener('drop', async e => {
+                if (!getModalItem() || relDragIndex !== null || !dtHasDroppableImage(e.dataTransfer)) return;
                 e.preventDefault(); e.stopPropagation();
                 ringOff();
-                if (e.dataTransfer.files && e.dataTransfer.files.length) addRelatedFromFiles(e.dataTransfer.files);
+                if (e.dataTransfer.files && e.dataTransfer.files.length) { addRelatedFromFiles(e.dataTransfer.files); return; }
+                const urls = extractImageUrls(e.dataTransfer);
+                const files = [];
+                for (const u of urls) { const f = await urlToImageFile(u); if (f) files.push(f); }
+                if (files.length) addRelatedFromFiles(files);
+                else if (urls.length) alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Guárdala y arrástrala desde el ordenador, o pégala con Ctrl+V.');
             });
         })();
 
@@ -1318,16 +1337,20 @@
                     if (!db[col.id]) db[col.id] = [];
                     (col.subCols || []).forEach(sub => { if (!db[sub.id]) db[sub.id] = []; });
                 });
+                const isCollapsed = collapsedGroups.has(group.groupId);
                 const groupMenu = document.createElement('div');
                 groupMenu.innerHTML = `
                     <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1 flex items-center justify-between gap-2">
-                        <span class="truncate">${group.groupTitle}</span>
+                        <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-[#39FF14] transition-colors" title="Minimizar / desplegar bloque">
+                            <span id="groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
+                            <span class="truncate">${group.groupTitle}</span>
+                        </button>
                         <span class="flex items-center gap-1 shrink-0">
                             <button onclick="moveGroup('${group.groupId}', -1, event)" class="text-zinc-600 hover:text-[#39FF14] text-sm leading-none p-0.5 transition-colors ${gi === 0 ? 'invisible' : ''}" title="Subir bloque">▲</button>
                             <button onclick="moveGroup('${group.groupId}', 1, event)" class="text-zinc-600 hover:text-[#39FF14] text-sm leading-none p-0.5 transition-colors ${gi === structure.length - 1 ? 'invisible' : ''}" title="Bajar bloque">▼</button>
                         </span>
                     </h3>`;
-                const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6";
+                const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6" + (isCollapsed ? " hidden" : ""); ul.id = "grouplist-" + group.groupId;
 
                 group.collections.forEach(col => {
                     const li = document.createElement('li');
@@ -1444,8 +1467,8 @@
 
             ['dragenter', 'dragover'].forEach(eName => {
                 box.addEventListener(eName, e => {
-                    // Aceptar tanto ficheros como una foto arrastrada de otra (sub)colección
-                    if (e.dataTransfer.types.includes('Files') || (dragSrcCol && dragSrcCol !== subId)) {
+                    // Aceptar ficheros, imágenes de otra web, o una foto de otra (sub)colección
+                    if (dtHasDroppableImage(e.dataTransfer) || (dragSrcCol && dragSrcCol !== subId)) {
                         e.preventDefault(); box.classList.add('section-drop-active');
                     }
                 }, false);
@@ -1455,11 +1478,6 @@
             });
             box.addEventListener('drop', e => {
                 box.classList.remove('section-drop-active');
-                if (e.dataTransfer.files && e.dataTransfer.files.length) {
-                    e.preventDefault(); e.stopPropagation();
-                    handleFiles(e.dataTransfer.files, subId);
-                    return;
-                }
                 // Mover una foto arrastrada desde otra (sub)colección a esta subcolección
                 if (dragSrcCol && dragSrcCol !== subId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
                     e.preventDefault(); e.stopPropagation();
@@ -1468,6 +1486,12 @@
                     db[subId].unshift(it);
                     dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
                     saveDB();
+                    return;
+                }
+                // Fichero del ordenador o imagen arrastrada de otra web
+                if (dtHasDroppableImage(e.dataTransfer)) {
+                    e.preventDefault(); e.stopPropagation();
+                    addDroppedImages(e.dataTransfer, subId);
                 }
             });
         }
@@ -1489,7 +1513,7 @@
 
             ['dragenter', 'dragover'].forEach(eName => {
                 sec.addEventListener(eName, e => {
-                    if (e.dataTransfer.types.includes('Files') || (dragSrcCol && dragSrcCol !== colId)) {
+                    if (dtHasDroppableImage(e.dataTransfer) || (dragSrcCol && dragSrcCol !== colId)) {
                         e.preventDefault();
                         sec.classList.add('section-drop-active');
                     }
@@ -1501,11 +1525,6 @@
             });
 
             sec.addEventListener('drop', e => {
-                if (e.dataTransfer.files && e.dataTransfer.files.length) {
-                    e.preventDefault();
-                    handleFiles(e.dataTransfer.files, colId);
-                    return;
-                }
                 // Foto arrastrada desde otra (sub)colección -> a las fotos sueltas de esta colección
                 if (dragSrcCol && dragSrcCol !== colId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
                     e.preventDefault(); e.stopPropagation();
@@ -1514,8 +1533,88 @@
                     db[colId].unshift(it);
                     dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
                     saveDB();
+                    return;
+                }
+                // Fichero del ordenador o imagen arrastrada de otra web
+                if (dtHasDroppableImage(e.dataTransfer)) {
+                    e.preventDefault();
+                    addDroppedImages(e.dataTransfer, colId);
                 }
             });
+        }
+
+        // ¿El objeto arrastrado trae una imagen que podamos soltar? (fichero o imagen de otra web)
+        function dtHasDroppableImage(dt) {
+            if (!dt) return false;
+            const t = [...(dt.types || [])];
+            return t.includes('Files') || t.includes('text/uri-list') || t.includes('text/html') || t.includes('text/plain');
+        }
+
+        // Saca las URLs de imagen de un dataTransfer (arrastrar desde otra página web)
+        function extractImageUrls(dt) {
+            const urls = [];
+            try {
+                (dt.getData('text/uri-list') || '').split(/\r?\n/).forEach(l => {
+                    l = l.trim(); if (l && l[0] !== '#') urls.push(l);
+                });
+            } catch (e) {}
+            try {
+                const html = dt.getData('text/html');
+                const m = html && html.match(/<img[^>]+src=["']([^"']+)["']/i);
+                if (m) urls.push(m[1]);
+            } catch (e) {}
+            try {
+                const t = (dt.getData('text/plain') || '').trim();
+                if (/^(https?:|data:image\/)/i.test(t)) urls.push(t);
+            } catch (e) {}
+            return [...new Set(urls)].filter(u => /^(https?:|data:image\/)/i.test(u));
+        }
+
+        async function urlToImageFile(url) {
+            try {
+                const resp = await fetch(url, { mode: 'cors' });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    if (blob.type.startsWith('image/')) return new File([blob], 'img', { type: blob.type });
+                }
+            } catch (e) {}
+            // Reserva: cargar como <img> y volcar a canvas (puede fallar por CORS)
+            try {
+                const dataUrl = await new Promise((res, rej) => {
+                    const im = new Image();
+                    im.crossOrigin = 'anonymous';
+                    im.onload = () => {
+                        try {
+                            const c = document.createElement('canvas');
+                            c.width = im.naturalWidth; c.height = im.naturalHeight;
+                            c.getContext('2d').drawImage(im, 0, 0);
+                            res(c.toDataURL('image/jpeg', 0.9));
+                        } catch (err) { rej(err); }
+                    };
+                    im.onerror = rej;
+                    im.src = url;
+                });
+                const b = await (await fetch(dataUrl)).blob();
+                return new File([b], 'img', { type: b.type || 'image/jpeg' });
+            } catch (e) {}
+            return null;
+        }
+
+        // Suelta imágenes en `targetColId`: ficheros del ordenador O imágenes de otra web
+        async function addDroppedImages(dt, targetColId) {
+            if (dt.files && dt.files.length) { handleFiles(dt.files, targetColId); return true; }
+            const urls = extractImageUrls(dt);
+            if (!urls.length) return false;
+            let ok = false;
+            for (const u of urls) {
+                if (u.startsWith('data:image/')) {
+                    try { const b = await (await fetch(u)).blob(); handleFiles([new File([b], 'img', { type: b.type })], targetColId); ok = true; continue; } catch (e) {}
+                }
+                const f = await urlToImageFile(u);
+                if (f) { handleFiles([f], targetColId); ok = true; }
+            }
+            if (!ok) alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Guárdala en el ordenador y arrástrala desde ahí, o cópiala y pégala con Ctrl+V dentro de la colección.');
+            return ok;
         }
 
         function handleFiles(files, colId) {
@@ -1622,22 +1721,19 @@
 
             const actionButtonsVisible = isSelectMode ? "hidden" : "flex";
             const relBadge = (Array.isArray(item.related) && item.related.length)
-                ? `<span class="bg-black/80 text-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded pointer-events-none">🔗 ${item.related.length}</span>`
+                ? `<span class="absolute top-1 right-1 z-30 bg-black/80 text-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded pointer-events-none">🔗 ${item.related.length}</span>`
                 : '';
             const favActive = !!item.fav;
             const favBtn = isSelectMode ? '' : `<button onclick="event.stopPropagation(); toggleFav('${colId}', ${index}, event)" title="Destacar"
-                    class="action-btn w-7 h-7 flex items-center justify-center rounded-md text-sm leading-none transition-all ${favActive ? 'bg-black/70 opacity-100 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]' : 'bg-black/40 opacity-30 grayscale hover:opacity-90 hover:grayscale-0'}">⭐</button>`;
-            const cornerTL = `<div class="absolute top-1 left-1 z-30 flex flex-col items-start gap-1">${favBtn}${relBadge}</div>`;
+                    class="action-btn absolute top-1 left-1 z-30 w-7 h-7 flex items-center justify-center rounded-md text-sm leading-none transition-all ${favActive ? 'bg-black/70 opacity-100 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]' : 'bg-black/40 opacity-30 grayscale hover:opacity-90 hover:grayscale-0'}">⭐</button>`;
 
             div.innerHTML = `
                 <div class="absolute inset-0 z-0" ${dragAttrs}></div>
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none relative z-0" alt="Producto">
-                ${cornerTL}
+                ${favBtn}
+                ${relBadge}
                 ${labelsHTML}
-                <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 ${actionButtonsVisible} flex-col justify-between p-2 transition-opacity z-20 pointer-events-none">
-                    <div class="flex justify-end w-full">
-                        <span class="text-white bg-black/80 p-1.5 rounded-md text-[10px] shadow-lg pointer-events-none">🔍</span>
-                    </div>
+                <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 ${actionButtonsVisible} flex-col justify-end p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
                         <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-md text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
                         <button onclick="openInput('patch', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-md text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
