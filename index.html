@@ -44,13 +44,12 @@
     <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
         <button class="fixed top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer z-[120]">&times;</button>
 
-        <button id="modal-nav-prev" onclick="navModal(-1, event)" title="Foto anterior" class="fixed left-2 sm:left-5 top-1/2 -translate-y-1/2 z-[120] w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/80 border border-[#39FF14] text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)]">‹</button>
-        <button id="modal-nav-next" onclick="navModal(1, event)" title="Foto siguiente" class="fixed right-2 sm:right-5 top-1/2 -translate-y-1/2 z-[120] w-11 h-11 sm:w-14 sm:h-14 rounded-full bg-black/80 border border-[#39FF14] text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(57,255,20,0.3)]">›</button>
-
         <div class="flex flex-col items-center gap-6 max-h-[92vh] overflow-y-auto py-6 px-2">
             <div class="relative shrink-0">
                 <img id="modal-img" class="max-h-[65vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-lg" />
                 <div id="modal-customization" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 border border-[#39FF14] text-center px-4 py-2 rounded-lg font-mono text-sm hidden shadow-[0_0_15px_rgba(0,0,0,0.8)]"></div>
+                <button id="modal-nav-prev" onclick="navModal(-1, event)" title="Imagen anterior de este producto" class="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/70 border border-[#39FF14]/70 text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(0,0,0,0.6)]">‹</button>
+                <button id="modal-nav-next" onclick="navModal(1, event)" title="Imagen siguiente de este producto" class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/70 border border-[#39FF14]/70 text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(0,0,0,0.6)]">›</button>
             </div>
 
             <div id="modal-toolbar" class="flex flex-wrap justify-center gap-4 sm:gap-6" onclick="event.stopPropagation()">
@@ -860,15 +859,30 @@
             populateModal(item, (colId ?? null), (index ?? null));
         }
 
-        // Navegar a la foto anterior / siguiente dentro de la misma colección
+        // Pasar entre la imagen principal y las imágenes extra DEL MISMO producto
         window.navModal = function(dir, event) {
             if (event) event.stopPropagation();
-            const { colId, index } = modalContext;
-            if (colId == null || index == null || !Array.isArray(db[colId])) return;
-            const ni = index + dir;
-            if (ni < 0 || ni >= db[colId].length) return;
-            populateModal(db[colId][ni], colId, ni);
+            const item = getModalItem();
+            if (!item) return;
+            const gallery = [modalContext.mainSrc, ...(Array.isArray(item.related) ? item.related : [])];
+            if (gallery.length < 2) return;
+            const cur = document.getElementById('modal-img').src;
+            let pos = gallery.indexOf(cur);
+            if (pos === -1) pos = 0;
+            let np = (pos + dir + gallery.length) % gallery.length;
+            document.getElementById('modal-img').src = gallery[np];
+            renderModalRelated();
         };
+
+        function updateModalNav() {
+            const item = getModalItem();
+            const relCount = (item && Array.isArray(item.related)) ? item.related.length : 0;
+            const show = relCount >= 1; // galería = principal + al menos 1 extra
+            ['modal-nav-prev', 'modal-nav-next'].forEach(id => {
+                const b = document.getElementById(id);
+                if (b) b.classList.toggle('invisible', !show);
+            });
+        }
 
         function populateModal(item, colId, index) {
             const modal = document.getElementById('image-modal');
@@ -901,12 +915,7 @@
                 obtainedBtn.innerHTML = '✅ Conseguida';
             }
 
-            // Flechas laterales para pasar de foto
-            const list = (modalContext.colId != null && Array.isArray(db[modalContext.colId])) ? db[modalContext.colId] : [];
-            const prevBtn = document.getElementById('modal-nav-prev');
-            const nextBtn = document.getElementById('modal-nav-next');
-            if (prevBtn) prevBtn.classList.toggle('invisible', !(index > 0));
-            if (nextBtn) nextBtn.classList.toggle('invisible', !(index != null && index < list.length - 1));
+            updateModalNav();
 
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
@@ -1087,6 +1096,8 @@
             const track = document.getElementById('modal-related-track');
             requestAnimationFrame(updateRelNav);
             if (track) track.querySelectorAll('img').forEach(im => im.addEventListener('load', updateRelNav, { once: true }));
+
+            updateModalNav();
         }
 
         function updateRelNav() {
@@ -1130,7 +1141,7 @@
                 if(!document.getElementById('move-multi-modal').classList.contains('hidden')) closeMoveMultiModal();
                 if(!document.getElementById('delete-confirm-modal').classList.contains('hidden')) closeDeleteModal();
             }
-            // Flechas del teclado para pasar de foto en el visor
+            // Flechas del teclado: pasar entre las imágenes del producto abierto
             const imgModalOpen = !document.getElementById('image-modal').classList.contains('hidden');
             if (imgModalOpen && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
                 if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
