@@ -86,7 +86,7 @@
             <div id="modal-toolbar" class="flex flex-wrap justify-center gap-4 sm:gap-6" onclick="event.stopPropagation()">
                 <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
                 <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
-                <button onclick="openSendModal('w2p', event)" class="px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-sky-400 text-sky-400 hover:bg-sky-400 hover:text-black shadow-[0_0_15px_rgba(56,189,248,0.3)]">📦 Enviar a Pedido</button>
+                <button onclick="openSendToPedidoModal(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">📦 Enviar a Pedido</button>
             </div>
 
             <div id="modal-related" class="w-[92vw] max-w-3xl hidden mt-2 mb-4 rounded-2xl transition-all" onclick="event.stopPropagation()"></div>
@@ -295,6 +295,41 @@
     </div>
 
     <!-- Enviar foto entre Wishlist <-> Pedido -->
+    <!-- Enviar un producto de la Wishlist directamente a una hoja de Crear Pedido (opción principal), con opción de ir solo a la biblioteca -->
+    <div id="send-to-pedido-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-lg max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-1">
+                <h3 class="text-lg font-black tracking-wider text-amber-400 uppercase">📦 Enviar a Pedido</h3>
+                <button onclick="closeSendToPedidoModal()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <button onclick="openSendToLibraryFallback(event)" class="text-[11px] text-zinc-500 hover:text-sky-400 underline mb-4 cursor-pointer">📚 Enviar solo a la biblioteca (Equipos/Selecciones) en su lugar</button>
+
+            <div class="text-[10px] text-zinc-500 uppercase mb-1">¿A qué hoja?</div>
+            <div id="send-pedido-sheet-list" class="space-y-1 mb-4"></div>
+
+            <div id="send-pedido-details" class="hidden border-t border-zinc-800 pt-4 space-y-3">
+                <div id="send-pedido-preview" class="mb-2"></div>
+                <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+                    <input type="checkbox" id="send-pedido-novariants" onchange="document.getElementById('send-pedido-variant-fields').classList.toggle('hidden', this.checked)">
+                    Enviar sin variantes (las añado después en la plantilla)
+                </label>
+                <div id="send-pedido-variant-fields" class="space-y-2">
+                    <input id="send-pedido-version" placeholder="Versión (ej. FAN, PLAYER...)" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400">
+                    <div class="flex gap-2">
+                        <input id="send-pedido-name" placeholder="Nombre" class="flex-1 min-w-0 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400 uppercase">
+                        <input id="send-pedido-number" placeholder="Número" class="w-20 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div id="send-pedido-patch-preview" class="w-10 h-12 bg-zinc-900 rounded border border-zinc-700 flex items-center justify-center shrink-0 overflow-hidden text-zinc-700 text-lg">＋</div>
+                        <button onclick="openSendToPedidoPatchPicker()" class="text-xs text-blue-400 hover:text-blue-300 underline cursor-pointer">🛡️ Elegir parche (opcional)</button>
+                        <button id="send-pedido-patch-clear" onclick="clearSendToPedidoPatch()" class="hidden text-xs text-red-400 hover:text-red-300 underline cursor-pointer">Quitar</button>
+                    </div>
+                </div>
+                <button onclick="confirmSendToPedido()" class="w-full px-4 py-2.5 text-sm font-bold bg-amber-400 text-black rounded-full hover:bg-white transition-colors cursor-pointer">✅ Enviar a esta hoja</button>
+            </div>
+        </div>
+    </div>
+
     <div id="send-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
         <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
             <h3 id="send-modal-title" class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase">Enviar a...</h3>
@@ -682,7 +717,7 @@
                         const ext = mime.includes('png') ? 'png' : 'jpg';
                         let extraName = "";
                         if (item.nameNumber) extraName += `_${safe(item.nameNumber)}`;
-                        if (item.patch) extraName += `_parche-${safe(item.patch)}`;
+                        if (item.patch && !item.patch.startsWith('data:image')) extraName += `_parche-${safe(item.patch)}`;
                         folder.file(`foto_${idx + 1}${extraName}.${ext}`, parts[1], { base64: true });
                     }
                     // Imágenes relacionadas -> subcarpeta propia
@@ -1408,7 +1443,13 @@
             resetZoom();
             let textHtml = [];
             if (item.nameNumber) textHtml.push(`<div class="text-[#39FF14] mb-1">📝 ${item.nameNumber}</div>`);
-            if (item.patch) textHtml.push(`<div class="text-blue-400">🛡️ ${item.patch}</div>`);
+            if (item.patch) {
+                if (item.patch.startsWith('data:image')) {
+                    textHtml.push(`<div class="text-blue-400 flex items-center justify-center gap-1">🛡️ <img src="${item.patch}" class="w-6 h-7 object-contain inline-block align-middle"></div>`);
+                } else {
+                    textHtml.push(`<div class="text-blue-400">🛡️ ${item.patch}</div>`);
+                }
+            }
 
             if (textHtml.length > 0) {
                 modalCust.innerHTML = textHtml.join('');
@@ -1859,15 +1900,16 @@
                 });
                 const isCollapsed = collapsedGroups.has(group.groupId);
                 const groupMenu = document.createElement('div');
+                groupMenu.className = "neon-card-green rounded-2xl p-3 mb-4";
                 groupMenu.innerHTML = `
-                    <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1 flex items-center justify-between gap-2" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
-                        <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-[#39FF14] transition-colors" title="Minimizar / desplegar bloque">
+                    <h3 class="text-xs font-bold text-[#39FF14] uppercase tracking-widest mb-3 border-b border-[#39FF14]/30 pb-2 flex items-center justify-between gap-2" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
+                        <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
                             <span id="groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.groupTitle}</span>
                         </button>
-                        <span draggable="true" ondragstart="groupDragStart(event, '${group.groupId}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
+                        <span draggable="true" ondragstart="groupDragStart(event, '${group.groupId}')" class="text-[#39FF14]/60 hover:text-[#39FF14] cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
                     </h3>`;
-                const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6" + (isCollapsed ? " hidden" : ""); ul.id = "grouplist-" + group.groupId;
+                const ul = document.createElement('ul'); ul.className = "space-y-1" + (isCollapsed ? " hidden" : ""); ul.id = "grouplist-" + group.groupId;
                 ul.setAttribute('ondragover', 'groupListDragOver(event)');
                 ul.setAttribute('ondrop', `groupListDrop(event, '${group.groupId}')`);
 
@@ -2240,7 +2282,7 @@
             if (item.nameNumber || item.patch) {
                 labelsHTML += `<div class="absolute bottom-0 left-0 right-0 bg-black/90 border-t border-[#39FF14]/50 p-1 text-center truncate z-10 flex flex-col gap-0.5 pointer-events-none">`;
                 if (item.nameNumber) labelsHTML += `<span class="text-[9px] text-[#39FF14] uppercase tracking-wider leading-tight">📝 ${item.nameNumber}</span>`;
-                if (item.patch) labelsHTML += `<span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>`;
+                if (item.patch) labelsHTML += `<span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch.startsWith('data:image') ? 'Parche' : item.patch}</span>`;
                 labelsHTML += `</div>`;
             }
 
@@ -2263,7 +2305,7 @@
                 <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col justify-end p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
                         <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-xl text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
-                        <button onclick="openInput('patch', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-xl text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
+                        <button onclick="openWishlistPatchPicker('${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-xl text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
                         <button onclick="openDeleteModal('${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-red-900/80 border border-red-500/50 text-red-300 rounded-xl text-xs hover:bg-red-500 hover:text-white transition-all mt-1" title="Eliminar">✕</button>
                     </div>
                 </div>
@@ -2426,16 +2468,18 @@
             pStructure.forEach((group, gi) => {
                 const isCollapsed = pCollapsedGroups.has(group.groupId);
                 const groupMenu = document.createElement('div');
-                const patchCls = group.isPatchGroup ? 'text-amber-500 border-amber-500/40' : 'text-zinc-600 border-zinc-800';
+                const neonCls = group.isPatchGroup ? 'neon-card-amber' : 'neon-card-sky';
+                const patchCls = group.isPatchGroup ? 'text-amber-400 border-amber-500/30' : 'text-sky-400 border-sky-400/30';
+                groupMenu.className = neonCls + " rounded-2xl p-3 mb-4";
                 groupMenu.innerHTML = `
-                    <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-1 flex items-center justify-between gap-2" ondragover="pGroupDragOver(event)" ondrop="pGroupDrop(event, '${group.groupId}')">
-                        <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-sky-400 transition-colors" title="Minimizar / desplegar bloque">
+                    <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-2 flex items-center justify-between gap-2" ondragover="pGroupDragOver(event)" ondrop="pGroupDrop(event, '${group.groupId}')">
+                        <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
                             <span id="p-groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.isPatchGroup ? '🛡️ ' : ''}${group.groupTitle}</span>
                         </button>
-                        <span draggable="true" ondragstart="pGroupDragStart(event, '${group.groupId}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
+                        <span draggable="true" ondragstart="pGroupDragStart(event, '${group.groupId}')" class="opacity-60 hover:opacity-100 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
                     </h3>`;
-                const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6" + (isCollapsed ? " hidden" : ""); ul.id = "p-grouplist-" + group.groupId;
+                const ul = document.createElement('ul'); ul.className = "space-y-1" + (isCollapsed ? " hidden" : ""); ul.id = "p-grouplist-" + group.groupId;
 
                 group.collections.forEach(col => {
                     const total = (pDb[col.id] || []).length + (col.subCols || []).reduce((s, x) => s + (pDb[x.id] || []).length, 0);
@@ -2820,7 +2864,7 @@
                 sendContext = { direction, src };
             }
             const targetStruct = direction === 'w2p' ? pStructure : structure;
-            document.getElementById('send-modal-title').textContent = direction === 'w2p' ? '📦 Enviar a Pedido...' : '⭐ Enviar a Wishlist...';
+            document.getElementById('send-modal-title').textContent = direction === 'w2p' ? '📚 Enviar a la biblioteca...' : '⭐ Enviar a Wishlist...';
             const list = document.getElementById('send-modal-list');
             list.innerHTML = '';
             targetStruct.forEach(g => {
@@ -2853,18 +2897,16 @@
                 pSaveDB();
                 closeSendModal();
 
-                openSheetPicker(sendContext.src, () => {
-                    const remove = confirm('Foto añadida al pedido ✔\n\n¿Quieres eliminarla también de la Wishlist?\n\nAceptar = moverla (se borra de la Wishlist)\nCancelar = mantenerla también en la Wishlist');
-                    if (remove) {
-                        const { wishlistColId, wishlistIndex } = sendContext;
-                        const arr = wishlistColId != null ? db[wishlistColId] : null;
-                        if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === sendContext.src) {
-                            arr.splice(wishlistIndex, 1);
-                            saveDB();
-                        }
-                        closeModal();
+                const remove = confirm('Foto añadida a la biblioteca ✔\n\n¿Quieres eliminarla también de la Wishlist?\n\nAceptar = moverla (se borra de la Wishlist)\nCancelar = mantenerla también en la Wishlist');
+                if (remove) {
+                    const { wishlistColId, wishlistIndex } = sendContext;
+                    const arr = wishlistColId != null ? db[wishlistColId] : null;
+                    if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === sendContext.src) {
+                        arr.splice(wishlistIndex, 1);
+                        saveDB();
                     }
-                });
+                    closeModal();
+                }
             } else {
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
                 db[targetColId].unshift({ src: sendContext.src, timestamp: Date.now(), nameNumber: "", patch: "" });
@@ -2872,6 +2914,93 @@
                 closeSendModal();
             }
         }
+
+        // --- Enviar un producto de la Wishlist directamente a una hoja de Crear Pedido (opción principal) ---
+        let sendToPedidoCtx = { src: null, wishlistColId: null, wishlistIndex: null, selectedSheetId: null, patchSrc: '' };
+        window.openSendToPedidoModal = function(event) {
+            if (event) event.stopPropagation();
+            const it = getModalItem(); if (!it) return;
+            sendToPedidoCtx = { src: it.src, wishlistColId: modalContext.colId, wishlistIndex: modalContext.index, selectedSheetId: null, patchSrc: '' };
+            document.getElementById('send-pedido-details').classList.add('hidden');
+            document.getElementById('send-pedido-novariants').checked = false;
+            document.getElementById('send-pedido-version').value = '';
+            document.getElementById('send-pedido-name').value = '';
+            document.getElementById('send-pedido-number').value = '';
+            document.getElementById('send-pedido-variant-fields').classList.remove('hidden');
+            renderSendPedidoPatchPreview();
+            renderSendPedidoSheetList();
+            document.getElementById('send-to-pedido-modal').classList.remove('hidden');
+        };
+        window.closeSendToPedidoModal = function() { document.getElementById('send-to-pedido-modal').classList.add('hidden'); };
+        window.openSendToLibraryFallback = function(event) {
+            closeSendToPedidoModal();
+            openSendModal('w2p', event);
+        };
+        function renderSendPedidoSheetList() {
+            const list = document.getElementById('send-pedido-sheet-list');
+            list.innerHTML = pOrders.sheets.map(s => `<button onclick="chooseSendToPedidoSheet('${s.id}')" class="w-full text-left px-3 py-2 rounded-full transition-colors text-sm font-bold truncate ${sendToPedidoCtx.selectedSheetId === s.id ? 'bg-amber-400 text-black' : 'bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300'}">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class="text-[10px] opacity-70">(actual)</span>' : ''}</button>`).join('');
+        }
+        window.chooseSendToPedidoSheet = function(sheetId) {
+            sendToPedidoCtx.selectedSheetId = sheetId;
+            renderSendPedidoSheetList();
+            const sheet = pOrders.sheets.find(s => s.id === sheetId);
+            document.getElementById('send-pedido-preview').innerHTML = renderSendPedidoPreview(sheet);
+            document.getElementById('send-pedido-details').classList.remove('hidden');
+        };
+        function renderSendPedidoPreview(sheet) {
+            const rows = sheet.rows.slice(-4);
+            return `<div class="text-[10px] text-zinc-500 uppercase mb-1">Vista previa de "${escapeHtml(sheet.name)}" · ${sheet.rows.length} fila${sheet.rows.length === 1 ? '' : 's'}</div>
+                <div class="flex gap-1.5 overflow-x-auto pb-1">
+                    ${rows.map(r => `<div class="shrink-0 w-10 h-12 bg-zinc-900 rounded border border-zinc-700 overflow-hidden flex items-center justify-center">${r.img && r.img.startsWith('data:image') ? `<img src="${r.img}" class="w-full h-full object-contain">` : '<span class="text-zinc-700 text-lg">＋</span>'}</div>`).join('')}
+                </div>`;
+        }
+        window.openSendToPedidoPatchPicker = function() {
+            pickerMode = 'send-to-pedido-patch';
+            pickerImages = [];
+            const body = document.getElementById('lib-picker-body');
+            const html = renderLibraryPickerGrid();
+            body.innerHTML = html || '<p class="text-zinc-500 text-sm">Todavía no tienes fotos de parches. Añádelas en "Crear Pedido", carpeta 🛡️ Parches.</p>';
+            document.getElementById('lib-picker-modal').classList.remove('hidden');
+        };
+        window.clearSendToPedidoPatch = function() {
+            sendToPedidoCtx.patchSrc = '';
+            renderSendPedidoPatchPreview();
+        };
+        function renderSendPedidoPatchPreview() {
+            const el = document.getElementById('send-pedido-patch-preview');
+            const clearBtn = document.getElementById('send-pedido-patch-clear');
+            if (sendToPedidoCtx.patchSrc) {
+                el.innerHTML = `<img src="${sendToPedidoCtx.patchSrc}" class="w-full h-full object-contain">`;
+                clearBtn.classList.remove('hidden');
+            } else {
+                el.innerHTML = '＋';
+                clearBtn.classList.add('hidden');
+            }
+        }
+        window.confirmSendToPedido = function() {
+            const sheetId = sendToPedidoCtx.selectedSheetId;
+            if (!sheetId) return;
+            const noVariants = document.getElementById('send-pedido-novariants').checked;
+            const extra = noVariants ? {} : {
+                version: document.getElementById('send-pedido-version').value.trim(),
+                name: document.getElementById('send-pedido-name').value.trim().toUpperCase(),
+                number: document.getElementById('send-pedido-number').value.trim(),
+                patch: sendToPedidoCtx.patchSrc || ''
+            };
+            const src = sendToPedidoCtx.src;
+            addOrderRowWithImage(src, sheetId, extra);
+            closeSendToPedidoModal();
+            const remove = confirm('Producto añadido al pedido ✔\n\n¿Quieres eliminarlo también de la Wishlist?\n\nAceptar = moverlo (se borra de la Wishlist)\nCancelar = mantenerlo también en la Wishlist');
+            if (remove) {
+                const { wishlistColId, wishlistIndex } = sendToPedidoCtx;
+                const arr = wishlistColId != null ? db[wishlistColId] : null;
+                if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === src) {
+                    arr.splice(wishlistIndex, 1);
+                    saveDB();
+                }
+                closeModal();
+            }
+        };
 
         window.addLibraryPhotoToOrder = function(event) {
             if (event) event.stopPropagation();
@@ -3155,12 +3284,14 @@
             };
         }
         window.addOrderRow = function() { activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
-        // Añade una fila nueva con la foto ya puesta, en la hoja indicada (o la activa) - usado al enviar desde Wishlist o la biblioteca
-        function addOrderRowWithImage(src, sheetId) {
+        // Añade una fila nueva con la foto ya puesta, en la hoja indicada (o la activa) - usado al enviar desde Wishlist o la biblioteca.
+        // `extraFields` permite rellenar version/name/number/patch de una vez (p.ej. al enviar desde la Wishlist eligiendo variantes).
+        function addOrderRowWithImage(src, sheetId, extraFields) {
             const sheet = sheetId ? pOrders.sheets.find(s => s.id === sheetId) : activeSheet();
             if (!sheet) return;
             const row = newOrderRow();
             row.img = src;
+            if (extraFields) Object.assign(row, extraFields);
             sheet.rows.push(row);
             if (sheetId && sheetId !== pOrders.activeSheetId) pOrders.activeSheetId = sheetId;
             savePOrders();
@@ -3469,15 +3600,13 @@
             }
         };
 
-        // --- Elegir foto de la biblioteca para una fila ---
+        // --- Elegir foto de la biblioteca para una fila del pedido, O para el parche de un producto de la Wishlist ---
         let pickerImages = [];
         let pickerTargetRow = null;
         let pickerTargetField = 'img';
-        window.openLibraryPicker = function(rowId, field) {
-            pickerTargetRow = rowId;
-            pickerTargetField = field || 'img';
-            pickerImages = [];
-            const body = document.getElementById('lib-picker-body');
+        let pickerMode = 'order-row'; // 'order-row' | 'wishlist-patch'
+        let wishlistPatchTarget = { colId: null, index: null };
+        function renderLibraryPickerGrid() {
             let html = '';
             pStructure.forEach(g => g.collections.forEach(col => {
                 const groups = [{ name: col.name, items: pDb[col.id] || [] }, ...((col.subCols || []).map(s => ({ name: col.name + ' · ' + s.name, items: pDb[s.id] || [] })))].filter(x => x.items.length);
@@ -3490,11 +3619,54 @@
                     html += `</div></div>`;
                 });
             }));
+            return html;
+        }
+        window.openLibraryPicker = function(rowId, field) {
+            pickerMode = 'order-row';
+            pickerTargetRow = rowId;
+            pickerTargetField = field || 'img';
+            pickerImages = [];
+            const body = document.getElementById('lib-picker-body');
+            const html = renderLibraryPickerGrid();
             body.innerHTML = html || '<p class="text-zinc-500 text-sm">La biblioteca está vacía. Añade fotos primero en el panel de la izquierda (pestaña Crear Pedido).</p>';
             document.getElementById('lib-picker-modal').classList.remove('hidden');
         };
-        window.closeLibraryPicker = function() { document.getElementById('lib-picker-modal').classList.add('hidden'); pickerTargetRow = null; };
+        window.openWishlistPatchPicker = function(colId, index, event) {
+            if (event) event.stopPropagation();
+            pickerMode = 'wishlist-patch';
+            wishlistPatchTarget = { colId, index };
+            pickerImages = [];
+            const body = document.getElementById('lib-picker-body');
+            const html = renderLibraryPickerGrid();
+            body.innerHTML = (html || '<p class="text-zinc-500 text-sm">Todavía no tienes fotos de parches. Añádelas en la pestaña "Crear Pedido", en la carpeta 🛡️ Parches.</p>')
+                + `<div class="pt-3 mt-3 border-t border-zinc-800 text-center"><button onclick="fallbackTextPatch()" class="text-xs text-zinc-500 hover:text-blue-400 underline cursor-pointer">✏️ O escribir el nombre del parche en texto</button></div>`;
+            document.getElementById('lib-picker-modal').classList.remove('hidden');
+        };
+        window.fallbackTextPatch = function() {
+            const { colId, index } = wishlistPatchTarget;
+            closeLibraryPicker();
+            openInput('patch', colId, index, null);
+        };
+        window.closeLibraryPicker = function() { document.getElementById('lib-picker-modal').classList.add('hidden'); pickerTargetRow = null; pickerMode = 'order-row'; };
         window.pickLibraryImage = function(i) {
+            if (pickerMode === 'wishlist-patch') {
+                const { colId, index } = wishlistPatchTarget;
+                if (db[colId] && db[colId][index] && pickerImages[i] != null) {
+                    db[colId][index].patch = pickerImages[i];
+                    saveDB();
+                }
+                closeLibraryPicker();
+                return;
+            }
+            if (pickerMode === 'send-to-pedido-patch') {
+                if (pickerImages[i] != null) {
+                    sendToPedidoCtx.patchSrc = pickerImages[i];
+                    renderSendPedidoPatchPreview();
+                }
+                closeLibraryPicker();
+                document.getElementById('send-to-pedido-modal').classList.remove('hidden');
+                return;
+            }
             const row = activeSheet().rows.find(r => r.id === pickerTargetRow);
             if (row && pickerImages[i] != null) {
                 row[pickerTargetField] = pickerImages[i]; savePOrders();
