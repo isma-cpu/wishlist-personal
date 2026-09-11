@@ -38,7 +38,6 @@
         .sidebar-drag-over { background-color: rgba(57, 255, 20, 0.2) !important; border-right: 4px solid #39FF14; }
 
         .selected-card { border-color: #39FF14 !important; box-shadow: 0 0 15px rgba(57, 255, 20, 0.5); transform: scale(0.97); }
-        .selected-card::after { content: '✓'; position: absolute; top: 10px; right: 10px; background: #39FF14; color: black; font-weight: bold; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 30; }
         
         .section-drop-active { background-color: rgba(57, 255, 20, 0.05); border: 2px dashed #39FF14; border-radius: 1rem; }
 
@@ -131,6 +130,9 @@
     <div id="multi-action-bar" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-zinc-900 border border-[#39FF14] px-6 py-3 rounded-full shadow-[0_0_20px_rgba(57,255,20,0.4)] z-[90] hidden items-center gap-4 transition-all">
         <span class="text-[#39FF14] text-sm font-bold"><span id="multi-count">0</span> seleccionados</span>
         <div class="h-4 w-px bg-zinc-700"></div>
+        <button onclick="reorderSelectedToFront()" class="text-amber-400 hover:text-amber-300 text-sm font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer" title="Poner las seleccionadas al principio de esta colección">
+            ⬆️ Reordenar
+        </button>
         <button onclick="openMoveMultiModal()" class="text-blue-400 hover:text-blue-300 text-sm font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer">
             Mover ➔
         </button>
@@ -147,10 +149,6 @@
             </h1>
             <p class="text-xs text-zinc-500 tracking-widest uppercase group-hover:text-[#39FF14] transition-colors">← Inicio (Últimas Añadidas)</p>
         </div>
-
-        <button onclick="toggleSelectMode()" id="btn-select-mode" class="mb-4 w-full py-2 border border-zinc-700 text-zinc-400 text-xs uppercase tracking-widest rounded-full hover:border-[#39FF14] hover:text-[#39FF14] transition-colors flex justify-center items-center gap-2 cursor-pointer">
-            ☑️ Activar Selección
-        </button>
 
         <div class="mb-8 space-y-2">
             <button onclick="downloadAllImagesZip()" class="w-full py-2 border border-[#39FF14] bg-[#39FF14]/10 text-[#39FF14] text-xs font-bold uppercase rounded-full hover:bg-[#39FF14] hover:text-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_10px_rgba(57,255,20,0.2)]">
@@ -545,7 +543,6 @@
 
         let db = {};
         let currentView = 'home';
-        let isSelectMode = false;
         let selectedItems = new Set();
         
         let editContext = { action: null, targetId: null, extraId: null };
@@ -1200,7 +1197,7 @@
                     toDelete[c].forEach(idx => db[c].splice(idx, 1));
                 }
                 selectedItems.clear();
-                toggleSelectMode();
+                updateActionBar();
                 saveDB();
             } else if (deleteContext.mode === 'subcollection') {
                 const parent = structure.flatMap(g => g.collections).find(c => c.id === deleteContext.colId);
@@ -1224,35 +1221,19 @@
             closeDeleteModal();
         };
 
-        // --- SELECCIÓN MÚLTIPLE ---
-        window.toggleSelectMode = function() {
-            isSelectMode = !isSelectMode;
-            const btn = document.getElementById('btn-select-mode');
-            
-            if(isSelectMode) {
-                btn.classList.replace('text-zinc-400', 'text-[#39FF14]');
-                btn.classList.replace('border-zinc-700', 'border-[#39FF14]');
-                btn.classList.add('bg-zinc-900');
-                btn.innerHTML = "☑️ Desactivar Selección";
-            } else {
-                btn.classList.replace('text-[#39FF14]', 'text-zinc-400');
-                btn.classList.replace('border-[#39FF14]', 'border-zinc-700');
-                btn.classList.remove('bg-zinc-900');
-                btn.innerHTML = "☑️ Activar Selección";
-                selectedItems.clear();
-                updateActionBar();
-            }
-            updateAll(); 
-        };
+        // --- SELECCIÓN MÚLTIPLE (mini casilla en cada tarjeta, siempre visible) ---
 
         window.toggleSelection = function(colId, index, element) {
             const key = `${colId}|${index}`;
+            const btn = element.querySelector('.select-check-btn');
             if (selectedItems.has(key)) {
                 selectedItems.delete(key);
                 element.classList.remove('selected-card');
+                if (btn) { btn.classList.remove('bg-[#39FF14]', 'border-[#39FF14]', 'text-black', 'opacity-100'); btn.classList.add('bg-black/40', 'border-white/50', 'text-transparent', 'opacity-40'); }
             } else {
                 selectedItems.add(key);
                 element.classList.add('selected-card');
+                if (btn) { btn.classList.add('bg-[#39FF14]', 'border-[#39FF14]', 'text-black', 'opacity-100'); btn.classList.remove('bg-black/40', 'border-white/50', 'text-transparent', 'opacity-40'); }
             }
             updateActionBar();
         };
@@ -1317,9 +1298,29 @@
 
             selectedItems.clear();
             closeMoveMultiModal();
-            toggleSelectMode();
+            updateActionBar();
             saveDB();
         }
+
+        // Pone las fotos seleccionadas al principio de su colección (mantiene su orden relativo entre ellas), colección por colección.
+        window.reorderSelectedToFront = function() {
+            if (!selectedItems.size) return;
+            const byCol = {};
+            selectedItems.forEach(key => {
+                const [c, i] = key.split('|');
+                if (!byCol[c]) byCol[c] = [];
+                byCol[c].push(parseInt(i));
+            });
+            for (const c in byCol) {
+                const indices = byCol[c].slice().sort((a, b) => a - b);
+                const picked = indices.map(i => db[c][i]);
+                indices.slice().sort((a, b) => b - a).forEach(i => db[c].splice(i, 1));
+                db[c].unshift(...picked);
+            }
+            selectedItems.clear();
+            updateActionBar();
+            saveDB();
+        };
 
         function showView(viewId) {
             currentView = viewId;
@@ -2221,28 +2222,20 @@
 
         function createImageCard(item, colId, index, isRecentView) {
             const div = document.createElement('div');
-            
-            const dragAttrs = (isRecentView || isSelectMode) ? "" : `draggable="true" ondragstart="handleDragStart(event, '${colId}', ${index})" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${colId}', ${index})" ondragend="handleDragEnd(event)"`;
-            
-            const isSelected = selectedItems.has(`${colId}|${index}`);
-            
-            div.className = `image-card-draggable relative aspect-[3/4] bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 transition-all ${isRecentView ? '' : 'hover:border-[#39FF14]'} group ${isSelected ? 'selected-card' : ''}`;
-            
-            if (!isRecentView && !isSelectMode) {
-                div.classList.add('cursor-grab', 'active:cursor-grabbing');
-            } else if (isSelectMode) {
-                div.classList.add('cursor-pointer');
-            }
 
-            div.onclick = (e) => { 
-                if(isSelectMode) {
-                    toggleSelection(colId, index, div);
-                } else {
-                    if(e.target.closest('.action-btn')) return;
-                    openModal(item.src, item.nameNumber, item.patch, e, colId, index);
-                }
+            const dragAttrs = isRecentView ? "" : `draggable="true" ondragstart="handleDragStart(event, '${colId}', ${index})" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, '${colId}', ${index})" ondragend="handleDragEnd(event)"`;
+
+            const isSelected = selectedItems.has(`${colId}|${index}`);
+
+            div.className = `image-card-draggable relative aspect-[3/4] bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 transition-all ${isRecentView ? '' : 'hover:border-[#39FF14]'} group ${isSelected ? 'selected-card' : ''}`;
+
+            if (!isRecentView) div.classList.add('cursor-grab', 'active:cursor-grabbing');
+
+            div.onclick = (e) => {
+                if (e.target.closest('.action-btn')) return;
+                openModal(item.src, item.nameNumber, item.patch, e, colId, index);
             };
-            
+
             let labelsHTML = '';
             if (item.nameNumber || item.patch) {
                 labelsHTML += `<div class="absolute bottom-0 left-0 right-0 bg-black/90 border-t border-[#39FF14]/50 p-1 text-center truncate z-10 flex flex-col gap-0.5 pointer-events-none">`;
@@ -2251,21 +2244,23 @@
                 labelsHTML += `</div>`;
             }
 
-            const actionButtonsVisible = isSelectMode ? "hidden" : "flex";
             const relBadge = (Array.isArray(item.related) && item.related.length)
-                ? `<span class="absolute top-1 right-1 z-30 bg-black/80 text-sky-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none">🔗 ${item.related.length}</span>`
+                ? `<span class="absolute bottom-1 right-1 z-20 bg-black/80 text-sky-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none">🔗 ${item.related.length}</span>`
                 : '';
             const favActive = !!item.fav;
-            const favBtn = isSelectMode ? '' : `<button onclick="event.stopPropagation(); toggleFav('${colId}', ${index}, event)" title="Destacar"
+            const favBtn = `<button onclick="event.stopPropagation(); toggleFav('${colId}', ${index}, event)" title="Destacar"
                     class="action-btn absolute top-1 left-1 z-30 w-7 h-7 flex items-center justify-center rounded-xl text-sm leading-none transition-all ${favActive ? 'bg-black/70 opacity-100 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]' : 'bg-black/40 opacity-30 grayscale hover:opacity-90 hover:grayscale-0'}">⭐</button>`;
+            const selectBtn = `<button onclick="event.stopPropagation(); toggleSelection('${colId}', ${index}, this.closest('.image-card-draggable'))" title="Seleccionar producto"
+                    class="select-check-btn action-btn absolute top-1 right-1 z-30 w-6 h-6 flex items-center justify-center rounded-full border-2 text-[11px] font-bold transition-all ${isSelected ? 'bg-[#39FF14] border-[#39FF14] text-black opacity-100' : 'bg-black/40 border-white/50 text-transparent opacity-40 hover:opacity-90'}">✓</button>`;
 
             div.innerHTML = `
                 <div class="absolute inset-0 z-0" ${dragAttrs}></div>
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none relative z-0" alt="Producto">
                 ${favBtn}
+                ${selectBtn}
                 ${relBadge}
                 ${labelsHTML}
-                <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 ${actionButtonsVisible} flex-col justify-end p-2 transition-opacity z-20 pointer-events-none">
+                <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col justify-end p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
                         <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-xl text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
                         <button onclick="openInput('patch', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-xl text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
