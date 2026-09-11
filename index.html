@@ -72,6 +72,15 @@
         }
         .del-x-btn:hover { background: #ef4444; border-color: #ef4444; color: #fff; }
         .del-x-btn:active { transform: scale(0.92); }
+        /* Variante pequeña, para sitios repetitivos/apretados (columnas, chips de cliente...) donde un recuadro
+           siempre visible sería demasiado ruido: solo aparece al pasar el ratón (combinar con opacity-0 group-hover:opacity-100). */
+        .del-x-btn.del-x-btn-sm { min-width: 0.85rem; min-height: 0.85rem; padding: 0.05rem; font-size: 9px; }
+
+        /* Texto que el usuario escribe para personalizar el producto (versión, talla, cantidad, nombre, número,
+           precios, columnas personalizadas, dirección...): tamaño ajustable con los botones A-/A+ de la barra
+           (--cell-font-size, en px, puesto como variable inline en #order-table por renderOrderTable). */
+        #order-table { --cell-font-size: 14px; }
+        .cell-text { font-weight: 700; font-size: var(--cell-font-size, 14px); }
     </style>
 </head>
 <body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
@@ -229,15 +238,21 @@
             </section>
 
             <section id="pedido-order-section" class="bg-white text-black rounded-2xl shadow-xl overflow-hidden">
-                <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-200 bg-gray-50 print:hidden">
+                <div class="flex flex-wrap items-center gap-3 p-4 border-b border-gray-200 bg-gray-50 print:hidden">
                     <h2 class="font-black text-lg tracking-wide text-black">📦 PLANTILLA DE PEDIDO</h2>
-                    <div class="flex flex-wrap gap-2">
+                    <div id="order-hidden-cols" class="flex flex-wrap gap-1"></div>
+                    <div class="flex flex-wrap items-center gap-2 ml-auto">
+                        <div class="flex items-center gap-0.5 border border-gray-300 rounded-full pl-2 pr-1 py-1 bg-white" title="Tamaño del texto de las columnas">
+                            <span class="text-[9px] text-gray-400 uppercase mr-1">Texto</span>
+                            <button onclick="adjustCellFontSize(-1)" class="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-black text-xs font-black rounded-full hover:bg-gray-100 cursor-pointer">A−</button>
+                            <span id="order-font-size-label" class="text-[10px] text-gray-500 w-8 text-center select-none">14px</span>
+                            <button onclick="adjustCellFontSize(1)" class="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-black text-sm font-black rounded-full hover:bg-gray-100 cursor-pointer">A+</button>
+                        </div>
                         <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
                         <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
                         <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
                         <button onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
                     </div>
-                    <div id="order-hidden-cols" class="flex flex-wrap gap-1"></div>
                 </div>
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
                 <div id="order-style-bar" class="flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-200 print:hidden"></div>
@@ -334,18 +349,7 @@
                     <input type="checkbox" id="send-pedido-novariants" onchange="document.getElementById('send-pedido-variant-fields').classList.toggle('hidden', this.checked)">
                     Enviar sin variantes (las añado después en la plantilla)
                 </label>
-                <div id="send-pedido-variant-fields" class="space-y-2">
-                    <input id="send-pedido-version" placeholder="Versión (ej. FAN, PLAYER...)" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400">
-                    <div class="flex gap-2">
-                        <input id="send-pedido-name" placeholder="Nombre" class="flex-1 min-w-0 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400 uppercase">
-                        <input id="send-pedido-number" placeholder="Número" class="w-20 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400">
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <div id="send-pedido-patch-preview" class="w-10 h-12 bg-zinc-900 rounded border border-zinc-700 flex items-center justify-center shrink-0 overflow-hidden text-zinc-700 text-lg">＋</div>
-                        <button onclick="openSendToPedidoPatchPicker()" class="text-xs text-blue-400 hover:text-blue-300 underline cursor-pointer">🛡️ Elegir parche (opcional)</button>
-                        <button id="send-pedido-patch-clear" onclick="clearSendToPedidoPatch()" class="hidden text-xs text-red-400 hover:text-red-300 underline cursor-pointer">Quitar</button>
-                    </div>
-                </div>
+                <div id="send-pedido-variant-fields"></div>
                 <button onclick="confirmSendToPedido()" class="w-full px-4 py-2.5 text-sm font-bold bg-amber-400 text-black rounded-full hover:bg-white transition-colors cursor-pointer">✅ Enviar a esta hoja</button>
             </div>
         </div>
@@ -1334,8 +1338,19 @@
                     if (currentView === deleteContext.colId) currentView = 'home';
                     saveStructure(); saveDB(); init();
                 }
+            } else if (deleteContext.mode === 'callback') {
+                if (typeof deleteContext.callback === 'function') deleteContext.callback();
             }
             closeDeleteModal();
+        };
+
+        // Punto de entrada genérico para CUALQUIER acción de eliminar/quitar de la web (Wishlist o Crear Pedido):
+        // muestra el mismo popup con la estética de la app (nunca el confirm() nativo del navegador, que además
+        // puede quedar bloqueado por el propio navegador tras varios avisos seguidos) y ejecuta el callback si acepta.
+        window.openConfirmDelete = function(message, onConfirm) {
+            deleteContext = { mode: 'callback', callback: onConfirm };
+            document.getElementById('delete-confirm-text').innerText = message;
+            document.getElementById('delete-confirm-modal').classList.remove('hidden');
         };
 
         // --- SELECCIÓN MÚLTIPLE (mini casilla en cada tarjeta, siempre visible) ---
@@ -1777,11 +1792,12 @@
         window.removeRelatedImage = function(i) {
             const item = getModalItem();
             if (!item || !Array.isArray(item.related)) return;
-            if (!confirm('¿Quitar esta imagen relacionada?')) return;
-            item.related.splice(i, 1);
-            if (!item.related.length) delete item.related;
-            saveDB();
-            showMainImage();
+            openConfirmDelete('¿Quitar esta imagen relacionada?', () => {
+                item.related.splice(i, 1);
+                if (!item.related.length) delete item.related;
+                saveDB();
+                showMainImage();
+            });
         };
 
         function renderModalRelated() {
@@ -1907,13 +1923,15 @@
                    ondrop="handleSidebarDrop(event, '${col.id}')"
                    onclick="showView('${col.id}'); return false;"
                    class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-[#39FF14] hover:bg-zinc-900 rounded-full transition-all group select-none relative">
-                    <span class="flex items-center gap-1.5 min-w-0 pointer-events-none">
+                    <span class="flex items-center gap-1.5 min-w-0 flex-1 pointer-events-none">
                         <span draggable="true" ondragstart="collectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar o mover a otra carpeta">⠿</span>
                         <span class="truncate">${col.name}</span>
                     </span>
                     <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
-                        <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
-                        <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="del-x-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
+                        <div class="hidden group-hover:flex items-center gap-1">
+                            <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5" title="Editar Nombre">✏️</button>
+                            <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="del-x-btn" title="Eliminar colección">✕</button>
+                        </div>
                         <span id="badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
                     </div>
                 </a>`;
@@ -1983,10 +2001,11 @@
             if (event) event.stopPropagation();
             const group = structure.find(g => g.groupId === groupId);
             if (!group) return;
-            if (!confirm('¿Eliminar esta carpeta? Las colecciones que contiene NO se borran, solo salen de la carpeta.')) return;
-            group.collections.forEach(c => { if (c.folderId === folderId) c.folderId = null; });
-            group.folders = group.folders.filter(f => f.id !== folderId);
-            saveStructure(); init();
+            openConfirmDelete('¿Eliminar esta carpeta? Las colecciones que contiene NO se borran, solo salen de la carpeta.', () => {
+                group.collections.forEach(c => { if (c.folderId === folderId) c.folderId = null; });
+                group.folders = group.folders.filter(f => f.id !== folderId);
+                saveStructure(); init();
+            });
         };
 
         // --- INICIALIZACIÓN INTERFAZ ---
@@ -2033,7 +2052,7 @@
                                 <span class="shrink-0">${folder.emoji || '📁'}</span>
                                 <span class="truncate">${folder.name}</span>
                             </button>
-                            <div class="flex items-center gap-1 shrink-0">
+                            <div class="hidden group-hover:flex items-center gap-1 shrink-0">
                                 <span draggable="true" ondragstart="folderDragStart(event, '${group.groupId}', '${folder.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity" title="Arrastra para reordenar la carpeta">⠿</span>
                                 <button onclick="openInput('set-folder-emoji', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Elegir emoji de la carpeta">😀</button>
                                 <button onclick="openInput('edit-folder', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Renombrar carpeta">✏️</button>
@@ -2591,6 +2610,25 @@
         // Escudos reales de cada equipo/selección, subidos por el usuario (no emojis) - por colección, en su propio store.
         let pTeamCrests = {};
         async function savePTeamCrests() { try { await localforage.setItem('pedido_crests_v1', pTeamCrests); } catch (e) {} }
+        // Mientras el usuario no suba el escudo real de un equipo, se genera un "escudo" provisional (iniciales +
+        // color, siempre el mismo para el mismo nombre) para no dejar el hueco vacío - un solo clic encima lo
+        // sustituye por la imagen real de siempre.
+        const CREST_FALLBACK_PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'];
+        function teamCrestFallback(name) {
+            name = name || '?';
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+            const color = CREST_FALLBACK_PALETTE[hash % CREST_FALLBACK_PALETTE.length];
+            const stopWords = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y']);
+            const words = name.trim().split(/\s+/).filter(w => w && !stopWords.has(w.toLowerCase()));
+            const initials = words.length >= 2 ? (words[0][0] + words[1][0]).toUpperCase() : (words[0] || name).trim().slice(0, 2).toUpperCase();
+            return { color, initials };
+        }
+        function renderCrestBadgeInner(col) {
+            if (pTeamCrests[col.id]) return `<img src="${pTeamCrests[col.id]}" class="w-full h-full object-cover">`;
+            const { color, initials } = teamCrestFallback(col.name);
+            return `<span class="w-full h-full flex items-center justify-center text-[8px] font-black text-white" style="background:${color}">${escapeHtml(initials)}</span>`;
+        }
         let pCrestUploadTarget = null;
         window.triggerCrestUpload = function(colId, event) {
             if (event) { event.stopPropagation(); event.preventDefault(); }
@@ -2612,11 +2650,12 @@
         };
         window.removeCrest = function(colId, event) {
             if (event) { event.stopPropagation(); event.preventDefault(); }
-            if (!confirm('¿Quitar el escudo de esta colección?')) return;
-            delete pTeamCrests[colId];
-            savePTeamCrests();
-            pInit();
-            if (pCurrentView === colId) pRenderLibraryBody();
+            openConfirmDelete('¿Quitar el escudo de esta colección?', () => {
+                delete pTeamCrests[colId];
+                savePTeamCrests();
+                pInit();
+                if (pCurrentView === colId) pRenderLibraryBody();
+            });
         };
 
         async function loadPedido() {
@@ -2683,17 +2722,19 @@
                            ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${group.groupId}', '${col.id}')"
                            onclick="pShowView('${col.id}'); return false;"
                            class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded-full transition-all group select-none relative">
-                            <span class="flex items-center gap-1.5 min-w-0 pointer-events-none">
+                            <span class="flex items-center gap-1.5 min-w-0 flex-1 pointer-events-none">
                                 <span draggable="true" ondragstart="pCollectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar">⠿</span>
-                                <span onclick="triggerCrestUpload('${col.id}', event)" class="shrink-0 w-5 h-5 rounded-full overflow-hidden border border-zinc-700 bg-zinc-800 flex items-center justify-center pointer-events-auto cursor-pointer hover:border-sky-400" title="${pTeamCrests[col.id] ? 'Cambiar escudo' : 'Subir escudo'}">
-                                    ${pTeamCrests[col.id] ? `<img src="${pTeamCrests[col.id]}" class="w-full h-full object-cover">` : `<span class="text-[9px] text-zinc-600">+</span>`}
+                                <span onclick="triggerCrestUpload('${col.id}', event)" class="shrink-0 w-5 h-5 rounded-full overflow-hidden border border-zinc-700 bg-zinc-800 flex items-center justify-center pointer-events-auto cursor-pointer hover:border-sky-400" title="${pTeamCrests[col.id] ? 'Cambiar escudo (pulsa para subir el tuyo)' : 'Pulsa para subir el escudo real'}">
+                                    ${renderCrestBadgeInner(col)}
                                 </span>
                                 <span class="truncate">${col.name}</span>
                             </span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
-                                ${pTeamCrests[col.id] ? `<button onclick="removeCrest('${col.id}', event)" class="del-x-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar escudo">🗑️</button>` : ''}
-                                <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
-                                <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="del-x-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
+                                <div class="hidden group-hover:flex items-center gap-1">
+                                    ${pTeamCrests[col.id] ? `<button onclick="removeCrest('${col.id}', event)" class="del-x-btn" title="Quitar escudo">🗑️</button>` : ''}
+                                    <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5" title="Editar Nombre">✏️</button>
+                                    <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="del-x-btn" title="Eliminar colección">✕</button>
+                                </div>
                                 <span id="p-badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
                             </div>
                         </a>`;
@@ -2731,11 +2772,12 @@
             const parent = pStructure.flatMap(g => g.collections).find(c => c.id === parentColId);
             const sub = parent && (parent.subCols || []).find(s => s.id === subId);
             const n = (pDb[subId] || []).length;
-            if (!confirm(`¿Eliminar la subcolección «${sub ? sub.name : ''}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`))) return;
-            parent.subCols = parent.subCols.filter(s => s.id !== subId);
-            if (!parent.subCols.length) delete parent.subCols;
-            delete pDb[subId];
-            pSaveStructure(); pSaveDB(); pInit();
+            openConfirmDelete(`¿Eliminar la subcolección «${sub ? sub.name : ''}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`), () => {
+                parent.subCols = parent.subCols.filter(s => s.id !== subId);
+                if (!parent.subCols.length) delete parent.subCols;
+                delete pDb[subId];
+                pSaveStructure(); pSaveDB(); pInit();
+            });
         };
 
         window.pDeleteCollection = function(groupId, colId, event) {
@@ -2744,12 +2786,13 @@
             const col = g && g.collections.find(c => c.id === colId);
             if (!col) return;
             let n = (pDb[colId] || []).length; (col.subCols || []).forEach(s => { n += (pDb[s.id] || []).length; });
-            if (!confirm(`¿Eliminar la colección «${col.name}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`))) return;
-            (col.subCols || []).forEach(s => { delete pDb[s.id]; });
-            delete pDb[colId];
-            g.collections = g.collections.filter(c => c.id !== colId);
-            if (pCurrentView === colId) pCurrentView = null;
-            pSaveStructure(); pSaveDB(); pInit();
+            openConfirmDelete(`¿Eliminar la colección «${col.name}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`), () => {
+                (col.subCols || []).forEach(s => { delete pDb[s.id]; });
+                delete pDb[colId];
+                g.collections = g.collections.filter(c => c.id !== colId);
+                if (pCurrentView === colId) pCurrentView = null;
+                pSaveStructure(); pSaveDB(); pInit();
+            });
         };
 
         window.pSidebarDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer) || pCollectionDragSrc) { e.preventDefault(); e.currentTarget.classList.add('sidebar-drag-over'); } };
@@ -2826,8 +2869,7 @@
                 return;
             }
 
-            const crest = pTeamCrests[col.id];
-            titleEl.innerHTML = (crest ? `<img src="${crest}" class="w-8 h-8 rounded-full object-cover inline-block align-middle mr-2 border border-zinc-700">` : '') + escapeHtml(col.name);
+            titleEl.innerHTML = `<span onclick="triggerCrestUpload('${col.id}', event)" title="Pulsa para subir el escudo real" class="w-8 h-8 rounded-full overflow-hidden inline-flex items-center justify-center align-middle mr-2 border border-zinc-700 cursor-pointer hover:border-sky-400">${renderCrestBadgeInner(col)}</span>` + escapeHtml(col.name);
             const hasSubs = Array.isArray(col.subCols);
             const items = pDb[col.id] || [];
             let total = items.length;
@@ -2936,9 +2978,10 @@
         }
 
         window.pDeleteImage = function(colId, index) {
-            if (!confirm('¿Eliminar esta foto de la biblioteca?')) return;
-            pDb[colId].splice(index, 1);
-            pSaveDB();
+            openConfirmDelete('¿Eliminar esta foto de la biblioteca?', () => {
+                pDb[colId].splice(index, 1);
+                pSaveDB();
+            });
         };
 
         function pIsPatchCollection(id) {
@@ -2967,10 +3010,11 @@
             if (event) event.stopPropagation();
             const { colId, index } = pModalContext;
             if (colId == null || index == null || !pDb[colId] || !pDb[colId][index]) return;
-            if (!confirm('¿Eliminar esta foto de la biblioteca?')) return;
-            pDb[colId].splice(index, 1);
-            pSaveDB();
-            pCloseModal();
+            openConfirmDelete('¿Eliminar esta foto de la biblioteca?', () => {
+                pDb[colId].splice(index, 1);
+                pSaveDB();
+                pCloseModal();
+            });
         };
 
         let pZoom = { scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, moved: false };
@@ -3112,6 +3156,46 @@
             const list = document.getElementById('send-pedido-sheet-list');
             list.innerHTML = pOrders.sheets.map(s => `<button onclick="chooseSendToPedidoSheet('${s.id}')" class="w-full text-left px-3 py-2 rounded-full transition-colors text-sm font-bold truncate ${sendToPedidoCtx.selectedSheetId === s.id ? 'bg-amber-400 text-black' : 'bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300'}">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class="text-[10px] opacity-70">(actual)</span>' : ''}</button>`).join('');
         }
+        // El formulario de variantes se dibuja como una mini-tabla con las MISMAS columnas/etiquetas que la
+        // hoja de destino (respeta nombres en español personalizados y si Nombre/Número están separados o no),
+        // para que el usuario se ubique de un vistazo, igual que en la plantilla real.
+        function renderSendPedidoVariantFields(sheet) {
+            const cols = getOrderColumns(sheet);
+            const verCol = cols.find(c => c.key === 'version') || { es: 'Versión' };
+            const patchCol = cols.find(c => c.key === 'patch') || { es: 'Parche' };
+            const th = label => `<th class="text-[9px] text-amber-400 uppercase font-bold px-2 py-1.5 border-b border-zinc-800 whitespace-nowrap">${escapeHtml(label)}</th>`;
+            let nameHeaderHtml, nameBodyHtml;
+            if (sheet.splitNameNumber) {
+                const nameCol = cols.find(c => c.key === 'name') || { es: 'Nombre' };
+                const numCol = cols.find(c => c.key === 'number') || { es: 'Número' };
+                nameHeaderHtml = th(nameCol.es) + th(numCol.es);
+                nameBodyHtml = `<td class="p-1.5"><input id="send-pedido-name" placeholder="NOMBRE" class="w-full bg-black border border-zinc-700 text-white px-2 py-1.5 text-xs rounded-lg text-center uppercase focus:outline-none focus:border-amber-400"></td>
+                    <td class="p-1.5"><input id="send-pedido-number" placeholder="Nº" class="w-full bg-black border border-zinc-700 text-white px-2 py-1.5 text-xs rounded-lg text-center focus:outline-none focus:border-amber-400"></td>`;
+            } else {
+                const nnCol = cols.find(c => c.key === 'nameNumber') || { es: 'Nombre y Número' };
+                nameHeaderHtml = th(nnCol.es);
+                nameBodyHtml = `<td class="p-1.5"><div class="flex gap-1">
+                        <input id="send-pedido-name" placeholder="NOMBRE" class="flex-1 min-w-0 bg-black border border-zinc-700 text-white px-2 py-1.5 text-xs rounded-lg text-center uppercase focus:outline-none focus:border-amber-400">
+                        <input id="send-pedido-number" placeholder="Nº" class="w-12 bg-black border border-zinc-700 text-white px-2 py-1.5 text-xs rounded-lg text-center focus:outline-none focus:border-amber-400">
+                    </div></td>`;
+            }
+            document.getElementById('send-pedido-variant-fields').innerHTML = `
+                <div class="overflow-x-auto border border-zinc-800 rounded-xl">
+                    <table class="w-full text-center border-collapse">
+                        <thead><tr class="bg-zinc-900">${th(verCol.es)}${nameHeaderHtml}${th(patchCol.es)}</tr></thead>
+                        <tbody><tr>
+                            <td class="p-1.5"><input id="send-pedido-version" placeholder="FAN, PLAYER..." class="w-full bg-black border border-zinc-700 text-white px-2 py-1.5 text-xs rounded-lg text-center focus:outline-none focus:border-amber-400"></td>
+                            ${nameBodyHtml}
+                            <td class="p-1.5">
+                                <div class="flex flex-col items-center gap-1">
+                                    <div id="send-pedido-patch-preview" onclick="openSendToPedidoPatchPicker()" title="Elegir parche (opcional)" class="w-10 h-10 bg-zinc-900 rounded-lg border border-zinc-700 flex items-center justify-center shrink-0 overflow-hidden text-zinc-700 text-lg cursor-pointer hover:border-amber-400">＋</div>
+                                    <button id="send-pedido-patch-clear" onclick="clearSendToPedidoPatch()" class="hidden text-[9px] text-red-400 hover:text-red-300 underline cursor-pointer">Quitar</button>
+                                </div>
+                            </td>
+                        </tr></tbody>
+                    </table>
+                </div>`;
+        }
         window.chooseSendToPedidoSheet = function(sheetId) {
             sendToPedidoCtx.selectedSheetId = sheetId;
             const sheet = pOrders.sheets.find(s => s.id === sheetId);
@@ -3123,9 +3207,7 @@
             document.getElementById('send-pedido-preview-full').classList.add('hidden');
             document.getElementById('send-pedido-preview-full').innerHTML = '';
             document.getElementById('send-pedido-novariants').checked = false;
-            document.getElementById('send-pedido-version').value = '';
-            document.getElementById('send-pedido-name').value = '';
-            document.getElementById('send-pedido-number').value = '';
+            renderSendPedidoVariantFields(sheet);
             document.getElementById('send-pedido-variant-fields').classList.remove('hidden');
             renderSendPedidoPatchPreview();
             document.getElementById('send-to-pedido-details-modal').classList.remove('hidden');
@@ -3521,11 +3603,12 @@
         window.deleteOrderSheet = function(id, event) {
             if (event) event.stopPropagation();
             if (pOrders.sheets.length <= 1) return;
-            if (!confirm('¿Eliminar esta hoja de pedido y todas sus filas? Esta acción no se puede deshacer.')) return;
-            pOrders.sheets = pOrders.sheets.filter(s => s.id !== id);
-            if (pOrders.activeSheetId === id) pOrders.activeSheetId = pOrders.sheets[0].id;
             closeSheetMenu();
-            savePOrders(); renderOrderSheetsBar(); renderOrderTable();
+            openConfirmDelete('¿Eliminar esta hoja de pedido y todas sus filas? Esta acción no se puede deshacer.', () => {
+                pOrders.sheets = pOrders.sheets.filter(s => s.id !== id);
+                if (pOrders.activeSheetId === id) pOrders.activeSheetId = pOrders.sheets[0].id;
+                savePOrders(); renderOrderSheetsBar(); renderOrderTable();
+            });
         };
 
         function newOrderRow() {
@@ -3549,11 +3632,12 @@
             if (!document.getElementById('view-pedido').classList.contains('hidden')) { renderOrderSheetsBar(); renderOrderTable(); }
         }
         window.deleteOrderRow = function(rowId) {
-            if (!confirm('¿Eliminar esta fila del pedido?')) return;
-            const sheet = activeSheet();
-            sheet.rows = sheet.rows.filter(r => r.id !== rowId);
-            if (!sheet.rows.length) sheet.rows.push(newOrderRow());
-            savePOrders(); renderOrderTable();
+            openConfirmDelete('¿Eliminar esta fila del pedido?', () => {
+                const sheet = activeSheet();
+                sheet.rows = sheet.rows.filter(r => r.id !== rowId);
+                if (!sheet.rows.length) sheet.rows.push(newOrderRow());
+                savePOrders(); renderOrderTable();
+            });
         };
 
         // --- Reordenar filas de la plantilla arrastrando el tirador ⠿ ---
@@ -3576,11 +3660,12 @@
             savePOrders(); renderOrderTable();
         }
         window.deleteOrderColumn = function(colId) {
-            if (!confirm('¿Eliminar esta columna?')) return;
-            const sheet = activeSheet();
-            sheet.customColumns = sheet.customColumns.filter(c => c.id !== colId);
-            sheet.rows.forEach(r => { delete r.custom[colId]; });
-            savePOrders(); renderOrderTable();
+            openConfirmDelete('¿Eliminar esta columna? Se perderá el texto que hayas escrito en ella para todas las filas.', () => {
+                const sheet = activeSheet();
+                sheet.customColumns = sheet.customColumns.filter(c => c.id !== colId);
+                sheet.rows.forEach(r => { delete r.custom[colId]; });
+                savePOrders(); renderOrderTable();
+            });
         };
 
         // --- Reordenar columnas de la plantilla arrastrando el tirador ⠿ de la cabecera ---
@@ -3651,7 +3736,7 @@
                 if (src) {
                     // Parche antiguo guardado como texto libre (antes de que los parches fueran siempre imagen) - se conserva visible.
                     return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" ${boxStyle}>
-                        <span class="text-[9px] text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
+                        <span class="cell-text text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
                         <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                             <button onclick="openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
                             <button onclick="clearOrderRowImage('${row.id}','patch')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
@@ -3673,9 +3758,9 @@
             const a = sheet.address || {};
             if (!hasAddressData(a)) return `<button onclick="openAddressModal()" class="text-[10px] uppercase text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
             const line = (label, val) => val ? `<div><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
-            return `<div class="text-[10px] leading-snug text-gray-800 min-w-[9rem] text-center">
+            return `<div class="cell-text leading-snug text-gray-800 min-w-[9rem] text-center">
                     ${line('Destinatario', a.dest)}${line('Dirección', a.dir)}${line('C.P.', a.cp)}${line('Ciudad', a.ciudad)}${line('Provincia', a.prov)}${line('País', a.pais)}${line('Tel', a.tel)}
-                    <button onclick="openAddressModal()" class="text-sky-500 hover:text-sky-700 text-[10px] uppercase mt-1 print:hidden">✎ Editar</button>
+                    <button onclick="openAddressModal()" class="text-sky-500 hover:text-sky-700 text-[10px] uppercase mt-1 print:hidden font-normal">✎ Editar</button>
                 </div>`;
         }
 
@@ -3683,20 +3768,20 @@
         // con rowspan a todas las filas, y solo se pinta en la primera.
         function renderOrderRowHTML(row, isFirstRow, totalRows) {
             const sheet = activeSheet();
-            // Las palabras/números que el cliente escribe para personalizar el producto (versión, talla, nombre,
-            // número, columnas personalizadas) van en negrita y algo más grandes que el resto de la tabla, para
-            // que se lean mejor al exportar el PDF (el proveedor tiene que verlas claras).
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm print:border-0" id="cell-${field}-${row.id}">`;
-            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 font-bold text-sm uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 font-bold text-sm print:border-0" id="cell-number-${row.id}">`;
-            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm print:border-0" id="cell-number-${row.id}">`;
-            const priceCell = `<span id="cell-price-${row.id}" class="font-bold text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
+            // Todo lo que el cliente escribe/ve para personalizar el producto (versión, talla, cantidad, nombre,
+            // número, precios, columnas personalizadas, dirección) usa la clase .cell-text: negrita y con el
+            // tamaño ajustable desde la barra (A-/A+), para que se lea mejor al exportar el PDF para el proveedor.
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="cell-text w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="cell-text w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="cell-text w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="cell-text w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const priceCell = `<span id="cell-price-${row.id}" class="cell-text text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
                 if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm print:border-0">
+                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="cell-text w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
                     </td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
@@ -3720,9 +3805,9 @@
             }).join('');
 
             const heightStyle = ` style="height:${row.height || ORDER_ROW_DEFAULT_HEIGHT}px"`;
-            return `<tr id="tr-${row.id}" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
+            return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
                     <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-300 hover:text-gray-500 text-sm cursor-grab select-none" title="Arrastra para reordenar la fila">⠿</span>
-                    <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn" title="Eliminar fila">✕</button>
+                    <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar fila">✕</button>
                     <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer" title="Arrastra para cambiar la altura de la fila"></span>
                 </td></tr>`;
         }
@@ -3743,22 +3828,27 @@
             const tbody = document.getElementById('order-tbody');
             colgroup.innerHTML = renderColgroupHTML(sheet);
 
+            const fontSize = sheet.cellFontSize || 14;
+            document.getElementById('order-table').style.setProperty('--cell-font-size', fontSize + 'px');
+            const fontLabel = document.getElementById('order-font-size-label');
+            if (fontLabel) fontLabel.textContent = fontSize + 'px';
+
             const headerBg = es ? 'bg-emerald-800' : 'bg-yellow-200';
             const headerText = es ? 'text-white' : 'text-gray-800';
             const headerZh = es ? 'hidden' : 'text-gray-500';
 
             const thAll = getOrderedColumns(sheet).map(c => `
-                <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative cursor-text">
+                <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative cursor-text">
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     ${c.isCustom ? `
                         <div class="flex items-center justify-center gap-1">
                             <span class="font-bold ${headerText} text-sm uppercase">${escapeHtml(c.es)}</span>
-                            <button onclick="event.stopPropagation(); deleteOrderColumn('${c.key}')" class="del-x-btn print:hidden" title="Eliminar columna">✕</button>
+                            <button onclick="event.stopPropagation(); deleteOrderColumn('${c.key}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden" title="Eliminar columna">✕</button>
                         </div>` : `
                         <div ondblclick="event.stopPropagation(); openInput('rename-order-column-zh', '${c.key}', 'builtin', event)" title="Doble clic para editar el texto en chino" class="text-[10px] ${headerZh} leading-none mb-0.5 cursor-text">${c.zh || ''}</div>
                         <div class="flex items-center justify-center gap-1">
                             <span class="font-bold ${headerText} text-sm leading-tight uppercase">${c.es}</span>
-                            <button onclick="event.stopPropagation(); hideOrderColumn('${c.key}')" class="del-x-btn print:hidden" title="Quitar columna">✕</button>
+                            <button onclick="event.stopPropagation(); hideOrderColumn('${c.key}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden" title="Quitar columna">✕</button>
                         </div>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
@@ -3791,6 +3881,14 @@
             const sheet = activeSheet();
             if (!Array.isArray(sheet.hiddenColumns)) return;
             sheet.hiddenColumns = sheet.hiddenColumns.filter(k => k !== key);
+            savePOrders(); renderOrderTable();
+        };
+        // Tamaño (px) del texto que se escribe en las columnas (versión, talla, cantidad, nombre, número, precios,
+        // columnas personalizadas, dirección), ajustable por hoja con los botones A-/A+ de la barra de herramientas.
+        window.adjustCellFontSize = function(delta) {
+            const sheet = activeSheet();
+            const cur = sheet.cellFontSize || 14;
+            sheet.cellFontSize = Math.max(10, Math.min(22, cur + delta));
             savePOrders(); renderOrderTable();
         };
 
@@ -3999,11 +4097,12 @@
             const id = sel && sel.value;
             if (!id) return;
             const a = savedAddresses.find(x => x.id === id);
-            if (!confirm('¿Eliminar la dirección guardada «' + (a ? a.label : '') + '»?')) return;
-            savedAddresses = savedAddresses.filter(x => x.id !== id);
-            saveSavedAddresses();
-            renderAddrSavedSelect();
-            sel.value = '';
+            openConfirmDelete('¿Eliminar la dirección guardada «' + (a ? a.label : '') + '»?', () => {
+                savedAddresses = savedAddresses.filter(x => x.id !== id);
+                saveSavedAddresses();
+                renderAddrSavedSelect();
+                sel.value = '';
+            });
         };
         window.openAddressModal = function() {
             const a = activeSheet().address || {};
@@ -4191,12 +4290,13 @@
         function renderClientesChips() {
             const el = document.getElementById('pedidos-clientes-chips');
             if (!el) return;
-            el.innerHTML = pedidosClientes.map(c => `<span class="text-[10px] uppercase bg-zinc-800 text-zinc-300 rounded-full pl-2 pr-1 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="del-x-btn" title="Quitar de la lista">✕</button></span>`).join('');
+            el.innerHTML = pedidosClientes.map(c => `<span class="group text-[10px] uppercase bg-zinc-800 text-zinc-300 rounded-full pl-2 pr-1 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar de la lista">✕</button></span>`).join('');
         }
         window.removePedidoCliente = function(name) {
-            if (!confirm('¿Quitar "' + name + '" de la lista de clientes? Los pedidos ya asignados a este cliente mantendrán el nombre guardado.')) return;
-            pedidosClientes = pedidosClientes.filter(c => c !== name);
-            saveClientes(); renderClientesChips(); renderPedidosTab();
+            openConfirmDelete('¿Quitar "' + name + '" de la lista de clientes? Los pedidos ya asignados a este cliente mantendrán el nombre guardado.', () => {
+                pedidosClientes = pedidosClientes.filter(c => c !== name);
+                saveClientes(); renderClientesChips(); renderPedidosTab();
+            });
         };
 
         function renderPedidosTab() {
@@ -4212,13 +4312,13 @@
                 const paid = parseFloat(p.paid) || 0;
                 const debe = Math.max(0, (p.total || 0) - paid);
                 const fecha = new Date(p.date).toLocaleDateString('es-ES');
-                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
+                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
                     <span class="text-zinc-500 text-lg select-none" title="Arrastra para reordenar">☰</span>
                     <div class="flex-1 min-w-[10rem]">
-                        <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-sky-400 rounded-full px-1 w-full">
+                        <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-amber-400 rounded-full px-1 w-full">
                         <div class="text-[10px] text-zinc-500 uppercase mt-0.5">${fecha}</div>
                     </div>
-                    <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-800 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-zinc-700">
+                    <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30">
                         <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
                         ${pedidosClientes.map(c => `<option value="${escAttr(c)}" ${p.cliente === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
                     </select>
@@ -4228,13 +4328,13 @@
                     </div>
                     <div class="text-center">
                         <div class="text-[9px] text-zinc-500 uppercase">Pagado</div>
-                        <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-20 text-center bg-zinc-800 text-white text-sm font-bold rounded-full px-1 py-1 border border-zinc-700">
+                        <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-20 text-center bg-zinc-900 text-white text-sm font-bold rounded-full px-1 py-1 border border-amber-400/30">
                     </div>
                     <div class="text-center">
                         <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
                         <div id="pedido-debe-${p.id}" class="${debe > 0 ? 'text-red-400' : 'text-emerald-400'} font-bold text-sm">${formatMoney(debe)} €</div>
                     </div>
-                    <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                    <button onclick="viewPedidoDetail('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
                     <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
                 </div>`;
             }).join('');
@@ -4254,9 +4354,10 @@
             }
         };
         window.deletePedido = function(id) {
-            if (!confirm('¿Eliminar este pedido archivado? Esta acción no se puede deshacer.')) return;
-            pedidosArchivo = pedidosArchivo.filter(p => p.id !== id);
-            savePedidosArchivo(); renderPedidosTab();
+            openConfirmDelete('¿Eliminar este pedido archivado? Esta acción no se puede deshacer.', () => {
+                pedidosArchivo = pedidosArchivo.filter(p => p.id !== id);
+                savePedidosArchivo(); renderPedidosTab();
+            });
         };
         window.pedidoDragStart = function(e, i) { pedidoDragIndex = i; e.dataTransfer.effectAllowed = 'move'; };
         window.pedidoDragOver = function(e) { e.preventDefault(); };
