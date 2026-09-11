@@ -240,7 +240,7 @@
     </div>
 
     <!-- Menú desplegable de opciones de una hoja de pedido (renombrar/duplicar/mover/eliminar): fixed para no quedar recortado por el scroll de la barra de pestañas -->
-    <div id="sheet-options-menu" class="hidden fixed bg-white border border-gray-300 rounded-full shadow-lg z-[300] flex flex-col min-w-[10rem] py-1"></div>
+    <div id="sheet-options-menu" class="hidden fixed bg-white border border-gray-300 rounded-xl shadow-lg z-[300] flex flex-col min-w-[10rem] py-1 overflow-hidden"></div>
 
     <div id="view-pedidos" class="hidden w-full pt-16 p-4 md:p-8 max-w-5xl mx-auto">
         <div class="flex items-center gap-3 mb-2 border-b border-zinc-800 pb-3">
@@ -1032,6 +1032,16 @@
                 titleEl.innerHTML = "✏️ RENOMBRAR HOJA";
                 const sheet = pOrders.sheets.find(s => s.id === targetId);
                 inputEl.value = sheet ? sheet.name : "";
+            } else if (action === 'rename-order-column') {
+                titleEl.innerHTML = "✏️ RENOMBRAR VARIANTE"; inputEl.placeholder = "Nombre de la columna...";
+                const sheet = activeSheet();
+                if (extraId === 'custom') {
+                    const col = sheet.customColumns.find(c => c.id === targetId);
+                    inputEl.value = col ? col.label : "";
+                } else {
+                    const col = getOrderColumns(sheet).find(c => c.key === targetId);
+                    inputEl.value = col ? col.es : "";
+                }
             } else if (action === 'add-cliente') {
                 titleEl.innerHTML = "➕ NUEVO CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
             } else if (action === 'save-address') {
@@ -1142,6 +1152,18 @@
                 if (val) {
                     const sheet = pOrders.sheets.find(s => s.id === targetId);
                     if (sheet) { sheet.name = val; savePOrders(); renderOrderSheetsBar(); }
+                }
+            } else if (action === 'rename-order-column') {
+                if (val) {
+                    const sheet = activeSheet();
+                    if (extraId === 'custom') {
+                        const col = sheet.customColumns.find(c => c.id === targetId);
+                        if (col) col.label = val;
+                    } else {
+                        if (!sheet.columnLabelOverrides) sheet.columnLabelOverrides = {};
+                        sheet.columnLabelOverrides[targetId] = val;
+                    }
+                    savePOrders(); renderOrderTable();
                 }
             } else if (action === 'add-cliente') {
                 if (val) {
@@ -3095,6 +3117,9 @@
             cols.push({ key: 'price', zh: '价格', es: 'Precio', type: 'number', w: 80 });
             cols.push({ key: 'priceTotal', zh: '总价', es: 'Precio Total', type: 'total', w: 90 });
             cols.push({ key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address', w: 190 });
+            if (sheet && sheet.columnLabelOverrides) {
+                cols.forEach(c => { if (sheet.columnLabelOverrides[c.key] != null) c.es = sheet.columnLabelOverrides[c.key]; });
+            }
             return cols;
         }
 
@@ -3208,9 +3233,9 @@
         function renderOrderSheetsBar() {
             const bar = document.getElementById('order-sheets-bar');
             bar.innerHTML = pOrders.sheets.map(s => `
-                <div class="flex items-center gap-1 shrink-0 ${s.id === pOrders.activeSheetId ? '' : 'opacity-70'}">
-                    <button onclick="switchOrderSheet('${s.id}')" class="px-3 py-1.5 rounded-t-xl text-xs font-bold uppercase border border-b-0 transition-colors ${s.id === pOrders.activeSheetId ? 'bg-white text-black border-gray-300' : 'bg-gray-200 text-gray-500 border-gray-200 hover:bg-gray-100'}">${escapeHtml(s.name)}</button>
-                    <button onclick="toggleSheetMenu('${s.id}', event)" class="text-gray-400 hover:text-black text-sm px-1 font-bold" title="Opciones de la hoja">⋯</button>
+                <div class="inline-flex items-center gap-1.5 shrink-0 px-3 py-1.5 rounded-t-xl text-xs font-bold uppercase border border-b-0 transition-colors ${s.id === pOrders.activeSheetId ? 'bg-white text-black border-gray-300' : 'bg-gray-200 text-gray-500 border-gray-200 hover:bg-gray-100 opacity-70'}">
+                    <span onclick="switchOrderSheet('${s.id}')" class="cursor-pointer">${escapeHtml(s.name)}</span>
+                    <button onclick="toggleSheetMenu('${s.id}', event)" class="hover:opacity-60 font-black leading-none" title="Opciones de la hoja">⋯</button>
                 </div>`).join('') + `<button onclick="addOrderSheet()" class="px-3 py-1.5 rounded-t-xl text-xs font-bold uppercase border border-b-0 border-dashed border-gray-300 text-gray-400 hover:text-black hover:border-black shrink-0">➕ Hoja</button>`;
             const as = activeSheet();
             const styleBar = document.getElementById('order-style-bar');
@@ -3465,7 +3490,7 @@
             const headerZh = es ? 'hidden' : 'text-gray-500';
 
             const thAll = getOrderedColumns(sheet).map(c => `
-                <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative">
+                <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative cursor-text">
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     ${c.isCustom ? `
                         <div class="flex items-center justify-center gap-1">
