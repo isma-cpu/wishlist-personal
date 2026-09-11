@@ -274,6 +274,7 @@
             <div class="flex flex-wrap justify-center gap-4" onclick="event.stopPropagation()">
                 <button onclick="openSendModal('p2w', event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black">⭐ Enviar a Wishlist</button>
                 <button id="p-modal-addrow-btn" onclick="addLibraryPhotoToOrder(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black">🛒 Añadir al pedido</button>
+                <button id="p-modal-sendpatch-btn" onclick="sendPatchToOrderFromModal(event)" class="hidden px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-black">📎 Enviar como parche</button>
                 <button onclick="pDeleteCurrentModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white">✕ Eliminar</button>
             </div>
         </div>
@@ -308,6 +309,28 @@
             <div id="sheet-picker-list" class="space-y-2 mb-6"></div>
             <div class="flex justify-end gap-3">
                 <button onclick="closeSheetPicker()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enviar un parche de la biblioteca a un producto ya existente: paso 1, elegir hoja -->
+    <div id="patch-sheet-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-lg shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm max-h-[80vh] overflow-y-auto">
+            <h3 class="text-lg font-black tracking-wider text-amber-400 mb-4 uppercase">📎 ¿A qué hoja lo envío?</h3>
+            <div id="patch-sheet-list" class="space-y-2 mb-6"></div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closePatchSheetModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enviar un parche: paso 2, elegir a qué producto/fila de esa hoja -->
+    <div id="patch-row-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-lg shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+            <h3 id="patch-row-title" class="text-lg font-black tracking-wider text-amber-400 mb-4 uppercase"></h3>
+            <div id="patch-row-body"></div>
+            <div class="flex justify-end gap-3 mt-4">
+                <button onclick="closePatchRowModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
             </div>
         </div>
     </div>
@@ -2057,6 +2080,10 @@
                 collections: [
                     { id: "sel-espana", name: "Selección España" }
                 ]
+            },
+            {
+                groupTitle: "PARCHES", groupId: "parches", isPatchGroup: true,
+                collections: [{ id: "parches-general", name: "Parches" }]
             }
         ];
 
@@ -2065,6 +2092,13 @@
             pStructure = JSON.parse(localStorage.getItem('pedido_structure_v2'));
             if (!pStructure || !Array.isArray(pStructure) || !pStructure[0].collections) pStructure = defaultPedidoStructure;
         } catch (e) { pStructure = defaultPedidoStructure; }
+
+        // Carpeta especial "Parches" (solo imágenes, se puede enviar directamente a un producto de cualquier hoja de pedido) - migración aditiva, no toca nada existente.
+        (function pEnsureParchesGroup() {
+            if (pStructure.some(g => g.groupId === 'parches')) return;
+            pStructure.push({ groupTitle: "PARCHES", groupId: "parches", isPatchGroup: true, collections: [{ id: "parches-general", name: "Parches" }] });
+            try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {}
+        })();
 
         function pSaveStructure() { try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {} }
 
@@ -2127,11 +2161,12 @@
             pStructure.forEach((group, gi) => {
                 const isCollapsed = pCollapsedGroups.has(group.groupId);
                 const groupMenu = document.createElement('div');
+                const patchCls = group.isPatchGroup ? 'text-amber-500 border-amber-500/40' : 'text-zinc-600 border-zinc-800';
                 groupMenu.innerHTML = `
-                    <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1 flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-1 flex items-center justify-between gap-2">
                         <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-sky-400 transition-colors" title="Minimizar / desplegar bloque">
                             <span id="p-groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
-                            <span class="truncate">${group.groupTitle}</span>
+                            <span class="truncate">${group.isPatchGroup ? '🛡️ ' : ''}${group.groupTitle}</span>
                         </button>
                         <span class="flex items-center gap-1 shrink-0">
                             <button onclick="pMoveGroup('${group.groupId}', -1, event)" class="text-zinc-600 hover:text-sky-400 text-sm leading-none p-0.5 transition-colors ${gi === 0 ? 'invisible' : ''}" title="Subir bloque">▲</button>
@@ -2147,7 +2182,7 @@
                         <a href="#" id="p-link-${col.id}"
                            ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${col.id}')"
                            onclick="pShowView('${col.id}'); return false;"
-                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-sky-400 hover:bg-zinc-900 rounded transition-all group select-none relative">
+                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded transition-all group select-none relative">
                             <span class="truncate pointer-events-none">${col.name}</span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
                                 <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
@@ -2246,10 +2281,12 @@
         };
 
         function pCardHTML(item, colId, index) {
-            return `<div class="relative group aspect-[3/4] bg-zinc-900 rounded-md overflow-hidden border border-zinc-800 hover:border-sky-400 transition-all cursor-pointer"
+            const isPatch = pIsPatchCollection(colId);
+            return `<div class="relative group aspect-[3/4] bg-zinc-900 rounded-md overflow-hidden border ${isPatch ? 'border-amber-500/40 hover:border-amber-400' : 'border-zinc-800 hover:border-sky-400'} transition-all cursor-pointer"
                     draggable="true" ondragstart="pDragStart(event, '${colId}', ${index})" ondragend="pDragEndCard()"
                     onclick="pOpenModal('${colId}', ${index})">
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none">
+                ${isPatch ? `<button onclick="event.stopPropagation(); sendPatchToOrder('${colId}', ${index})" title="Enviar a un producto del pedido" class="absolute bottom-0 inset-x-0 z-10 py-1 bg-amber-500/90 text-black text-[9px] font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">📎 Enviar a pedido</button>` : ''}
                 <button onclick="event.stopPropagation(); pDeleteImage('${colId}', ${index})" title="Eliminar" class="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-red-900/80 border border-red-500/50 text-red-300 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
             </div>`;
         }
@@ -2377,6 +2414,10 @@
             pSaveDB();
         };
 
+        function pIsPatchCollection(id) {
+            return pStructure.some(g => g.isPatchGroup && g.collections.some(c => c.id === id || (c.subCols || []).some(s => s.id === id)));
+        }
+
         // --- Visor simple de la biblioteca (con zoom) ---
         let pModalContext = { colId: null, index: null };
         window.pOpenModal = function(colId, index) {
@@ -2384,6 +2425,9 @@
             pModalContext = { colId, index };
             document.getElementById('p-modal-img').src = item.src;
             pResetZoom();
+            const isPatch = pIsPatchCollection(colId);
+            document.getElementById('p-modal-addrow-btn').classList.toggle('hidden', isPatch);
+            document.getElementById('p-modal-sendpatch-btn').classList.toggle('hidden', !isPatch);
             document.getElementById('p-modal').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
         };
@@ -2576,6 +2620,63 @@
             if (cb) cb();
         };
 
+        // --- Enviar un parche de la biblioteca directamente a un producto YA EXISTENTE de una hoja (no crea fila nueva) ---
+        let patchTargetSrc = null;
+        window.sendPatchToOrder = function(colId, index) {
+            const item = pDb[colId] && pDb[colId][index]; if (!item) return;
+            openPatchSheetPicker(item.src);
+        };
+        window.sendPatchToOrderFromModal = function(event) {
+            if (event) event.stopPropagation();
+            const item = pDb[pModalContext.colId] && pDb[pModalContext.colId][pModalContext.index];
+            if (item) openPatchSheetPicker(item.src);
+        };
+        function openPatchSheetPicker(src) {
+            patchTargetSrc = src;
+            const list = document.getElementById('patch-sheet-list');
+            list.innerHTML = pOrders.sheets.map(s => `<button onclick="choosePatchSheet('${s.id}')" class="w-full text-left px-3 py-2 bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300 rounded transition-colors text-sm font-bold truncate">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class=\'text-[10px] text-zinc-500\'>(actual)</span>' : ''}</button>`).join('');
+            document.getElementById('patch-sheet-modal').classList.remove('hidden');
+        }
+        window.closePatchSheetModal = function() {
+            document.getElementById('patch-sheet-modal').classList.add('hidden');
+            patchTargetSrc = null;
+        };
+        window.choosePatchSheet = function(sheetId) {
+            document.getElementById('patch-sheet-modal').classList.add('hidden');
+            const sheet = pOrders.sheets.find(s => s.id === sheetId); if (!sheet) return;
+            const body = document.getElementById('patch-row-body');
+            if (!sheet.rows.length) {
+                body.innerHTML = `<p class="text-zinc-500 font-mono text-sm">Esta hoja todavía no tiene ninguna fila. Añade un producto primero.</p>`;
+            } else {
+                body.innerHTML = `<div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr))">` + sheet.rows.map((r, i) => `
+                    <button onclick="choosePatchRow('${sheet.id}','${r.id}')" class="flex flex-col items-center gap-1 p-2 bg-zinc-900 hover:bg-amber-900/40 border border-zinc-800 hover:border-amber-400 rounded transition-colors">
+                        ${r.img && r.img.startsWith('data:image') ? `<img src="${r.img}" class="w-12 h-14 object-contain">` : `<div class="w-12 h-14 flex items-center justify-center text-zinc-600 text-2xl">＋</div>`}
+                        <span class="text-[10px] text-zinc-400 font-mono uppercase truncate w-full text-center">${escapeHtml(r.name || ('Fila ' + (i + 1)))}</span>
+                        ${r.patch && r.patch.startsWith('data:image') ? `<span class="text-[8px] text-amber-500">🛡️ ya tiene parche</span>` : ''}
+                    </button>`).join('') + `</div>`;
+            }
+            document.getElementById('patch-row-title').textContent = '📎 ¿A qué producto de "' + sheet.name + '"?';
+            document.getElementById('patch-row-modal').classList.remove('hidden');
+        };
+        window.closePatchRowModal = function() {
+            document.getElementById('patch-row-modal').classList.add('hidden');
+            patchTargetSrc = null;
+        };
+        window.choosePatchRow = function(sheetId, rowId) {
+            const sheet = pOrders.sheets.find(s => s.id === sheetId);
+            const row = sheet && sheet.rows.find(r => r.id === rowId);
+            if (row && patchTargetSrc) {
+                row.patch = patchTargetSrc;
+                savePOrders();
+                if (pOrders.activeSheetId === sheetId) {
+                    const cell = document.getElementById('cell-patch-' + rowId);
+                    if (cell) cell.innerHTML = renderImgCellInner(row, 'patch');
+                }
+            }
+            patchTargetSrc = null;
+            document.getElementById('patch-row-modal').classList.add('hidden');
+        };
+
         // ============================================================
         // =================  TABLA / PLANTILLA DE PEDIDO  ============
         // ============================================================
@@ -2591,18 +2692,25 @@
                 { key: 'qty', zh: '数量', es: 'Cantidad', type: 'number', w: 65 },
                 { key: 'size', zh: '尺码', es: 'Talla', type: 'text', w: 65 }
             ];
-            if (es) {
-                cols.push({ key: 'nameNumber', es: 'Nombre y Número', type: 'name-number', w: 140 });
-            } else {
-                cols.push({ key: 'name', zh: '印刷名字', es: 'Nombre', type: 'text-upper', w: 110 });
-                cols.push({ key: 'number', zh: '印刷号码', es: 'Número', type: 'text', w: 75 });
-            }
+            cols.push({ key: 'nameNumber', zh: '印刷名字/号码', es: 'Nombre y Número', type: 'name-number', w: 150 });
             cols.push({ key: 'patch', zh: '补丁', es: 'Parche', type: 'patch', w: 90 });
             cols.push({ key: 'unitPrice', zh: '单价', es: es ? 'Precio x Unidad' : 'P. unitario', type: 'number', w: 85 });
             cols.push({ key: 'price', zh: '价格', es: 'Precio', type: 'number', w: 80 });
             cols.push({ key: 'priceTotal', zh: '总价', es: 'Precio Total', type: 'total', w: 90 });
             cols.push({ key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address', w: 190 });
             return cols;
+        }
+
+        // Columnas fijas + columnas personalizadas de la hoja, en un solo orden (aplica sheet.colOrder si el usuario ha arrastrado alguna).
+        function getOrderedColumns(sheet) {
+            const all = getOrderColumns(sheet).concat((sheet.customColumns || []).map(c => ({ key: c.id, es: c.label, type: 'custom', w: c.w || 100, isCustom: true })));
+            if (Array.isArray(sheet.colOrder) && sheet.colOrder.length) {
+                const map = new Map(all.map(c => [c.key, c]));
+                const ordered = sheet.colOrder.map(k => map.get(k)).filter(Boolean);
+                all.forEach(c => { if (!ordered.includes(c)) ordered.push(c); });
+                return ordered;
+            }
+            return all;
         }
 
         // --- Varias "hojas" de pedido (como pestañas de Excel) ---
@@ -2740,6 +2848,22 @@
             if (!sheet.rows.length) sheet.rows.push(newOrderRow());
             savePOrders(); renderOrderTable();
         };
+
+        // --- Reordenar filas de la plantilla arrastrando el tirador ⠿ ---
+        let rowDragId = null;
+        window.rowDragStart = function(e, rowId) { rowDragId = rowId; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
+        window.rowDragOverTr = function(e) { if (rowDragId) e.preventDefault(); };
+        window.rowDropTr = function(e, targetRowId) {
+            e.preventDefault();
+            if (!rowDragId || rowDragId === targetRowId) return;
+            const rows = activeSheet().rows;
+            const from = rows.findIndex(r => r.id === rowDragId), to = rows.findIndex(r => r.id === targetRowId);
+            rowDragId = null;
+            if (from === -1 || to === -1) return;
+            const [moved] = rows.splice(from, 1);
+            rows.splice(to, 0, moved);
+            savePOrders(); renderOrderTable();
+        };
         function addOrderColumnNamed(name) {
             activeSheet().customColumns.push({ id: 'col-' + Date.now(), label: name });
             savePOrders(); renderOrderTable();
@@ -2749,6 +2873,24 @@
             const sheet = activeSheet();
             sheet.customColumns = sheet.customColumns.filter(c => c.id !== colId);
             sheet.rows.forEach(r => { delete r.custom[colId]; });
+            savePOrders(); renderOrderTable();
+        };
+
+        // --- Reordenar columnas de la plantilla arrastrando el tirador ⠿ de la cabecera ---
+        let colDragKey = null;
+        window.colDragStart = function(e, key) { colDragKey = key; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
+        window.colDragOverTh = function(e) { if (colDragKey) e.preventDefault(); };
+        window.colDropTh = function(e, targetKey) {
+            e.preventDefault();
+            if (!colDragKey || colDragKey === targetKey) { colDragKey = null; return; }
+            const sheet = activeSheet();
+            const keys = getOrderedColumns(sheet).map(c => c.key);
+            const from = keys.indexOf(colDragKey), to = keys.indexOf(targetKey);
+            colDragKey = null;
+            if (from === -1 || to === -1) return;
+            const [moved] = keys.splice(from, 1);
+            keys.splice(to, 0, moved);
+            sheet.colOrder = keys;
             savePOrders(); renderOrderTable();
         };
 
@@ -2795,10 +2937,20 @@
                 </div>`;
             }
             if (field === 'patch') {
-                return `<div class="flex flex-col items-center gap-1">
-                    <input type="text" value="${escAttr(src)}" placeholder="Texto" oninput="updateOrderField('${row.id}','patch',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
-                    <button onclick="openLibraryPicker('${row.id}','patch')" ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" class="text-[9px] text-sky-500 hover:text-sky-700 print:hidden">🖼 imagen</button>
-                </div>`;
+                if (src) {
+                    // Parche antiguo guardado como texto libre (antes de que los parches fueran siempre imagen) - se conserva visible.
+                    return `<div class="relative group w-14 h-16 mx-auto flex items-center justify-center text-center px-1">
+                        <span class="text-[9px] text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
+                        <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded gap-1">
+                            <button onclick="openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                            <button onclick="clearOrderRowImage('${row.id}','patch')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
+                        </div>
+                    </div>`;
+                }
+                return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" onclick="openLibraryPicker('${row.id}','patch')"
+                        class="w-14 h-16 mx-auto border border-dashed border-amber-300 rounded flex flex-col items-center justify-center text-amber-400 hover:border-amber-500 hover:text-amber-600 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
+                        <span class="text-lg leading-none">＋</span>Parche
+                    </div>`;
             }
             return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="openLibraryPicker('${row.id}','img')"
                     class="w-16 h-20 mx-auto border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
@@ -2822,15 +2974,18 @@
             const sheet = activeSheet();
             const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
             const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Número" oninput="updateOrderField('${row.id}','number',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="flex-1 min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-0.5 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-8 shrink-0 text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-0.5 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
             const priceCell = `<span id="cell-price-${row.id}" class="font-bold text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
-            const tds = getOrderColumns(sheet).map(c => {
+            const tds = getOrderedColumns(sheet).map(c => {
+                if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
+                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
+                    </td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
-                if (c.key === 'name-number' || c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <div class="flex flex-col gap-0.5">${nameCell}${numberCell}</div>
+                if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 align-middle text-center">
+                        <div class="flex items-center justify-center gap-0.5 whitespace-nowrap">${nameCell}${numberCell}</div>
                     </td>`;
                 if (c.key === 'address') {
                     if (!isFirstRow) return '';
@@ -2841,20 +2996,14 @@
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
                     return `<td id="cell-pricetotal" rowspan="${totalRows}" class="border border-gray-300 p-2 align-middle text-center font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`;
                 }
-                if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-middle text-center">${nameCell}</td>`;
-                if (c.key === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numberCell}</td>`;
                 if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
                 return `<td class="border border-gray-300 p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
 
-            const tdsCustom = sheet.customColumns.map(c => `
-                <td class="border border-gray-300 p-1 align-middle text-center">
-                    <input type="text" value="${escAttr(row.custom[c.id] || '')}" oninput="updateOrderCustomField('${row.id}','${c.id}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
-                </td>`).join('');
-
             const heightStyle = row.height ? ` style="height:${row.height}px"` : '';
-            return `<tr id="tr-${row.id}"${heightStyle}>${tds}${tdsCustom}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
+            return `<tr id="tr-${row.id}" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
+                    <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-300 hover:text-gray-500 text-sm cursor-grab select-none" title="Arrastra para reordenar la fila">⠿</span>
                     <button onclick="deleteOrderRow('${row.id}')" class="text-gray-300 hover:text-red-500 text-sm" title="Eliminar fila">✕</button>
                     <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer" title="Arrastra para cambiar la altura de la fila"></span>
                 </td></tr>`;
@@ -2862,8 +3011,7 @@
 
         function renderColgroupHTML(sheet) {
             const widths = pOrders.colWidths || {};
-            let html = getOrderColumns(sheet).map(c => `<col id="col-${c.key}" style="width:${widths[c.key] || c.w || 90}px">`).join('');
-            html += sheet.customColumns.map(c => `<col id="col-${c.id}" style="width:${widths[c.id] || 100}px">`).join('');
+            let html = getOrderedColumns(sheet).map(c => `<col id="col-${c.key}" style="width:${widths[c.key] || c.w || 90}px">`).join('');
             html += `<col style="width:32px">`;
             return html;
         }
@@ -2881,21 +3029,19 @@
             const headerText = es ? 'text-white' : 'text-gray-800';
             const headerZh = es ? 'hidden' : 'text-gray-500';
 
-            const thBase = getOrderColumns(sheet).map(c => `
-                <th class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative">
-                    <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
-                    <div class="font-bold ${headerText} text-[11px] leading-tight uppercase">${c.es}</div>
+            const thAll = getOrderedColumns(sheet).map(c => `
+                <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative">
+                    <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
+                    ${c.isCustom ? `
+                        <div class="flex items-center justify-center gap-1">
+                            <span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.es)}</span>
+                            <button onclick="deleteOrderColumn('${c.key}')" class="${es ? 'text-white/60 hover:text-red-300' : 'text-gray-400 hover:text-red-500'} text-xs print:hidden" title="Eliminar columna">✕</button>
+                        </div>` : `
+                        <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
+                        <div class="font-bold ${headerText} text-[11px] leading-tight uppercase">${c.es}</div>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
-            const thCustom = sheet.customColumns.map(c => `
-                <th class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative">
-                    <div class="flex items-center justify-center gap-1">
-                        <span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.label)}</span>
-                        <button onclick="deleteOrderColumn('${c.id}')" class="${es ? 'text-white/60 hover:text-red-300' : 'text-gray-400 hover:text-red-500'} text-xs print:hidden" title="Eliminar columna">✕</button>
-                    </div>
-                    <span onmousedown="startColResize(event, '${c.id}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
-                </th>`).join('');
-            thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
+            thead.innerHTML = `<tr>${thAll}<th class="border border-gray-300 ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
             tbody.innerHTML = sheet.rows.map((r, i) => renderOrderRowHTML(r, i === 0, sheet.rows.length)).join('');
         }
 
@@ -3164,6 +3310,7 @@
                 name: sheet.name,
                 date: new Date().toISOString(),
                 style: sheet.style,
+                colOrder: JSON.parse(JSON.stringify(sheet.colOrder || [])),
                 address: JSON.parse(JSON.stringify(sheet.address || {})),
                 customColumns: JSON.parse(JSON.stringify(sheet.customColumns || [])),
                 rows: JSON.parse(JSON.stringify(sheet.rows || [])),
@@ -3263,26 +3410,27 @@
             const headerBg = es ? 'bg-emerald-800' : 'bg-yellow-200';
             const headerText = es ? 'text-white' : 'text-gray-800';
             const headerZh = es ? 'hidden' : 'text-gray-500';
-            const cols = getOrderColumns({ style: p.style });
+            const cols = getOrderedColumns(p);
             const theadHtml = `<tr>` + cols.map(c => `<th class="border border-gray-300 ${headerBg} px-2 py-2 text-center">
-                    <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
-                    <div class="font-bold ${headerText} text-[11px] uppercase">${c.es}</div>
-                </th>`).join('') + (p.customColumns || []).map(c => `<th class="border border-gray-300 ${headerBg} px-2 py-2 text-center"><span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.label)}</span></th>`).join('') + `</tr>`;
+                    ${c.isCustom ? `<span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.es)}</span>` : `
+                        <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
+                        <div class="font-bold ${headerText} text-[11px] uppercase">${c.es}</div>`}
+                </th>`).join('') + `</tr>`;
             const rows = p.rows || [];
             const tbodyHtml = rows.map((r, i) => {
                 const isFirst = i === 0, totalRows = rows.length;
                 const tds = cols.map(c => {
+                    if (c.isCustom) return `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml((r.custom && r.custom[c.key]) || '')}</td>`;
                     if (c.key === 'img' || c.key === 'patch') {
                         const src = r[c.key];
                         return `<td class="border border-gray-300 p-1 text-center align-middle">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-12 h-14 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
                     }
-                    if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center align-middle"><div class="font-bold uppercase">${escapeHtml(r.name || '')}</div><div>${escapeHtml(r.number || '')}</div></td>`;
+                    if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center align-middle whitespace-nowrap"><span class="font-bold uppercase">${escapeHtml(r.name || '')}</span>${r.number ? ' ' + escapeHtml(r.number) : ''}</td>`;
                     if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle bg-white">${renderAddrCellInner({ address: p.address })}</td>`; }
                     if (c.key === 'priceTotal') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle font-black text-gray-900 bg-yellow-100">${formatMoney(p.total)} €</td>`; }
                     return `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
                 }).join('');
-                const tdsCustom = (p.customColumns || []).map(c => `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml((r.custom && r.custom[c.id]) || '')}</td>`).join('');
-                return `<tr>${tds}${tdsCustom}</tr>`;
+                return `<tr>${tds}</tr>`;
             }).join('');
             document.getElementById('pedido-view-title').textContent = p.name;
             document.getElementById('pedido-view-body').innerHTML = `<table class="w-full border-collapse text-xs bg-white text-black"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table>`;
