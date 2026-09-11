@@ -40,9 +40,10 @@
 
         #order-tbody tr:nth-child(even) td { background-color: #f9fafb; }
 
-        @page { size: landscape; margin: 10mm; }
+        @page { size: A4 landscape; margin: 10mm; }
         @media print {
             html, body { background: #fff !important; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
         }
 
         .col-resizer { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
@@ -2556,8 +2557,12 @@
         let pOrders = { sheets: [], activeSheetId: null };
         function activeSheet() { return pOrders.sheets.find(s => s.id === pOrders.activeSheetId) || pOrders.sheets[0]; }
         function newSheet(name) {
-            return { id: 'sheet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), name: name || ('Pedido ' + (pOrders.sheets.length + 1)), customColumns: [], rows: [] };
+            return {
+                id: 'sheet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), name: name || ('Pedido ' + (pOrders.sheets.length + 1)),
+                customColumns: [], rows: [], address: { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' }
+            };
         }
+        function hasAddressData(a) { return !!(a && (a.dest || a.dir || a.cp || a.ciudad || a.prov || a.pais || a.tel)); }
 
         async function loadPOrder() {
             try {
@@ -2584,6 +2589,12 @@
             pOrders.sheets.forEach(s => {
                 if (!Array.isArray(s.rows)) s.rows = [];
                 if (!Array.isArray(s.customColumns)) s.customColumns = [];
+                if (!s.address) {
+                    // Migración: una sola dirección por hoja. Si las filas ya traían dirección
+                    // (versión anterior), se recupera la primera que tenga datos, sin perder nada.
+                    const withAddr = s.rows.find(r => hasAddressData(r.address));
+                    s.address = withAddr ? { ...withAddr.address } : { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' };
+                }
             });
             const as = activeSheet();
             if (!as.rows.length) as.rows.push(newOrderRow());
@@ -2625,8 +2636,7 @@
         function newOrderRow() {
             return {
                 id: 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-                version: '', img: '', size: '', qty: '', name: '', number: '', patch: '', unitPrice: '', price: 0, height: null,
-                address: { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' }, custom: {}
+                version: '', img: '', size: '', qty: '', name: '', number: '', patch: '', unitPrice: '', price: 0, height: null, custom: {}
             };
         }
         window.addOrderRow = function() { activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
@@ -2699,18 +2709,19 @@
                 </div>`;
         }
 
-        function renderAddrCellInner(row) {
-            const a = row.address || {};
-            const has = a.dest || a.dir || a.cp || a.ciudad || a.prov || a.pais || a.tel;
-            if (!has) return `<button onclick="openAddressModal('${row.id}')" class="text-[10px] font-mono uppercase text-gray-400 border border-dashed border-gray-300 rounded px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
+        function renderAddrCellInner(sheet) {
+            const a = sheet.address || {};
+            if (!hasAddressData(a)) return `<button onclick="openAddressModal()" class="text-[10px] font-mono uppercase text-gray-400 border border-dashed border-gray-300 rounded px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
             const line = (label, val) => val ? `<div><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
             return `<div class="text-[10px] leading-snug text-gray-800 min-w-[9rem] text-center">
                     ${line('Destinatario', a.dest)}${line('Dirección', a.dir)}${line('C.P.', a.cp)}${line('Ciudad', a.ciudad)}${line('Provincia', a.prov)}${line('País', a.pais)}${line('Tel', a.tel)}
-                    <button onclick="openAddressModal('${row.id}')" class="text-sky-500 hover:text-sky-700 text-[10px] font-mono uppercase mt-1 print:hidden">✎ Editar</button>
+                    <button onclick="openAddressModal()" class="text-sky-500 hover:text-sky-700 text-[10px] font-mono uppercase mt-1 print:hidden">✎ Editar</button>
                 </div>`;
         }
 
-        function renderOrderRowHTML(row) {
+        // La dirección de envío es UNA por hoja (no por fila): se combina en una sola celda
+        // que ocupa todas las filas (rowspan), y solo se pinta en la primera fila.
+        function renderOrderRowHTML(row, isFirstRow, totalRows) {
             const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
             const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
             const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
@@ -2718,7 +2729,10 @@
 
             const tds = ORDER_BASE_COLS.map(c => {
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row)}</td>`;
-                if (c.key === 'address') return `<td id="cell-addr-${row.id}" class="border border-gray-300 p-2 align-middle text-center">${renderAddrCellInner(row)}</td>`;
+                if (c.key === 'address') {
+                    if (!isFirstRow) return '';
+                    return `<td id="cell-addr" rowspan="${totalRows}" class="border border-gray-300 p-2 align-middle text-center bg-white">${renderAddrCellInner(activeSheet())}</td>`;
+                }
                 if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-middle text-center">${nameCell}</td>`;
                 if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
@@ -2767,7 +2781,7 @@
                     <span onmousedown="startColResize(event, '${c.id}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
             thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 bg-green-200 px-2 py-2 print:hidden"></th></tr>`;
-            tbody.innerHTML = sheet.rows.map(renderOrderRowHTML).join('');
+            tbody.innerHTML = sheet.rows.map((r, i) => renderOrderRowHTML(r, i === 0, sheet.rows.length)).join('');
             renderOrderFooter(sheet);
         }
 
@@ -2914,12 +2928,9 @@
             closeLibraryPicker();
         };
 
-        // --- Dirección de envío por fila ---
-        let addressModalRow = null;
-        window.openAddressModal = function(rowId) {
-            addressModalRow = rowId;
-            const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
-            const a = row.address || {};
+        // --- Dirección de envío: una sola por hoja de pedido (un solo envío por pedido) ---
+        window.openAddressModal = function() {
+            const a = activeSheet().address || {};
             document.getElementById('addr-dest').value = a.dest || '';
             document.getElementById('addr-dir').value = a.dir || '';
             document.getElementById('addr-cp').value = a.cp || '';
@@ -2929,23 +2940,21 @@
             document.getElementById('addr-tel').value = a.tel || '';
             document.getElementById('p-address-modal').classList.remove('hidden');
         };
-        window.closeAddressModal = function() { document.getElementById('p-address-modal').classList.add('hidden'); addressModalRow = null; };
+        window.closeAddressModal = function() { document.getElementById('p-address-modal').classList.add('hidden'); };
         window.saveAddressModal = function() {
-            const row = activeSheet().rows.find(r => r.id === addressModalRow);
-            if (row) {
-                row.address = {
-                    dest: document.getElementById('addr-dest').value.trim(),
-                    dir: document.getElementById('addr-dir').value.trim(),
-                    cp: document.getElementById('addr-cp').value.trim(),
-                    ciudad: document.getElementById('addr-ciudad').value.trim(),
-                    prov: document.getElementById('addr-prov').value.trim(),
-                    pais: document.getElementById('addr-pais').value.trim(),
-                    tel: document.getElementById('addr-tel').value.trim()
-                };
-                savePOrders();
-                const cell = document.getElementById('cell-addr-' + addressModalRow);
-                if (cell) cell.innerHTML = renderAddrCellInner(row);
-            }
+            const sheet = activeSheet();
+            sheet.address = {
+                dest: document.getElementById('addr-dest').value.trim(),
+                dir: document.getElementById('addr-dir').value.trim(),
+                cp: document.getElementById('addr-cp').value.trim(),
+                ciudad: document.getElementById('addr-ciudad').value.trim(),
+                prov: document.getElementById('addr-prov').value.trim(),
+                pais: document.getElementById('addr-pais').value.trim(),
+                tel: document.getElementById('addr-tel').value.trim()
+            };
+            savePOrders();
+            const cell = document.getElementById('cell-addr');
+            if (cell) cell.innerHTML = renderAddrCellInner(sheet);
             closeAddressModal();
         };
 
