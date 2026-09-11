@@ -224,12 +224,12 @@
                     </div>
                 </div>
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
+                <div id="order-style-bar" class="flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-200 print:hidden"></div>
                 <div class="overflow-x-auto print:overflow-visible">
                     <table id="order-table" class="w-full border-collapse text-xs" style="table-layout: fixed;">
                         <colgroup id="order-colgroup"></colgroup>
                         <thead id="order-thead"></thead>
                         <tbody id="order-tbody"></tbody>
-                        <tfoot id="order-tfoot"></tfoot>
                     </table>
                 </div>
                 <button onclick="addOrderRow()" class="w-full py-3 text-center text-gray-400 hover:text-black hover:bg-gray-50 font-mono text-xs uppercase tracking-widest transition-colors cursor-pointer print:hidden border-t border-gray-200">➕ Añadir producto</button>
@@ -2540,18 +2540,30 @@
         // =================  TABLA / PLANTILLA DE PEDIDO  ============
         // ============================================================
 
-        const ORDER_BASE_COLS = [
-            { key: 'version', zh: '版本', es: 'Versión', type: 'text', w: 70 },
-            { key: 'img', zh: '产品图片', es: 'Producto', type: 'img', w: 90 },
-            { key: 'qty', zh: '数量', es: 'Cantidad', type: 'number', w: 65 },
-            { key: 'size', zh: '尺码', es: 'Talla', type: 'text', w: 65 },
-            { key: 'name', zh: '印刷名字', es: 'Nombre', type: 'text-upper', w: 110 },
-            { key: 'number', zh: '印刷号码', es: 'Número', type: 'text', w: 75 },
-            { key: 'patch', zh: '补丁', es: 'Parche', type: 'text', w: 90 },
-            { key: 'unitPrice', zh: '单价', es: 'P. unitario', type: 'number', w: 80 },
-            { key: 'price', zh: '价格', es: 'Precio', type: 'number', w: 80 },
-            { key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address', w: 190 }
-        ];
+        // Columnas de la plantilla: dependen del "estilo" de la hoja.
+        //  - 'zh' (por defecto): bilingüe chino/español, para el proveedor. Nombre y Número separados.
+        //  - 'es': solo español, cabecera verde oscuro/blanco, para clientes. Nombre y Número combinados.
+        function getOrderColumns(sheet) {
+            const es = sheet && sheet.style === 'es';
+            const cols = [
+                { key: 'version', zh: '版本', es: 'Versión', type: 'text', w: 70 },
+                { key: 'img', zh: '产品图片', es: 'Producto', type: 'img', w: 90 },
+                { key: 'qty', zh: '数量', es: 'Cantidad', type: 'number', w: 65 },
+                { key: 'size', zh: '尺码', es: 'Talla', type: 'text', w: 65 }
+            ];
+            if (es) {
+                cols.push({ key: 'nameNumber', es: 'Nombre y Número', type: 'name-number', w: 140 });
+            } else {
+                cols.push({ key: 'name', zh: '印刷名字', es: 'Nombre', type: 'text-upper', w: 110 });
+                cols.push({ key: 'number', zh: '印刷号码', es: 'Número', type: 'text', w: 75 });
+            }
+            cols.push({ key: 'patch', zh: '补丁', es: 'Parche', type: 'patch', w: 90 });
+            cols.push({ key: 'unitPrice', zh: '单价', es: es ? 'Precio x Unidad' : 'P. unitario', type: 'number', w: 85 });
+            cols.push({ key: 'price', zh: '价格', es: 'Precio', type: 'number', w: 80 });
+            cols.push({ key: 'priceTotal', zh: '总价', es: 'Precio Total', type: 'total', w: 90 });
+            cols.push({ key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address', w: 190 });
+            return cols;
+        }
 
         // --- Varias "hojas" de pedido (como pestañas de Excel) ---
         let pOrders = { sheets: [], activeSheetId: null };
@@ -2559,10 +2571,14 @@
         function newSheet(name) {
             return {
                 id: 'sheet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), name: name || ('Pedido ' + (pOrders.sheets.length + 1)),
-                customColumns: [], rows: [], address: { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' }
+                style: 'zh', customColumns: [], rows: [], address: { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' }
             };
         }
         function hasAddressData(a) { return !!(a && (a.dest || a.dir || a.cp || a.ciudad || a.prov || a.pais || a.tel)); }
+        window.setSheetStyle = function(style) {
+            activeSheet().style = style;
+            savePOrders(); renderOrderTable();
+        };
 
         async function loadPOrder() {
             try {
@@ -2595,6 +2611,10 @@
                     const withAddr = s.rows.find(r => hasAddressData(r.address));
                     s.address = withAddr ? { ...withAddr.address } : { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' };
                 }
+                if (!s.style) {
+                    // Una hoja llamada "Nuevo Pedido" es la plantilla para clientes españoles: sin chino.
+                    s.style = /nuevo\s*pedido/i.test(s.name || '') ? 'es' : 'zh';
+                }
             });
             const as = activeSheet();
             if (!as.rows.length) as.rows.push(newOrderRow());
@@ -2612,6 +2632,15 @@
                     <button onclick="renameOrderSheet('${s.id}', event)" class="text-gray-400 hover:text-black text-xs px-0.5" title="Renombrar hoja">✏️</button>
                     ${pOrders.sheets.length > 1 ? `<button onclick="deleteOrderSheet('${s.id}', event)" class="text-gray-400 hover:text-red-500 text-xs px-0.5" title="Eliminar hoja">✕</button>` : ''}
                 </div>`).join('') + `<button onclick="addOrderSheet()" class="px-3 py-1.5 rounded-t-md text-xs font-mono font-bold uppercase border border-b-0 border-dashed border-gray-300 text-gray-400 hover:text-black hover:border-black shrink-0">➕ Hoja</button>`;
+            const as = activeSheet();
+            const styleBar = document.getElementById('order-style-bar');
+            if (styleBar && as) {
+                const es = as.style === 'es';
+                styleBar.innerHTML = `
+                    <span class="text-[10px] font-mono uppercase text-gray-400">Estilo de esta hoja:</span>
+                    <button onclick="setSheetStyle('zh')" class="px-2 py-1 rounded text-[10px] font-mono font-bold uppercase border ${!es ? 'bg-green-200 border-green-300 text-gray-800' : 'bg-white border-gray-300 text-gray-400 hover:text-gray-600'}">🇨🇳 Con chino</button>
+                    <button onclick="setSheetStyle('es')" class="px-2 py-1 rounded text-[10px] font-mono font-bold uppercase border ${es ? 'bg-emerald-800 border-emerald-800 text-white' : 'bg-white border-gray-300 text-gray-400 hover:text-gray-600'}">🇪🇸 Solo español</button>`;
+            }
         }
         window.addOrderSheet = function() {
             const s = newSheet();
@@ -2683,7 +2712,7 @@
                 row.price = computeRowPrice(row);
                 const priceEl = document.getElementById('cell-price-' + rowId);
                 if (priceEl) priceEl.textContent = formatMoney(row.price);
-                renderOrderFooter(activeSheet());
+                updateOrderTotalCell();
             }
             savePOrders();
         };
@@ -2692,18 +2721,33 @@
             row.custom[colId] = value;
             savePOrders();
         };
+        function updateOrderTotalCell() {
+            const sheet = activeSheet();
+            const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
+            const cell = document.getElementById('cell-pricetotal');
+            if (cell) cell.textContent = formatMoney(total) + ' €';
+        }
 
-        function renderImgCellInner(row) {
-            if (row.img) {
-                return `<div class="relative group w-16 h-20 mx-auto">
-                    <img src="${row.img}" class="w-16 h-20 object-cover rounded border border-gray-300">
+        // --- Foto del producto y del parche (el parche puede ser texto libre O una imagen) ---
+        function renderImgCellInner(row, field) {
+            field = field || 'img';
+            const src = row[field];
+            if (src && src.startsWith('data:image')) {
+                return `<div class="relative group w-14 h-16 mx-auto">
+                    <img src="${src}" class="w-14 h-16 object-contain mx-auto">
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded gap-1">
-                        <button onclick="openLibraryPicker('${row.id}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                        <button onclick="clearOrderRowImage('${row.id}')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
+                        <button onclick="openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                        <button onclick="clearOrderRowImage('${row.id}','${field}')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
                     </div>
                 </div>`;
             }
-            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}')" onclick="openLibraryPicker('${row.id}')"
+            if (field === 'patch') {
+                return `<div class="flex flex-col items-center gap-1">
+                    <input type="text" value="${escAttr(src)}" placeholder="Texto" oninput="updateOrderField('${row.id}','patch',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
+                    <button onclick="openLibraryPicker('${row.id}','patch')" ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" class="text-[9px] text-sky-500 hover:text-sky-700 print:hidden">🖼 imagen</button>
+                </div>`;
+            }
+            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="openLibraryPicker('${row.id}','img')"
                     class="w-16 h-20 mx-auto border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
                     <span class="text-lg leading-none">＋</span>Foto
                 </div>`;
@@ -2719,27 +2763,39 @@
                 </div>`;
         }
 
-        // La dirección de envío es UNA por hoja (no por fila): se combina en una sola celda
-        // que ocupa todas las filas (rowspan), y solo se pinta en la primera fila.
+        // Dirección de envío y precio total: UNA sola celda por hoja (no por fila), combinada
+        // con rowspan a todas las filas, y solo se pinta en la primera.
         function renderOrderRowHTML(row, isFirstRow, totalRows) {
+            const sheet = activeSheet();
             const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
             const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
             const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Número" oninput="updateOrderField('${row.id}','number',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
             const priceCell = `<span id="cell-price-${row.id}" class="font-bold text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
-            const tds = ORDER_BASE_COLS.map(c => {
-                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row)}</td>`;
+            const tds = getOrderColumns(sheet).map(c => {
+                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
+                if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
+                if (c.key === 'name-number' || c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 align-middle text-center">
+                        <div class="flex flex-col gap-0.5">${nameCell}${numberCell}</div>
+                    </td>`;
                 if (c.key === 'address') {
                     if (!isFirstRow) return '';
-                    return `<td id="cell-addr" rowspan="${totalRows}" class="border border-gray-300 p-2 align-middle text-center bg-white">${renderAddrCellInner(activeSheet())}</td>`;
+                    return `<td id="cell-addr" rowspan="${totalRows}" class="border border-gray-300 p-2 align-middle text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
+                }
+                if (c.key === 'priceTotal') {
+                    if (!isFirstRow) return '';
+                    const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
+                    return `<td id="cell-pricetotal" rowspan="${totalRows}" class="border border-gray-300 p-2 align-middle text-center font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`;
                 }
                 if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-middle text-center">${nameCell}</td>`;
+                if (c.key === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numberCell}</td>`;
                 if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
                 return `<td class="border border-gray-300 p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
 
-            const tdsCustom = activeSheet().customColumns.map(c => `
+            const tdsCustom = sheet.customColumns.map(c => `
                 <td class="border border-gray-300 p-1 align-middle text-center">
                     <input type="text" value="${escAttr(row.custom[c.id] || '')}" oninput="updateOrderCustomField('${row.id}','${c.id}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
                 </td>`).join('');
@@ -2753,7 +2809,7 @@
 
         function renderColgroupHTML(sheet) {
             const widths = pOrders.colWidths || {};
-            let html = ORDER_BASE_COLS.map(c => `<col id="col-${c.key}" style="width:${widths[c.key] || c.w || 90}px">`).join('');
+            let html = getOrderColumns(sheet).map(c => `<col id="col-${c.key}" style="width:${widths[c.key] || c.w || 90}px">`).join('');
             html += sheet.customColumns.map(c => `<col id="col-${c.id}" style="width:${widths[c.id] || 100}px">`).join('');
             html += `<col style="width:32px">`;
             return html;
@@ -2761,44 +2817,36 @@
 
         function renderOrderTable() {
             const sheet = activeSheet();
+            const es = sheet.style === 'es';
             sheet.rows.forEach(r => { r.price = computeRowPrice(r); }); // el precio siempre reflejado cantidad × unitario
             const colgroup = document.getElementById('order-colgroup');
             const thead = document.getElementById('order-thead');
             const tbody = document.getElementById('order-tbody');
             colgroup.innerHTML = renderColgroupHTML(sheet);
-            const thBase = ORDER_BASE_COLS.map(c => `
-                <th class="border border-gray-300 bg-green-200 px-2 py-2 text-center align-bottom relative">
-                    <div class="text-[9px] text-gray-500 leading-none mb-0.5">${c.zh}</div>
-                    <div class="font-bold text-gray-800 text-[11px] leading-tight">${c.es}</div>
+
+            const headerBg = es ? 'bg-emerald-800' : 'bg-green-200';
+            const headerText = es ? 'text-white' : 'text-gray-800';
+            const headerZh = es ? 'hidden' : 'text-gray-500';
+
+            const thBase = getOrderColumns(sheet).map(c => `
+                <th class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative">
+                    <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
+                    <div class="font-bold ${headerText} text-[11px] leading-tight uppercase">${c.es}</div>
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
             const thCustom = sheet.customColumns.map(c => `
-                <th class="border border-gray-300 bg-green-200 px-2 py-2 text-center align-bottom relative">
+                <th class="border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative">
                     <div class="flex items-center justify-center gap-1">
-                        <span class="font-bold text-gray-800 text-[11px]">${escapeHtml(c.label)}</span>
-                        <button onclick="deleteOrderColumn('${c.id}')" class="text-gray-400 hover:text-red-500 text-xs print:hidden" title="Eliminar columna">✕</button>
+                        <span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.label)}</span>
+                        <button onclick="deleteOrderColumn('${c.id}')" class="${es ? 'text-white/60 hover:text-red-300' : 'text-gray-400 hover:text-red-500'} text-xs print:hidden" title="Eliminar columna">✕</button>
                     </div>
                     <span onmousedown="startColResize(event, '${c.id}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
-            thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 bg-green-200 px-2 py-2 print:hidden"></th></tr>`;
+            thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
             tbody.innerHTML = sheet.rows.map((r, i) => renderOrderRowHTML(r, i === 0, sheet.rows.length)).join('');
-            renderOrderFooter(sheet);
         }
 
         function formatMoney(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-
-        function renderOrderFooter(sheet) {
-            const tfoot = document.getElementById('order-tfoot');
-            if (!tfoot) return;
-            const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
-            const cells = ORDER_BASE_COLS.map(c => {
-                if (c.key === 'version') return `<td class="border border-gray-300 bg-yellow-200 px-2 py-2 text-center font-bold text-gray-700 text-[10px] uppercase">总价<br>PRECIO TOTAL</td>`;
-                if (c.key === 'price') return `<td class="border border-gray-300 bg-yellow-200 px-2 py-2 text-center font-black text-gray-900 text-xs">${formatMoney(total)} €</td>`;
-                return `<td class="border border-gray-300 bg-yellow-200"></td>`;
-            }).join('');
-            const customCells = sheet.customColumns.map(() => `<td class="border border-gray-300 bg-yellow-200"></td>`).join('');
-            tfoot.innerHTML = `<tr>${cells}${customCells}<td class="border border-gray-300 bg-yellow-200 print:hidden"></td></tr>`;
-        }
 
         // --- Redimensionar columnas (ancho) y filas (altura) arrastrando ---
         let colResizing = null;
@@ -2852,31 +2900,33 @@
             document.removeEventListener('mouseup', onRowResizeUp);
         }
 
-        window.clearOrderRowImage = function(rowId) {
+        window.clearOrderRowImage = function(rowId, field) {
+            field = field || 'img';
             const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
-            row.img = ''; savePOrders();
-            const cell = document.getElementById('cell-img-' + rowId);
-            if (cell) cell.innerHTML = renderImgCellInner(row);
+            row[field] = ''; savePOrders();
+            const cell = document.getElementById('cell-' + field + '-' + rowId);
+            if (cell) cell.innerHTML = renderImgCellInner(row, field);
         };
 
         window.orderCellDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer) || libraryDragSrc) { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); } };
         window.orderCellDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400'); };
-        window.handleOrderImageDrop = function(e, rowId) {
+        window.handleOrderImageDrop = function(e, rowId, field) {
+            field = field || 'img';
             e.preventDefault(); e.stopPropagation();
-            const cellEl = document.getElementById('cell-img-' + rowId);
+            const cellEl = document.getElementById('cell-' + field + '-' + rowId);
             if (cellEl) cellEl.querySelectorAll('.ring-2').forEach(el => el.classList.remove('ring-2', 'ring-sky-400'));
             const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
 
             if (libraryDragSrc) {
-                row.img = libraryDragSrc.src; libraryDragSrc = null;
+                row[field] = libraryDragSrc.src; libraryDragSrc = null;
                 savePOrders();
-                if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
+                if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
                 return;
             }
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
                 fileToResizedDataURL(e.dataTransfer.files[0]).then(src => {
-                    row.img = src; savePOrders();
-                    if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
+                    row[field] = src; savePOrders();
+                    if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
                 }).catch(() => {});
                 return;
             }
@@ -2886,8 +2936,8 @@
                     const f = await urlToImageFile(urls[0]);
                     if (f) {
                         const src = await fileToResizedDataURL(f);
-                        row.img = src; savePOrders();
-                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
+                        row[field] = src; savePOrders();
+                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
                     } else {
                         alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Prueba a elegirla desde la biblioteca (📚) o arrástrala desde el ordenador.');
                     }
@@ -2898,8 +2948,10 @@
         // --- Elegir foto de la biblioteca para una fila ---
         let pickerImages = [];
         let pickerTargetRow = null;
-        window.openLibraryPicker = function(rowId) {
+        let pickerTargetField = 'img';
+        window.openLibraryPicker = function(rowId, field) {
             pickerTargetRow = rowId;
+            pickerTargetField = field || 'img';
             pickerImages = [];
             const body = document.getElementById('lib-picker-body');
             let html = '';
@@ -2921,9 +2973,9 @@
         window.pickLibraryImage = function(i) {
             const row = activeSheet().rows.find(r => r.id === pickerTargetRow);
             if (row && pickerImages[i] != null) {
-                row.img = pickerImages[i]; savePOrders();
-                const cell = document.getElementById('cell-img-' + row.id);
-                if (cell) cell.innerHTML = renderImgCellInner(row);
+                row[pickerTargetField] = pickerImages[i]; savePOrders();
+                const cell = document.getElementById('cell-' + pickerTargetField + '-' + row.id);
+                if (cell) cell.innerHTML = renderImgCellInner(row, pickerTargetField);
             }
             closeLibraryPicker();
         };
