@@ -94,7 +94,7 @@
         </div>
     </div>
 
-    <div id="custom-input-modal" class="fixed inset-0 bg-black/90 hidden z-[200] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
+    <div id="custom-input-modal" class="fixed inset-0 bg-black/90 hidden z-[350] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
         <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm transform scale-100 transition-all">
             <h3 id="custom-input-title" class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase flex items-center gap-2"></h3>
             <input type="text" id="custom-input-field" class="w-full bg-black border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14] rounded-xl mb-6 transition-all placeholder:text-zinc-600" autocomplete="off">
@@ -374,8 +374,15 @@
 
     <!-- Dirección de envío de una fila del pedido -->
     <div id="p-address-modal" class="fixed inset-0 bg-black/90 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm">
+        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm max-h-[90vh] overflow-y-auto">
             <h3 class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase">📍 Dirección de envío</h3>
+            <div class="mb-4">
+                <label class="text-[10px] text-zinc-500 uppercase block mb-1">Direcciones guardadas</label>
+                <div class="flex items-center gap-2">
+                    <select id="addr-saved-select" onchange="loadSavedAddressIntoForm(this.value)" class="flex-1 min-w-0 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-[#39FF14]"></select>
+                    <button onclick="deleteSavedAddressSelected()" class="text-red-500 hover:text-red-400 text-lg px-1 shrink-0" title="Eliminar esta dirección guardada">✕</button>
+                </div>
+            </div>
             <div class="space-y-3">
                 <input id="addr-dest" placeholder="Destinatario" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
                 <input id="addr-dir" placeholder="Dirección" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
@@ -385,6 +392,7 @@
                 <input id="addr-pais" placeholder="País" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
                 <input id="addr-tel" placeholder="Teléfono" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
             </div>
+            <button onclick="openInput('save-address', null, null, event)" class="w-full mt-3 px-4 py-2 text-xs font-bold text-[#39FF14] border border-[#39FF14]/50 rounded-full hover:bg-[#39FF14] hover:text-black transition-colors cursor-pointer">💾 Guardar esta dirección para reutilizarla</button>
             <div class="flex justify-end gap-3 mt-6">
                 <button onclick="closeAddressModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button onclick="saveAddressModal()" class="px-5 py-2 text-xs font-bold bg-[#39FF14] text-black rounded-xl hover:bg-white transition-colors cursor-pointer">GUARDAR</button>
@@ -735,7 +743,7 @@
                 exportedAt: new Date().toISOString(),
                 wishlist: { db, structure },
                 biblioteca: { pDb, pStructure },
-                pedidos: { pOrders, pedidosArchivo, pedidosClientes }
+                pedidos: { pOrders, pedidosArchivo, pedidosClientes, savedAddresses }
             };
         }
         // Si el archivo es una copia completa (tiene __backup) restaura las 3 partes; si no, es una copia antigua (solo `db`) que trata el propio caller.
@@ -755,7 +763,9 @@
                 if (parsed.pedidos.pOrders) pOrders = parsed.pedidos.pOrders;
                 pedidosArchivo = parsed.pedidos.pedidosArchivo || [];
                 if (parsed.pedidos.pedidosClientes) pedidosClientes = parsed.pedidos.pedidosClientes;
+                if (parsed.pedidos.savedAddresses) savedAddresses = parsed.pedidos.savedAddresses;
                 saveClientes();
+                saveSavedAddresses();
                 await savePOrders();
                 await savePedidosArchivo();
             }
@@ -991,6 +1001,8 @@
                 inputEl.value = sheet ? sheet.name : "";
             } else if (action === 'add-cliente') {
                 titleEl.innerHTML = "➕ NUEVO CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
+            } else if (action === 'save-address') {
+                titleEl.innerHTML = "💾 GUARDAR DIRECCIÓN COMO..."; inputEl.placeholder = "Ej: PERSONAL, TITO, KIKE...";
             }
 
             modal.classList.remove('hidden');
@@ -1104,6 +1116,27 @@
                     if (v && !pedidosClientes.includes(v)) {
                         pedidosClientes.push(v); saveClientes(); renderClientesChips(); renderPedidosTab();
                     }
+                }
+            } else if (action === 'save-address') {
+                if (val) {
+                    const label = val.trim();
+                    const entry = {
+                        id: 'addr-' + Date.now(),
+                        label,
+                        dest: document.getElementById('addr-dest').value.trim(),
+                        dir: document.getElementById('addr-dir').value.trim(),
+                        cp: document.getElementById('addr-cp').value.trim(),
+                        ciudad: document.getElementById('addr-ciudad').value.trim(),
+                        prov: document.getElementById('addr-prov').value.trim(),
+                        pais: document.getElementById('addr-pais').value.trim(),
+                        tel: document.getElementById('addr-tel').value.trim()
+                    };
+                    const existingIdx = savedAddresses.findIndex(a => a.label.toLowerCase() === label.toLowerCase());
+                    if (existingIdx !== -1) { entry.id = savedAddresses[existingIdx].id; savedAddresses[existingIdx] = entry; }
+                    else savedAddresses.push(entry);
+                    saveSavedAddresses();
+                    renderAddrSavedSelect();
+                    document.getElementById('addr-saved-select').value = entry.id;
                 }
             }
             closeCustomInput();
@@ -3477,6 +3510,41 @@
         };
 
         // --- Dirección de envío: una sola por hoja de pedido (un solo envío por pedido) ---
+        // Direcciones guardadas (clientes, mi propia dirección, etc.) reutilizables desde cualquier hoja.
+        let savedAddresses = [];
+        try {
+            const raw = JSON.parse(localStorage.getItem('pedidos_direcciones_v1') || '[]');
+            if (Array.isArray(raw)) savedAddresses = raw;
+        } catch (e) {}
+        function saveSavedAddresses() { try { localStorage.setItem('pedidos_direcciones_v1', JSON.stringify(savedAddresses)); } catch (e) {} }
+        function renderAddrSavedSelect() {
+            const sel = document.getElementById('addr-saved-select');
+            if (!sel) return;
+            sel.innerHTML = `<option value="">— Nueva dirección —</option>` + savedAddresses.map(a => `<option value="${a.id}">${escapeHtml(a.label)}</option>`).join('');
+        }
+        window.loadSavedAddressIntoForm = function(id) {
+            if (!id) return;
+            const a = savedAddresses.find(x => x.id === id);
+            if (!a) return;
+            document.getElementById('addr-dest').value = a.dest || '';
+            document.getElementById('addr-dir').value = a.dir || '';
+            document.getElementById('addr-cp').value = a.cp || '';
+            document.getElementById('addr-ciudad').value = a.ciudad || '';
+            document.getElementById('addr-prov').value = a.prov || '';
+            document.getElementById('addr-pais').value = a.pais || '';
+            document.getElementById('addr-tel').value = a.tel || '';
+        };
+        window.deleteSavedAddressSelected = function() {
+            const sel = document.getElementById('addr-saved-select');
+            const id = sel && sel.value;
+            if (!id) return;
+            const a = savedAddresses.find(x => x.id === id);
+            if (!confirm('¿Eliminar la dirección guardada «' + (a ? a.label : '') + '»?')) return;
+            savedAddresses = savedAddresses.filter(x => x.id !== id);
+            saveSavedAddresses();
+            renderAddrSavedSelect();
+            sel.value = '';
+        };
         window.openAddressModal = function() {
             const a = activeSheet().address || {};
             document.getElementById('addr-dest').value = a.dest || '';
@@ -3486,6 +3554,8 @@
             document.getElementById('addr-prov').value = a.prov || '';
             document.getElementById('addr-pais').value = a.pais || '';
             document.getElementById('addr-tel').value = a.tel || '';
+            renderAddrSavedSelect();
+            document.getElementById('addr-saved-select').value = '';
             document.getElementById('p-address-modal').classList.remove('hidden');
         };
         window.closeAddressModal = function() { document.getElementById('p-address-modal').classList.add('hidden'); };
