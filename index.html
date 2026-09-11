@@ -57,6 +57,7 @@
     <div id="tab-bar" class="fixed top-0 inset-x-0 h-11 z-[80] flex bg-black border-b border-zinc-800 print:hidden">
         <button id="tab-btn-wishlist" onclick="switchTab('wishlist')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-[#39FF14] border-[#39FF14]">📋 Wishlist</button>
         <button id="tab-btn-pedido" onclick="switchTab('pedido')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-zinc-500 border-transparent hover:text-sky-400">📦 Crear Pedido</button>
+        <button id="tab-btn-pedidos" onclick="switchTab('pedidos')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-zinc-500 border-transparent hover:text-amber-400">📑 Pedidos</button>
     </div>
 
     <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
@@ -235,6 +236,31 @@
                 <button onclick="addOrderRow()" class="w-full py-3 text-center text-gray-400 hover:text-black hover:bg-gray-50 font-mono text-xs uppercase tracking-widest transition-colors cursor-pointer print:hidden border-t border-gray-200">➕ Añadir producto</button>
             </section>
         </main>
+    </div>
+
+    <div id="view-pedidos" class="hidden w-full pt-11 p-4 md:p-8 max-w-5xl mx-auto">
+        <div class="flex items-center gap-3 mb-2 border-b border-zinc-800 pb-3">
+            <div class="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></div>
+            <h2 class="text-2xl font-black text-white tracking-wide uppercase">Pedidos</h2>
+            <span class="text-sm font-mono text-zinc-500 ml-auto" id="pedidos-count">0 pedidos</span>
+        </div>
+        <p class="text-xs text-zinc-500 font-mono mb-4">Se archivan automáticamente aquí cada vez que descargas un PDF desde "Crear Pedido".</p>
+        <div class="flex items-center gap-2 flex-wrap mb-6">
+            <span class="text-xs text-zinc-500 font-mono uppercase">Clientes:</span>
+            <div id="pedidos-clientes-chips" class="flex gap-2 flex-wrap"></div>
+            <button onclick="openInput('add-cliente', null, null, event)" class="text-xs text-sky-400 hover:text-sky-300 font-mono uppercase border border-sky-400/40 rounded px-2 py-1 cursor-pointer">➕ Cliente</button>
+        </div>
+        <div id="pedidos-list"></div>
+    </div>
+
+    <div id="pedido-view-modal" class="hidden fixed inset-0 bg-black/80 z-[95] flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[85vh] overflow-auto">
+            <div class="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">
+                <h3 id="pedido-view-title" class="font-black text-black text-lg"></h3>
+                <button onclick="closePedidoView()" class="text-gray-400 hover:text-red-500 text-2xl leading-none cursor-pointer">✕</button>
+            </div>
+            <div id="pedido-view-body" class="p-4 overflow-x-auto"></div>
+        </div>
     </div>
 
     <!-- Visor simple de imagen de la BIBLIOTECA -->
@@ -815,6 +841,8 @@
                 titleEl.innerHTML = "✏️ RENOMBRAR HOJA";
                 const sheet = pOrders.sheets.find(s => s.id === targetId);
                 inputEl.value = sheet ? sheet.name : "";
+            } else if (action === 'add-cliente') {
+                titleEl.innerHTML = "➕ NUEVO CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
             }
 
             modal.classList.remove('hidden');
@@ -908,6 +936,13 @@
                 if (val) {
                     const sheet = pOrders.sheets.find(s => s.id === targetId);
                     if (sheet) { sheet.name = val; savePOrders(); renderOrderSheetsBar(); }
+                }
+            } else if (action === 'add-cliente') {
+                if (val) {
+                    const v = val.trim().toUpperCase();
+                    if (v && !pedidosClientes.includes(v)) {
+                        pedidosClientes.push(v); saveClientes(); renderClientesChips(); renderPedidosTab();
+                    }
                 }
             }
             closeCustomInput();
@@ -1983,7 +2018,8 @@
         window.switchTab = function(tab) {
             document.getElementById('view-wishlist').classList.toggle('hidden', tab !== 'wishlist');
             document.getElementById('view-pedido').classList.toggle('hidden', tab !== 'pedido');
-            const wBtn = document.getElementById('tab-btn-wishlist'), pBtn = document.getElementById('tab-btn-pedido');
+            document.getElementById('view-pedidos').classList.toggle('hidden', tab !== 'pedidos');
+            const wBtn = document.getElementById('tab-btn-wishlist'), pBtn = document.getElementById('tab-btn-pedido'), pdBtn = document.getElementById('tab-btn-pedidos');
             wBtn.classList.toggle('text-[#39FF14]', tab === 'wishlist');
             wBtn.classList.toggle('border-[#39FF14]', tab === 'wishlist');
             wBtn.classList.toggle('text-zinc-500', tab !== 'wishlist');
@@ -1992,6 +2028,10 @@
             pBtn.classList.toggle('border-sky-400', tab === 'pedido');
             pBtn.classList.toggle('text-zinc-500', tab !== 'pedido');
             pBtn.classList.toggle('border-transparent', tab !== 'pedido');
+            pdBtn.classList.toggle('text-amber-400', tab === 'pedidos');
+            pdBtn.classList.toggle('border-amber-400', tab === 'pedidos');
+            pdBtn.classList.toggle('text-zinc-500', tab !== 'pedidos');
+            pdBtn.classList.toggle('border-transparent', tab !== 'pedidos');
             try { localStorage.setItem('wishlist_active_tab', tab); } catch (e) {}
         };
 
@@ -2630,6 +2670,7 @@
                 <div class="flex items-center gap-1 shrink-0 ${s.id === pOrders.activeSheetId ? '' : 'opacity-70'}">
                     <button onclick="switchOrderSheet('${s.id}')" class="px-3 py-1.5 rounded-t-md text-xs font-mono font-bold uppercase border border-b-0 transition-colors ${s.id === pOrders.activeSheetId ? 'bg-white text-black border-gray-300' : 'bg-gray-200 text-gray-500 border-gray-200 hover:bg-gray-100'}">${escapeHtml(s.name)}</button>
                     <button onclick="renameOrderSheet('${s.id}', event)" class="text-gray-400 hover:text-black text-xs px-0.5" title="Renombrar hoja">✏️</button>
+                    <button onclick="duplicateOrderSheet('${s.id}', event)" class="text-gray-400 hover:text-sky-500 text-xs px-0.5" title="Duplicar hoja">📄</button>
                     ${pOrders.sheets.length > 1 ? `<button onclick="deleteOrderSheet('${s.id}', event)" class="text-gray-400 hover:text-red-500 text-xs px-0.5" title="Eliminar hoja">✕</button>` : ''}
                 </div>`).join('') + `<button onclick="addOrderSheet()" class="px-3 py-1.5 rounded-t-md text-xs font-mono font-bold uppercase border border-b-0 border-dashed border-gray-300 text-gray-400 hover:text-black hover:border-black shrink-0">➕ Hoja</button>`;
             const as = activeSheet();
@@ -2653,6 +2694,18 @@
             savePOrders(); renderOrderSheetsBar(); renderOrderTable();
         };
         window.renameOrderSheet = function(id, event) { if (event) event.stopPropagation(); openInput('rename-order-sheet', id, null, event); };
+        window.duplicateOrderSheet = function(id, event) {
+            if (event) event.stopPropagation();
+            const src = pOrders.sheets.find(s => s.id === id); if (!src) return;
+            const copy = JSON.parse(JSON.stringify(src));
+            copy.id = 'sheet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+            copy.name = src.name + ' (copia)';
+            copy.rows.forEach(r => { r.id = 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7); });
+            const idx = pOrders.sheets.findIndex(s => s.id === id);
+            pOrders.sheets.splice(idx + 1, 0, copy);
+            pOrders.activeSheetId = copy.id;
+            savePOrders(); renderOrderSheetsBar(); renderOrderTable();
+        };
         window.deleteOrderSheet = function(id, event) {
             if (event) event.stopPropagation();
             if (pOrders.sheets.length <= 1) return;
@@ -2824,7 +2877,7 @@
             const tbody = document.getElementById('order-tbody');
             colgroup.innerHTML = renderColgroupHTML(sheet);
 
-            const headerBg = es ? 'bg-emerald-800' : 'bg-green-200';
+            const headerBg = es ? 'bg-emerald-800' : 'bg-yellow-200';
             const headerText = es ? 'text-white' : 'text-gray-800';
             const headerZh = es ? 'hidden' : 'text-gray-500';
 
@@ -3073,6 +3126,7 @@
                 const fecha = new Date().toISOString().split('T')[0];
                 const nombreHoja = (activeSheet().name || 'pedido').replace(/[^a-z0-9]+/gi, '_');
                 pdf.save(`pedido_${nombreHoja}_${fecha}.pdf`);
+                archiveOrderSheet(activeSheet());
             } catch (err) {
                 console.error('Error generando el PDF:', err);
                 alert('No se pudo generar el PDF. Comprueba tu conexión a internet (se necesita para cargar la herramienta la primera vez) e inténtalo de nuevo.');
@@ -3081,9 +3135,165 @@
             }
         };
 
+        // --- Pestaña PEDIDOS: archivo de pedidos ya enviados/descargados (independiente de las hojas de la plantilla) ---
+        let pedidosArchivo = [];
+        let pedidosClientes = ['TITO', 'KIKE', 'PERSONAL', 'DROPSHIPPING'];
+        let pedidoDragIndex = null;
+
+        async function loadPedidosArchivo() {
+            try {
+                const saved = await localforage.getItem('pedidos_archivo_v1');
+                if (Array.isArray(saved)) pedidosArchivo = saved;
+            } catch (e) {}
+            try {
+                const c = localStorage.getItem('pedidos_clientes_v1');
+                if (c) { const arr = JSON.parse(c); if (Array.isArray(arr) && arr.length) pedidosClientes = arr; }
+            } catch (e) {}
+            renderClientesChips();
+            renderPedidosTab();
+        }
+        async function savePedidosArchivo() { try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {} }
+        function saveClientes() { try { localStorage.setItem('pedidos_clientes_v1', JSON.stringify(pedidosClientes)); } catch (e) {} }
+
+        // Cada descarga de PDF guarda una foto fija (snapshot) de la hoja en ese momento - no afecta a la plantilla editable.
+        function archiveOrderSheet(sheet) {
+            if (!sheet) return;
+            const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
+            const entry = {
+                id: 'ped-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+                name: sheet.name,
+                date: new Date().toISOString(),
+                style: sheet.style,
+                address: JSON.parse(JSON.stringify(sheet.address || {})),
+                customColumns: JSON.parse(JSON.stringify(sheet.customColumns || [])),
+                rows: JSON.parse(JSON.stringify(sheet.rows || [])),
+                total,
+                cliente: '',
+                paid: 0
+            };
+            pedidosArchivo.unshift(entry);
+            savePedidosArchivo();
+            renderPedidosTab();
+        }
+
+        function renderClientesChips() {
+            const el = document.getElementById('pedidos-clientes-chips');
+            if (!el) return;
+            el.innerHTML = pedidosClientes.map(c => `<span class="text-[10px] font-mono uppercase bg-zinc-800 text-zinc-300 rounded px-2 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="text-zinc-500 hover:text-red-400 cursor-pointer" title="Quitar de la lista">✕</button></span>`).join('');
+        }
+        window.removePedidoCliente = function(name) {
+            if (!confirm('¿Quitar "' + name + '" de la lista de clientes? Los pedidos ya asignados a este cliente mantendrán el nombre guardado.')) return;
+            pedidosClientes = pedidosClientes.filter(c => c !== name);
+            saveClientes(); renderClientesChips(); renderPedidosTab();
+        };
+
+        function renderPedidosTab() {
+            const countEl = document.getElementById('pedidos-count');
+            if (countEl) countEl.textContent = pedidosArchivo.length + (pedidosArchivo.length === 1 ? ' pedido' : ' pedidos');
+            const list = document.getElementById('pedidos-list');
+            if (!list) return;
+            if (!pedidosArchivo.length) {
+                list.innerHTML = `<p class="text-zinc-500 font-mono text-sm">Todavía no hay pedidos archivados. Se guardan aquí automáticamente cada vez que descargas un PDF desde "Crear Pedido".</p>`;
+                return;
+            }
+            list.innerHTML = pedidosArchivo.map((p, i) => {
+                const paid = parseFloat(p.paid) || 0;
+                const debe = Math.max(0, (p.total || 0) - paid);
+                const fecha = new Date(p.date).toLocaleDateString('es-ES');
+                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
+                    <span class="text-zinc-500 text-lg select-none" title="Arrastra para reordenar">☰</span>
+                    <div class="flex-1 min-w-[10rem]">
+                        <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-sky-400 rounded px-1 w-full">
+                        <div class="text-[10px] text-zinc-500 font-mono uppercase mt-0.5">${fecha}</div>
+                    </div>
+                    <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-800 text-white text-xs font-mono uppercase rounded px-2 py-1.5 border border-zinc-700">
+                        <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
+                        ${pedidosClientes.map(c => `<option value="${escAttr(c)}" ${p.cliente === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+                    </select>
+                    <div class="text-center">
+                        <div class="text-[9px] text-zinc-500 font-mono uppercase">Total</div>
+                        <div class="text-white font-bold text-sm">${formatMoney(p.total)} €</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-[9px] text-zinc-500 font-mono uppercase">Pagado</div>
+                        <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-20 text-center bg-zinc-800 text-white text-sm font-bold rounded px-1 py-1 border border-zinc-700">
+                    </div>
+                    <div class="text-center">
+                        <div class="text-[9px] text-zinc-500 font-mono uppercase">Debe</div>
+                        <div id="pedido-debe-${p.id}" class="${debe > 0 ? 'text-red-400' : 'text-emerald-400'} font-bold text-sm">${formatMoney(debe)} €</div>
+                    </div>
+                    <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs font-mono uppercase border border-sky-400/40 rounded px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                    <button onclick="deletePedido('${p.id}')" class="text-zinc-500 hover:text-red-500 text-lg px-1 cursor-pointer" title="Eliminar">✕</button>
+                </div>`;
+            }).join('');
+        }
+
+        window.updatePedidoField = function(id, field, value) {
+            const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
+            p[field] = value;
+            savePedidosArchivo();
+            if (field === 'paid' || field === 'total') {
+                const debeEl = document.getElementById('pedido-debe-' + id);
+                if (debeEl) {
+                    const debe = Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0));
+                    debeEl.textContent = formatMoney(debe) + ' €';
+                    debeEl.className = (debe > 0 ? 'text-red-400' : 'text-emerald-400') + ' font-bold text-sm';
+                }
+            }
+        };
+        window.deletePedido = function(id) {
+            if (!confirm('¿Eliminar este pedido archivado? Esta acción no se puede deshacer.')) return;
+            pedidosArchivo = pedidosArchivo.filter(p => p.id !== id);
+            savePedidosArchivo(); renderPedidosTab();
+        };
+        window.pedidoDragStart = function(e, i) { pedidoDragIndex = i; e.dataTransfer.effectAllowed = 'move'; };
+        window.pedidoDragOver = function(e) { e.preventDefault(); };
+        window.pedidoDrop = function(e, i) {
+            e.preventDefault();
+            if (pedidoDragIndex === null || pedidoDragIndex === i) return;
+            const [moved] = pedidosArchivo.splice(pedidoDragIndex, 1);
+            pedidosArchivo.splice(i, 0, moved);
+            pedidoDragIndex = null;
+            savePedidosArchivo(); renderPedidosTab();
+        };
+
+        window.viewPedidoDetail = function(id) {
+            const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
+            const es = p.style === 'es';
+            const headerBg = es ? 'bg-emerald-800' : 'bg-yellow-200';
+            const headerText = es ? 'text-white' : 'text-gray-800';
+            const headerZh = es ? 'hidden' : 'text-gray-500';
+            const cols = getOrderColumns({ style: p.style });
+            const theadHtml = `<tr>` + cols.map(c => `<th class="border border-gray-300 ${headerBg} px-2 py-2 text-center">
+                    <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
+                    <div class="font-bold ${headerText} text-[11px] uppercase">${c.es}</div>
+                </th>`).join('') + (p.customColumns || []).map(c => `<th class="border border-gray-300 ${headerBg} px-2 py-2 text-center"><span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.label)}</span></th>`).join('') + `</tr>`;
+            const rows = p.rows || [];
+            const tbodyHtml = rows.map((r, i) => {
+                const isFirst = i === 0, totalRows = rows.length;
+                const tds = cols.map(c => {
+                    if (c.key === 'img' || c.key === 'patch') {
+                        const src = r[c.key];
+                        return `<td class="border border-gray-300 p-1 text-center align-middle">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-12 h-14 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
+                    }
+                    if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center align-middle"><div class="font-bold uppercase">${escapeHtml(r.name || '')}</div><div>${escapeHtml(r.number || '')}</div></td>`;
+                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle bg-white">${renderAddrCellInner({ address: p.address })}</td>`; }
+                    if (c.key === 'priceTotal') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle font-black text-gray-900 bg-yellow-100">${formatMoney(p.total)} €</td>`; }
+                    return `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
+                }).join('');
+                const tdsCustom = (p.customColumns || []).map(c => `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml((r.custom && r.custom[c.id]) || '')}</td>`).join('');
+                return `<tr>${tds}${tdsCustom}</tr>`;
+            }).join('');
+            document.getElementById('pedido-view-title').textContent = p.name;
+            document.getElementById('pedido-view-body').innerHTML = `<table class="w-full border-collapse text-xs bg-white text-black"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table>`;
+            document.getElementById('pedido-view-modal').classList.remove('hidden');
+        };
+        window.closePedidoView = function() { document.getElementById('pedido-view-modal').classList.add('hidden'); };
+
         window.onload = async function() {
             await loadDB();
             await loadPedido();
+            await loadPedidosArchivo();
             let savedTab = 'wishlist';
             try { savedTab = localStorage.getItem('wishlist_active_tab') || 'wishlist'; } catch (e) {}
             switchTab(savedTab);
