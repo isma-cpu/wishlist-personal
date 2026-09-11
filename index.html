@@ -192,6 +192,7 @@
             </div>
 
             <nav id="pedido-sidebar-nav" class="space-y-8 flex-1"></nav>
+            <input type="file" accept="image/*" class="hidden" id="p-crest-upload-input" onchange="handleCrestUpload(event)">
         </aside>
 
         <main class="flex-1 p-4 md:p-8 overflow-x-hidden relative space-y-6" id="pedido-main-drop-area">
@@ -1681,6 +1682,27 @@
                 reader.readAsDataURL(file);
             });
         }
+        // Igual que fileToResizedDataURL pero en PNG (conserva transparencia) - para escudos/logos, que casi siempre llevan fondo transparente.
+        function fileToResizedPngDataURL(file, maxSize) {
+            return new Promise((resolve, reject) => {
+                if (!file || !file.type.startsWith('image/')) { reject(new Error('no image')); return; }
+                const reader = new FileReader();
+                reader.onload = e => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const max = maxSize || 256; let w = img.width, h = img.height;
+                        if (w > h) { if (w > max) { h *= max / w; w = max; } } else { if (h > max) { w *= max / h; h = max; } }
+                        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        resolve(canvas.toDataURL('image/png'));
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
 
         function getModalItem() {
             const { colId, index } = modalContext;
@@ -2434,44 +2456,44 @@
             {
                 groupTitle: "LALIGA", groupId: "laliga",
                 collections: [
-                    { id: "ll-realmadrid", name: "Real Madrid", emoji: "⚪" }, { id: "ll-barcelona", name: "FC Barcelona", emoji: "🔴🔵" },
-                    { id: "ll-atletico", name: "Atlético de Madrid", emoji: "🔴⚪" }, { id: "ll-athletic", name: "Athletic Club", emoji: "🦁" },
-                    { id: "ll-villarreal", name: "Villarreal CF", emoji: "🟡" }, { id: "ll-betis", name: "Real Betis", emoji: "🟢⚪" },
-                    { id: "ll-celta", name: "RC Celta", emoji: "🩵" }, { id: "ll-rayo", name: "Rayo Vallecano", emoji: "⚡" },
-                    { id: "ll-osasuna", name: "CA Osasuna", emoji: "🔴" }, { id: "ll-realsociedad", name: "Real Sociedad", emoji: "🔵⚪" },
-                    { id: "ll-mallorca", name: "RCD Mallorca", emoji: "🏝️" }, { id: "ll-girona", name: "Girona FC", emoji: "🔴⚪" },
-                    { id: "ll-getafe", name: "Getafe CF", emoji: "🔵" }, { id: "ll-sevilla", name: "Sevilla FC", emoji: "⚪🔴" },
-                    { id: "ll-valencia", name: "Valencia CF", emoji: "🦇" }, { id: "ll-alaves", name: "Deportivo Alavés", emoji: "🔵⚪" },
-                    { id: "ll-espanyol", name: "RCD Espanyol", emoji: "🔵⚪" }, { id: "ll-elche", name: "Elche CF", emoji: "🌴" },
-                    { id: "ll-levante", name: "Levante UD", emoji: "🔵🔴" }, { id: "ll-oviedo", name: "Real Oviedo", emoji: "🔵" }
+                    { id: "ll-realmadrid", name: "Real Madrid" }, { id: "ll-barcelona", name: "FC Barcelona" },
+                    { id: "ll-atletico", name: "Atlético de Madrid" }, { id: "ll-athletic", name: "Athletic Club" },
+                    { id: "ll-villarreal", name: "Villarreal CF" }, { id: "ll-betis", name: "Real Betis" },
+                    { id: "ll-celta", name: "RC Celta" }, { id: "ll-rayo", name: "Rayo Vallecano" },
+                    { id: "ll-osasuna", name: "CA Osasuna" }, { id: "ll-realsociedad", name: "Real Sociedad" },
+                    { id: "ll-mallorca", name: "RCD Mallorca" }, { id: "ll-girona", name: "Girona FC" },
+                    { id: "ll-getafe", name: "Getafe CF" }, { id: "ll-sevilla", name: "Sevilla FC" },
+                    { id: "ll-valencia", name: "Valencia CF" }, { id: "ll-alaves", name: "Deportivo Alavés" },
+                    { id: "ll-espanyol", name: "RCD Espanyol" }, { id: "ll-elche", name: "Elche CF" },
+                    { id: "ll-levante", name: "Levante UD" }, { id: "ll-oviedo", name: "Real Oviedo" }
                 ]
             },
             {
                 groupTitle: "PREMIER LEAGUE", groupId: "premier",
                 collections: [
-                    { id: "pl-mancity", name: "Manchester City", emoji: "🩵" }, { id: "pl-arsenal", name: "Arsenal", emoji: "🔴⚪" },
-                    { id: "pl-liverpool", name: "Liverpool", emoji: "🔴" }, { id: "pl-chelsea", name: "Chelsea", emoji: "🔵" },
-                    { id: "pl-manutd", name: "Manchester United", emoji: "😈" }, { id: "pl-newcastle", name: "Newcastle United", emoji: "⚫⚪" },
-                    { id: "pl-astonvilla", name: "Aston Villa", emoji: "🟣" }, { id: "pl-tottenham", name: "Tottenham Hotspur", emoji: "🐓" },
-                    { id: "pl-brighton", name: "Brighton & Hove Albion", emoji: "🔵⚪" }, { id: "pl-bournemouth", name: "Bournemouth", emoji: "🍒" },
-                    { id: "pl-fulham", name: "Fulham", emoji: "⚪⚫" }, { id: "pl-crystalpalace", name: "Crystal Palace", emoji: "🦅" },
-                    { id: "pl-everton", name: "Everton", emoji: "🔵" }, { id: "pl-westham", name: "West Ham United", emoji: "⚒️" },
-                    { id: "pl-wolves", name: "Wolverhampton Wanderers", emoji: "🐺" }, { id: "pl-brentford", name: "Brentford", emoji: "🐝" },
-                    { id: "pl-forest", name: "Nottingham Forest", emoji: "🌳" }, { id: "pl-leeds", name: "Leeds United", emoji: "⚪" },
-                    { id: "pl-burnley", name: "Burnley", emoji: "🟣" }, { id: "pl-sunderland", name: "Sunderland", emoji: "🔴⚪" }
+                    { id: "pl-mancity", name: "Manchester City" }, { id: "pl-arsenal", name: "Arsenal" },
+                    { id: "pl-liverpool", name: "Liverpool" }, { id: "pl-chelsea", name: "Chelsea" },
+                    { id: "pl-manutd", name: "Manchester United" }, { id: "pl-newcastle", name: "Newcastle United" },
+                    { id: "pl-astonvilla", name: "Aston Villa" }, { id: "pl-tottenham", name: "Tottenham Hotspur" },
+                    { id: "pl-brighton", name: "Brighton & Hove Albion" }, { id: "pl-bournemouth", name: "Bournemouth" },
+                    { id: "pl-fulham", name: "Fulham" }, { id: "pl-crystalpalace", name: "Crystal Palace" },
+                    { id: "pl-everton", name: "Everton" }, { id: "pl-westham", name: "West Ham United" },
+                    { id: "pl-wolves", name: "Wolverhampton Wanderers" }, { id: "pl-brentford", name: "Brentford" },
+                    { id: "pl-forest", name: "Nottingham Forest" }, { id: "pl-leeds", name: "Leeds United" },
+                    { id: "pl-burnley", name: "Burnley" }, { id: "pl-sunderland", name: "Sunderland" }
                 ]
             },
             {
                 groupTitle: "SELECCIONES", groupId: "selecciones",
                 collections: [
-                    { id: "sel-espana", name: "España", emoji: "🇪🇸" },
-                    { id: "sel-brasil", name: "Brasil", emoji: "🇧🇷" },
-                    { id: "sel-argentina", name: "Argentina", emoji: "🇦🇷" },
-                    { id: "sel-francia", name: "Francia", emoji: "🇫🇷" },
-                    { id: "sel-alemania", name: "Alemania", emoji: "🇩🇪" },
-                    { id: "sel-portugal", name: "Portugal", emoji: "🇵🇹" },
-                    { id: "sel-italia", name: "Italia", emoji: "🇮🇹" },
-                    { id: "sel-holanda", name: "Holanda", emoji: "🇳🇱" }
+                    { id: "sel-espana", name: "España" },
+                    { id: "sel-brasil", name: "Brasil" },
+                    { id: "sel-argentina", name: "Argentina" },
+                    { id: "sel-francia", name: "Francia" },
+                    { id: "sel-alemania", name: "Alemania" },
+                    { id: "sel-portugal", name: "Portugal" },
+                    { id: "sel-italia", name: "Italia" },
+                    { id: "sel-holanda", name: "Holanda" }
                 ]
             }
         ];
@@ -2482,7 +2504,7 @@
             if (!pStructure || !Array.isArray(pStructure) || !pStructure[0].collections) pStructure = defaultPedidoStructure;
         } catch (e) { pStructure = defaultPedidoStructure; }
 
-        // Migraciones aditivas de la biblioteca: carpeta Parches, Premier League, más selecciones, emojis/logos por defecto - nunca tocan nada que el usuario ya haya personalizado.
+        // Migraciones aditivas de la biblioteca: carpeta Parches, Premier League, más selecciones - nunca tocan nada que el usuario ya haya personalizado.
         (function pEnsurePedidoContent() {
             let changed = false;
             const findDefaultGroup = (groupId) => defaultPedidoStructure.find(g => g.groupId === groupId);
@@ -2507,15 +2529,10 @@
                 const espana = selecciones.collections.find(c => c.id === 'sel-espana');
                 if (espana && espana.name === 'Selección España') { espana.name = 'España'; changed = true; }
             }
-            // Logo/emoji por defecto para colecciones que aún no tengan uno propio (nunca sobrescribe uno ya elegido)
+            // Se probaron emojis como logo por defecto y se descartaron (el usuario prefiere subir el escudo real) - se limpia cualquier resto.
             pStructure.forEach(g => {
-                const defGroup = findDefaultGroup(g.groupId);
-                if (!defGroup) return;
                 g.collections.forEach(col => {
-                    if (!col.emoji) {
-                        const defCol = defGroup.collections.find(c => c.id === col.id);
-                        if (defCol && defCol.emoji) { col.emoji = defCol.emoji; changed = true; }
-                    }
+                    if (col.emoji) { delete col.emoji; changed = true; }
                 });
             });
             // La carpeta Parches queda fijada siempre la primera del array (se renderiza igual aunque el usuario arrastre otros bloques).
@@ -2546,8 +2563,40 @@
         let pCurrentView = null;
         try { pCurrentView = localStorage.getItem('pedido_current_view') || null; } catch (e) {}
 
+        // Escudos reales de cada equipo/selección, subidos por el usuario (no emojis) - por colección, en su propio store.
+        let pTeamCrests = {};
+        async function savePTeamCrests() { try { await localforage.setItem('pedido_crests_v1', pTeamCrests); } catch (e) {} }
+        let pCrestUploadTarget = null;
+        window.triggerCrestUpload = function(colId, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            pCrestUploadTarget = colId;
+            document.getElementById('p-crest-upload-input').click();
+        };
+        window.handleCrestUpload = async function(event) {
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (!file || !pCrestUploadTarget) return;
+            try {
+                const src = await fileToResizedPngDataURL(file, 256);
+                pTeamCrests[pCrestUploadTarget] = src;
+                await savePTeamCrests();
+                pInit();
+                if (pCurrentView === pCrestUploadTarget) pRenderLibraryBody();
+            } catch (e) {}
+            pCrestUploadTarget = null;
+        };
+        window.removeCrest = function(colId, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            if (!confirm('¿Quitar el escudo de esta colección?')) return;
+            delete pTeamCrests[colId];
+            savePTeamCrests();
+            pInit();
+            if (pCurrentView === colId) pRenderLibraryBody();
+        };
+
         async function loadPedido() {
             try { pDb = (await localforage.getItem('pedido_db_v1')) || {}; } catch (e) { pDb = {}; }
+            try { pTeamCrests = (await localforage.getItem('pedido_crests_v1')) || {}; } catch (e) { pTeamCrests = {}; }
             initPedidoStaticListeners();
             pInit();
             await loadPOrder();
@@ -2611,10 +2660,13 @@
                            class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded-full transition-all group select-none relative">
                             <span class="flex items-center gap-1.5 min-w-0 pointer-events-none">
                                 <span draggable="true" ondragstart="pCollectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar">⠿</span>
-                                ${col.emoji ? `<span class="shrink-0">${col.emoji}</span>` : ''}
+                                <span onclick="triggerCrestUpload('${col.id}', event)" class="shrink-0 w-5 h-5 rounded-full overflow-hidden border border-zinc-700 bg-zinc-800 flex items-center justify-center pointer-events-auto cursor-pointer hover:border-sky-400" title="${pTeamCrests[col.id] ? 'Cambiar escudo' : 'Subir escudo'}">
+                                    ${pTeamCrests[col.id] ? `<img src="${pTeamCrests[col.id]}" class="w-full h-full object-cover">` : `<span class="text-[9px] text-zinc-600">+</span>`}
+                                </span>
                                 <span class="truncate">${col.name}</span>
                             </span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
+                                ${pTeamCrests[col.id] ? `<button onclick="removeCrest('${col.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar escudo">🗑️</button>` : ''}
                                 <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
                                 <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
                                 <span id="p-badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
@@ -2744,12 +2796,13 @@
             const countEl = document.getElementById('p-lib-count');
 
             if (!col) {
-                titleEl.textContent = 'Sin colecciones';
+                titleEl.innerHTML = 'Sin colecciones';
                 columnsWrap.innerHTML = ''; grid.innerHTML = ''; looseLabel.classList.add('hidden'); countEl.textContent = '0 u.';
                 return;
             }
 
-            titleEl.textContent = col.name;
+            const crest = pTeamCrests[col.id];
+            titleEl.innerHTML = (crest ? `<img src="${crest}" class="w-8 h-8 rounded-full object-cover inline-block align-middle mr-2 border border-zinc-700">` : '') + escapeHtml(col.name);
             const hasSubs = Array.isArray(col.subCols);
             const items = pDb[col.id] || [];
             let total = items.length;
