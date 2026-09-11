@@ -60,6 +60,18 @@
         .col-resizer:hover { background: rgba(56, 189, 248, 0.5); }
         .row-resizer { position: absolute; left: 0; bottom: -3px; width: 100%; height: 6px; cursor: row-resize; z-index: 5; }
         .row-resizer:hover { background: rgba(56, 189, 248, 0.5); }
+
+        /* Botón estándar para cualquier acción de eliminar/quitar de la web: recuadro rojo con la cruz bien visible. */
+        .del-x-btn {
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0.15rem; min-width: 1.15rem; min-height: 1.15rem;
+            border-radius: 9999px; border: 1px solid rgba(239, 68, 68, 0.55);
+            background: rgba(239, 68, 68, 0.12); color: #f87171;
+            line-height: 1; font-size: 11px; cursor: pointer;
+            transition: background-color .15s, color .15s, border-color .15s, transform .1s;
+        }
+        .del-x-btn:hover { background: #ef4444; border-color: #ef4444; color: #fff; }
+        .del-x-btn:active { transform: scale(0.92); }
     </style>
 </head>
 <body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
@@ -136,7 +148,7 @@
         <button onclick="openMoveMultiModal()" class="text-blue-400 hover:text-blue-300 text-sm font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer">
             Mover ➔
         </button>
-        <button onclick="openBatchDeleteModal()" class="text-red-400 hover:text-red-300 text-sm font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer">
+        <button onclick="openBatchDeleteModal()" class="text-red-400 hover:text-white hover:bg-red-500 border border-red-500/60 rounded-full px-3 py-1 text-sm font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors">
             ✕ Eliminar
         </button>
     </div>
@@ -225,6 +237,7 @@
                         <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
                         <button onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
                     </div>
+                    <div id="order-hidden-cols" class="flex flex-wrap gap-1"></div>
                 </div>
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
                 <div id="order-style-bar" class="flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-200 print:hidden"></div>
@@ -432,7 +445,7 @@
                 <label class="text-[10px] text-zinc-500 uppercase block mb-1">Direcciones guardadas</label>
                 <div class="flex items-center gap-2">
                     <select id="addr-saved-select" onchange="loadSavedAddressIntoForm(this.value)" class="flex-1 min-w-0 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-[#39FF14]"></select>
-                    <button onclick="deleteSavedAddressSelected()" class="text-red-500 hover:text-red-400 text-lg px-1 shrink-0" title="Eliminar esta dirección guardada">✕</button>
+                    <button onclick="deleteSavedAddressSelected()" class="del-x-btn shrink-0" title="Eliminar esta dirección guardada">✕</button>
                 </div>
             </div>
             <div class="space-y-3">
@@ -1069,6 +1082,11 @@
                     const col = getOrderColumns(sheet).find(c => c.key === targetId);
                     inputEl.value = col ? col.es : "";
                 }
+            } else if (action === 'rename-order-column-zh') {
+                titleEl.innerHTML = "✏️ TEXTO EN CHINO"; inputEl.placeholder = "Ej: 版本, 数量...";
+                const sheet = activeSheet();
+                const col = getOrderColumns(sheet).find(c => c.key === targetId);
+                inputEl.value = col ? (col.zh || "") : "";
             } else if (action === 'add-cliente') {
                 titleEl.innerHTML = "➕ NUEVO CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
             } else if (action === 'save-address') {
@@ -1197,6 +1215,13 @@
                         if (!sheet.columnLabelOverrides) sheet.columnLabelOverrides = {};
                         sheet.columnLabelOverrides[targetId] = val;
                     }
+                    savePOrders(); renderOrderTable();
+                }
+            } else if (action === 'rename-order-column-zh') {
+                if (val) {
+                    const sheet = activeSheet();
+                    if (!sheet.columnZhOverrides) sheet.columnZhOverrides = {};
+                    sheet.columnZhOverrides[targetId] = val;
                     savePOrders(); renderOrderTable();
                 }
             } else if (action === 'add-cliente') {
@@ -1888,7 +1913,7 @@
                     </span>
                     <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
                         <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
-                        <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
+                        <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="del-x-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
                         <span id="badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
                     </div>
                 </a>`;
@@ -2012,7 +2037,7 @@
                                 <span draggable="true" ondragstart="folderDragStart(event, '${group.groupId}', '${folder.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity" title="Arrastra para reordenar la carpeta">⠿</span>
                                 <button onclick="openInput('set-folder-emoji', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Elegir emoji de la carpeta">😀</button>
                                 <button onclick="openInput('edit-folder', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Renombrar carpeta">✏️</button>
-                                <button onclick="deleteFolder('${group.groupId}', '${folder.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar carpeta (las colecciones no se borran)">✕</button>
+                                <button onclick="deleteFolder('${group.groupId}', '${folder.id}', event)" class="del-x-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar carpeta (las colecciones no se borran)">✕</button>
                             </div>
                         </div>
                         <ul id="folderlist-${folder.id}" class="ml-5 mt-1 space-y-1 border-l border-zinc-800 pl-2 ${isFolderCollapsed ? 'hidden' : ''}">
@@ -2049,7 +2074,7 @@
                                     <h3 class="font-bold text-white text-sm uppercase tracking-wide truncate flex-1">${sub.name}</h3>
                                     <span class="text-[10px] text-zinc-500 shrink-0" id="count-${sub.id}">0</span>
                                     <button onclick="openInput('edit-subcollection', '${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 transition-colors" title="Renombrar subcolección">✏️</button>
-                                    <button onclick="deleteSubCollection('${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 transition-colors" title="Eliminar subcolección">✕</button>
+                                    <button onclick="deleteSubCollection('${col.id}', '${sub.id}', event)" class="del-x-btn" title="Eliminar subcolección">✕</button>
                                 </div>
                                 <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
                                     <div id="dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-[#39FF14]/25 bg-black hover-neon rounded-xl flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none">
@@ -2666,9 +2691,9 @@
                                 <span class="truncate">${col.name}</span>
                             </span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
-                                ${pTeamCrests[col.id] ? `<button onclick="removeCrest('${col.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar escudo">🗑️</button>` : ''}
+                                ${pTeamCrests[col.id] ? `<button onclick="removeCrest('${col.id}', event)" class="del-x-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar escudo">🗑️</button>` : ''}
                                 <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
-                                <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
+                                <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="del-x-btn opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
                                 <span id="p-badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
                             </div>
                         </a>`;
@@ -2827,7 +2852,7 @@
                             <h3 class="font-bold text-white text-sm uppercase tracking-wide truncate flex-1">${sub.name}</h3>
                             <span class="text-[10px] text-zinc-500 shrink-0">${sItems.length}</span>
                             <button onclick="openInput('p-edit-subcollection', '${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 transition-colors" title="Renombrar subcolección">✏️</button>
-                            <button onclick="pDeleteSubCollection('${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 transition-colors" title="Eliminar subcolección">✕</button>
+                            <button onclick="pDeleteSubCollection('${col.id}', '${sub.id}', event)" class="del-x-btn" title="Eliminar subcolección">✕</button>
                         </div>
                         <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
                             <div id="p-dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed ${dzBorder} bg-black hover-neon rounded-xl flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all ${dzFocus} focus:outline-none">
@@ -3144,8 +3169,8 @@
                         return `<td class="border border-gray-300 p-1 text-center">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-8 h-10 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
                     }
                     if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center whitespace-nowrap"><span class="font-bold uppercase">${escapeHtml(r.name || '')}</span>${r.number ? ' ' + escapeHtml(r.number) : ''}</td>`;
-                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle bg-white">${renderAddrCellInner(sheet)}</td>`; }
-                    if (c.key === 'priceTotal') { if (!isFirst) return ''; const total = rows.reduce((s, rr) => s + (parseFloat(rr.price) || 0), 0); return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`; }
+                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top bg-white">${renderAddrCellInner(sheet)}</td>`; }
+                    if (c.key === 'priceTotal') { if (!isFirst) return ''; const total = rows.reduce((s, rr) => s + (parseFloat(rr.price) || 0), 0); return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`; }
                     return `<td class="border border-gray-300 p-1 text-center">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
                 }).join('');
                 return `<tr>${tds}</tr>`;
@@ -3308,7 +3333,12 @@
                 { key: 'qty', zh: '数量', es: 'Cantidad', type: 'number', w: 65 },
                 { key: 'size', zh: '尺码', es: 'Talla', type: 'text', w: 65 }
             ];
-            cols.push({ key: 'nameNumber', zh: '印刷名字/号码', es: 'Nombre y Número', type: 'name-number', w: 150 });
+            if (sheet && sheet.splitNameNumber) {
+                cols.push({ key: 'name', zh: '名字', es: 'Nombre', type: 'text', w: 90 });
+                cols.push({ key: 'number', zh: '号码', es: 'Número', type: 'text', w: 55 });
+            } else {
+                cols.push({ key: 'nameNumber', zh: '印刷名字/号码', es: 'Nombre y Número', type: 'name-number', w: 150 });
+            }
             cols.push({ key: 'patch', zh: '补丁', es: 'Parche', type: 'patch', w: 90 });
             cols.push({ key: 'unitPrice', zh: '单价', es: es ? 'Precio x Unidad' : 'P. unitario', type: 'number', w: 85 });
             cols.push({ key: 'price', zh: '价格', es: 'Precio', type: 'number', w: 80 });
@@ -3317,19 +3347,28 @@
             if (sheet && sheet.columnLabelOverrides) {
                 cols.forEach(c => { if (sheet.columnLabelOverrides[c.key] != null) c.es = sheet.columnLabelOverrides[c.key]; });
             }
+            if (sheet && sheet.columnZhOverrides) {
+                cols.forEach(c => { if (sheet.columnZhOverrides[c.key] != null) c.zh = sheet.columnZhOverrides[c.key]; });
+            }
             return cols;
         }
 
-        // Columnas fijas + columnas personalizadas de la hoja, en un solo orden (aplica sheet.colOrder si el usuario ha arrastrado alguna).
+        // Columnas fijas + columnas personalizadas de la hoja, en un solo orden (aplica sheet.colOrder si el usuario ha arrastrado alguna),
+        // y sin las que el usuario haya quitado de esta hoja (sheet.hiddenColumns).
         function getOrderedColumns(sheet) {
             const all = getOrderColumns(sheet).concat((sheet.customColumns || []).map(c => ({ key: c.id, es: c.label, type: 'custom', w: c.w || 100, isCustom: true })));
+            let ordered;
             if (Array.isArray(sheet.colOrder) && sheet.colOrder.length) {
                 const map = new Map(all.map(c => [c.key, c]));
-                const ordered = sheet.colOrder.map(k => map.get(k)).filter(Boolean);
+                ordered = sheet.colOrder.map(k => map.get(k)).filter(Boolean);
                 all.forEach(c => { if (!ordered.includes(c)) ordered.push(c); });
-                return ordered;
+            } else {
+                ordered = all;
             }
-            return all;
+            if (Array.isArray(sheet.hiddenColumns) && sheet.hiddenColumns.length) {
+                ordered = ordered.filter(c => !sheet.hiddenColumns.includes(c.key));
+            }
+            return ordered;
         }
 
         // --- Varias "hojas" de pedido (como pestañas de Excel) ---
@@ -3405,6 +3444,7 @@
             menu.innerHTML = `
                 <button onclick="renameOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">✏️ Renombrar</button>
                 <button onclick="duplicateOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">📄 Duplicar</button>
+                <button onclick="toggleSheetSplitNameNumber('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">${s.splitNameNumber ? '🔗 Combinar nombre y número' : '🔀 Separar nombre y número'}</button>
                 <button onclick="moveOrderSheet('${s.id}', -1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
                 <button onclick="moveOrderSheet('${s.id}', 1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === pOrders.sheets.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
                 ${pOrders.sheets.length > 1 ? `<button onclick="deleteOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-red-50 text-red-600">✕ Eliminar</button>` : ''}`;
@@ -3456,6 +3496,15 @@
             savePOrders(); renderOrderSheetsBar(); renderOrderTable();
         };
         window.renameOrderSheet = function(id, event) { if (event) event.stopPropagation(); closeSheetMenu(); openInput('rename-order-sheet', id, null, event); };
+        window.toggleSheetSplitNameNumber = function(id, event) {
+            if (event) event.stopPropagation();
+            closeSheetMenu();
+            const sheet = pOrders.sheets.find(s => s.id === id);
+            if (!sheet) return;
+            sheet.splitNameNumber = !sheet.splitNameNumber;
+            savePOrders();
+            if (activeSheet().id === id) renderOrderTable();
+        };
         window.duplicateOrderSheet = function(id, event) {
             if (event) event.stopPropagation();
             const src = pOrders.sheets.find(s => s.id === id); if (!src) return;
@@ -3594,7 +3643,7 @@
                     <img src="${src}" class="w-full h-full object-contain mx-auto">
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                         <button onclick="openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                        <button onclick="clearOrderRowImage('${row.id}','${field}')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
+                        <button onclick="clearOrderRowImage('${row.id}','${field}')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
                     </div>
                 </div>`;
             }
@@ -3605,7 +3654,7 @@
                         <span class="text-[9px] text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
                         <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                             <button onclick="openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                            <button onclick="clearOrderRowImage('${row.id}','patch')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
+                            <button onclick="clearOrderRowImage('${row.id}','patch')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
                         </div>
                     </div>`;
                 }
@@ -3634,29 +3683,36 @@
         // con rowspan a todas las filas, y solo se pinta en la primera.
         function renderOrderRowHTML(row, isFirstRow, totalRows) {
             const sheet = activeSheet();
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            // Las palabras/números que el cliente escribe para personalizar el producto (versión, talla, nombre,
+            // número, columnas personalizadas) van en negrita y algo más grandes que el resto de la tabla, para
+            // que se lean mejor al exportar el PDF (el proveedor tiene que verlas claras).
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm print:border-0" id="cell-${field}-${row.id}">`;
             const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 font-bold text-sm uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 font-bold text-sm print:border-0" id="cell-number-${row.id}">`;
+            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm print:border-0" id="cell-number-${row.id}">`;
             const priceCell = `<span id="cell-price-${row.id}" class="font-bold text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
                 if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
+                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 font-bold text-sm print:border-0">
                     </td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
                 if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 align-middle text-center">
                         <div class="inline-flex items-center gap-1 whitespace-nowrap">${nameCell}${numberCell}</div>
                     </td>`;
+                if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-middle text-center">${nameCellSolo}</td>`;
+                if (c.key === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numberCellSolo}</td>`;
                 if (c.key === 'address') {
                     if (!isFirstRow) return '';
-                    return `<td id="cell-addr" rowspan="${totalRows}" class="border border-gray-300 p-2 align-middle text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
+                    return `<td id="cell-addr" rowspan="${totalRows}" class="border border-gray-300 p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
                 }
                 if (c.key === 'priceTotal') {
                     if (!isFirstRow) return '';
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
-                    return `<td id="cell-pricetotal" rowspan="${totalRows}" class="border border-gray-300 p-2 align-middle text-center font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`;
+                    return `<td id="cell-pricetotal" rowspan="${totalRows}" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`;
                 }
                 if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
@@ -3666,7 +3722,7 @@
             const heightStyle = ` style="height:${row.height || ORDER_ROW_DEFAULT_HEIGHT}px"`;
             return `<tr id="tr-${row.id}" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
                     <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-300 hover:text-gray-500 text-sm cursor-grab select-none" title="Arrastra para reordenar la fila">⠿</span>
-                    <button onclick="deleteOrderRow('${row.id}')" class="text-gray-300 hover:text-red-500 text-sm" title="Eliminar fila">✕</button>
+                    <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn" title="Eliminar fila">✕</button>
                     <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer" title="Arrastra para cambiar la altura de la fila"></span>
                 </td></tr>`;
         }
@@ -3696,16 +3752,47 @@
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     ${c.isCustom ? `
                         <div class="flex items-center justify-center gap-1">
-                            <span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.es)}</span>
-                            <button onclick="deleteOrderColumn('${c.key}')" class="${es ? 'text-white/60 hover:text-red-300' : 'text-gray-400 hover:text-red-500'} text-xs print:hidden" title="Eliminar columna">✕</button>
+                            <span class="font-bold ${headerText} text-sm uppercase">${escapeHtml(c.es)}</span>
+                            <button onclick="event.stopPropagation(); deleteOrderColumn('${c.key}')" class="del-x-btn print:hidden" title="Eliminar columna">✕</button>
                         </div>` : `
-                        <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
-                        <div class="font-bold ${headerText} text-[11px] leading-tight uppercase">${c.es}</div>`}
+                        <div ondblclick="event.stopPropagation(); openInput('rename-order-column-zh', '${c.key}', 'builtin', event)" title="Doble clic para editar el texto en chino" class="text-[10px] ${headerZh} leading-none mb-0.5 cursor-text">${c.zh || ''}</div>
+                        <div class="flex items-center justify-center gap-1">
+                            <span class="font-bold ${headerText} text-sm leading-tight uppercase">${c.es}</span>
+                            <button onclick="event.stopPropagation(); hideOrderColumn('${c.key}')" class="del-x-btn print:hidden" title="Quitar columna">✕</button>
+                        </div>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
             thead.innerHTML = `<tr>${thAll}<th class="border border-gray-300 ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
             tbody.innerHTML = sheet.rows.map((r, i) => renderOrderRowHTML(r, i === 0, sheet.rows.length)).join('');
+            renderHiddenColsBar(sheet);
         }
+
+        // Columnas fijas que el usuario ha quitado de esta hoja (no se pierden datos, solo se dejan de mostrar) -
+        // se pueden volver a añadir desde este pequeño listado junto a "+ Columna".
+        function renderHiddenColsBar(sheet) {
+            const el = document.getElementById('order-hidden-cols');
+            if (!el) return;
+            const hidden = Array.isArray(sheet.hiddenColumns) ? sheet.hiddenColumns : [];
+            if (!hidden.length) { el.innerHTML = ''; return; }
+            const defs = getOrderColumns(sheet);
+            el.innerHTML = hidden.map(key => {
+                const def = defs.find(c => c.key === key);
+                const label = def ? def.es : key;
+                return `<button onclick="restoreOrderColumn('${key}')" class="px-2 py-1 border border-dashed border-gray-300 text-gray-500 text-[10px] rounded-full hover:border-emerald-400 hover:text-emerald-600 transition-colors cursor-pointer print:hidden" title="Volver a mostrar esta columna">↩ ${escapeHtml(label)}</button>`;
+            }).join('');
+        }
+        window.hideOrderColumn = function(key) {
+            const sheet = activeSheet();
+            if (!Array.isArray(sheet.hiddenColumns)) sheet.hiddenColumns = [];
+            if (!sheet.hiddenColumns.includes(key)) sheet.hiddenColumns.push(key);
+            savePOrders(); renderOrderTable();
+        };
+        window.restoreOrderColumn = function(key) {
+            const sheet = activeSheet();
+            if (!Array.isArray(sheet.hiddenColumns)) return;
+            sheet.hiddenColumns = sheet.hiddenColumns.filter(k => k !== key);
+            savePOrders(); renderOrderTable();
+        };
 
         function formatMoney(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
@@ -4087,6 +4174,10 @@
                 colOrder: JSON.parse(JSON.stringify(sheet.colOrder || [])),
                 address: JSON.parse(JSON.stringify(sheet.address || {})),
                 customColumns: JSON.parse(JSON.stringify(sheet.customColumns || [])),
+                hiddenColumns: JSON.parse(JSON.stringify(sheet.hiddenColumns || [])),
+                splitNameNumber: !!sheet.splitNameNumber,
+                columnLabelOverrides: JSON.parse(JSON.stringify(sheet.columnLabelOverrides || {})),
+                columnZhOverrides: JSON.parse(JSON.stringify(sheet.columnZhOverrides || {})),
                 rows: JSON.parse(JSON.stringify(sheet.rows || [])),
                 total,
                 cliente: cliente || '',
@@ -4100,7 +4191,7 @@
         function renderClientesChips() {
             const el = document.getElementById('pedidos-clientes-chips');
             if (!el) return;
-            el.innerHTML = pedidosClientes.map(c => `<span class="text-[10px] uppercase bg-zinc-800 text-zinc-300 rounded-full px-2 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="text-zinc-500 hover:text-red-400 cursor-pointer" title="Quitar de la lista">✕</button></span>`).join('');
+            el.innerHTML = pedidosClientes.map(c => `<span class="text-[10px] uppercase bg-zinc-800 text-zinc-300 rounded-full pl-2 pr-1 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="del-x-btn" title="Quitar de la lista">✕</button></span>`).join('');
         }
         window.removePedidoCliente = function(name) {
             if (!confirm('¿Quitar "' + name + '" de la lista de clientes? Los pedidos ya asignados a este cliente mantendrán el nombre guardado.')) return;
@@ -4144,7 +4235,7 @@
                         <div id="pedido-debe-${p.id}" class="${debe > 0 ? 'text-red-400' : 'text-emerald-400'} font-bold text-sm">${formatMoney(debe)} €</div>
                     </div>
                     <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
-                    <button onclick="deletePedido('${p.id}')" class="text-zinc-500 hover:text-red-500 text-lg px-1 cursor-pointer" title="Eliminar">✕</button>
+                    <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
                 </div>`;
             }).join('');
         }
@@ -4200,8 +4291,8 @@
                         return `<td class="border border-gray-300 p-1 text-center align-middle">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-12 h-14 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
                     }
                     if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center align-middle whitespace-nowrap"><span class="font-bold uppercase">${escapeHtml(r.name || '')}</span>${r.number ? ' ' + escapeHtml(r.number) : ''}</td>`;
-                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle bg-white">${renderAddrCellInner({ address: p.address })}</td>`; }
-                    if (c.key === 'priceTotal') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle font-black text-gray-900 bg-yellow-100">${formatMoney(p.total)} €</td>`; }
+                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top bg-white">${renderAddrCellInner({ address: p.address })}</td>`; }
+                    if (c.key === 'priceTotal') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top font-black text-gray-900 bg-yellow-100">${formatMoney(p.total)} €</td>`; }
                     return `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
                 }).join('');
                 return `<tr>${tds}</tr>`;
