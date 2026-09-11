@@ -39,7 +39,12 @@
         .section-drop-active { background-color: rgba(57, 255, 20, 0.05); border: 2px dashed #39FF14; border-radius: 1rem; }
     </style>
 </head>
-<body class="font-sans min-h-screen flex flex-col md:flex-row selection:bg-[#39FF14] selection:text-black">
+<body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
+
+    <div id="tab-bar" class="fixed top-0 inset-x-0 h-11 z-[80] flex bg-black border-b border-zinc-800 print:hidden">
+        <button id="tab-btn-wishlist" onclick="switchTab('wishlist')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-[#39FF14] border-[#39FF14]">📋 Wishlist</button>
+        <button id="tab-btn-pedido" onclick="switchTab('pedido')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-zinc-500 border-transparent hover:text-sky-400">📦 Crear Pedido</button>
+    </div>
 
     <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
         <button class="fixed top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer z-[120]">&times;</button>
@@ -56,6 +61,7 @@
             <div id="modal-toolbar" class="flex flex-wrap justify-center gap-4 sm:gap-6" onclick="event.stopPropagation()">
                 <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
                 <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
+                <button onclick="openSendModal('w2p', event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-sky-400 text-sky-400 hover:bg-sky-400 hover:text-black shadow-[0_0_15px_rgba(56,189,248,0.3)]">📦 Enviar a Pedido</button>
             </div>
 
             <div id="modal-related" class="w-[92vw] max-w-3xl hidden mt-2 mb-4 rounded-xl transition-all" onclick="event.stopPropagation()"></div>
@@ -107,7 +113,8 @@
         </button>
     </div>
 
-    <aside class="w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-0 md:h-screen overflow-y-auto">
+    <div id="view-wishlist" class="w-full flex flex-col md:flex-row pt-11">
+    <aside class="w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-11 md:h-[calc(100vh-2.75rem)] overflow-y-auto">
         <div class="mb-6 cursor-pointer group" onclick="showView('home')" title="Volver al inicio">
             <h1 class="text-3xl font-black tracking-tighter text-neon mb-1 flex items-center gap-2">
                 WISHLIST ⚽
@@ -150,6 +157,126 @@
         </section>
         <div id="main-content" class="space-y-10"></div>
     </main>
+    </div>
+
+    <!-- ============ PESTAÑA: CREAR PEDIDO ============ -->
+    <div id="view-pedido" class="hidden w-full flex flex-col md:flex-row pt-11">
+        <aside id="pedido-sidebar" class="print:hidden w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-11 md:h-[calc(100vh-2.75rem)] overflow-y-auto">
+            <div class="mb-6">
+                <h1 class="text-2xl font-black tracking-tighter text-sky-400 mb-1">BIBLIOTECA 📦</h1>
+                <p class="text-xs text-zinc-500 font-mono tracking-widest uppercase">Equipos y selecciones</p>
+            </div>
+
+            <div class="mb-6 grid grid-cols-2 gap-2">
+                <button onclick="pExportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guardar copia de la biblioteca">
+                    <span>💾</span><span>Copia JSON</span>
+                </button>
+                <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar biblioteca desde copia JSON">
+                    <span>📂</span><span>Cargar JSON</span>
+                    <input type="file" accept=".json" class="hidden" id="p-import-input" onchange="pImportBackupJSON(event)">
+                </label>
+            </div>
+
+            <nav id="pedido-sidebar-nav" class="space-y-8 flex-1"></nav>
+        </aside>
+
+        <main class="flex-1 p-4 md:p-8 overflow-x-hidden relative space-y-6" id="pedido-main-drop-area">
+            <section id="pedido-library-section" class="print:hidden">
+                <div class="flex items-center gap-3 mb-4 border-b border-zinc-800 pb-3">
+                    <div class="w-3 h-3 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]"></div>
+                    <h2 id="p-lib-title" class="text-2xl font-black text-white tracking-wide uppercase">Biblioteca</h2>
+                    <span class="text-sm font-mono text-zinc-500 ml-auto" id="p-lib-count">0 u.</span>
+                    <button onclick="toggleLibraryCollapsed()" id="p-lib-toggle" class="text-zinc-500 hover:text-sky-400 text-xs font-mono uppercase border border-zinc-700 hover:border-sky-400 rounded px-2 py-1 transition-colors">Ocultar ▴</button>
+                </div>
+                <button onclick="pAddSubCollection(pCurrentView, event)" class="mb-4 px-4 py-2 border border-sky-400/60 bg-sky-400/10 text-sky-400 font-mono text-xs font-bold uppercase rounded hover:bg-sky-400 hover:text-black transition-all flex items-center gap-2 cursor-pointer">➕ Nueva subcolección</button>
+                <div id="p-lib-body">
+                    <div id="p-lib-columns" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6"></div>
+                    <div id="p-lib-loose-label" class="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-3 border-t border-zinc-800 pt-4 hidden">Sin clasificar</div>
+                    <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
+                        <div id="p-dropzone" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-sky-400 focus:outline-none">
+                            <span class="text-xl opacity-50 pointer-events-none">➕</span>
+                        </div>
+                        <div id="p-lib-grid" class="contents"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="pedido-order-section" class="bg-white text-black rounded-lg shadow-xl overflow-hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-200 bg-gray-50 print:hidden">
+                    <h2 class="font-black text-lg tracking-wide text-black">📦 PLANTILLA DE PEDIDO</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
+                        <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
+                        <button onclick="printOrder()" class="px-3 py-1.5 border border-emerald-600 bg-emerald-600 text-white font-mono text-[11px] font-bold uppercase rounded hover:bg-emerald-500 transition-colors cursor-pointer">🖨️ Descargar PDF</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table id="order-table" class="w-full border-collapse text-xs">
+                        <thead id="order-thead"></thead>
+                        <tbody id="order-tbody"></tbody>
+                    </table>
+                </div>
+                <button onclick="addOrderRow()" class="w-full py-3 text-center text-gray-400 hover:text-black hover:bg-gray-50 font-mono text-xs uppercase tracking-widest transition-colors cursor-pointer print:hidden border-t border-gray-200">➕ Añadir producto</button>
+            </section>
+        </main>
+    </div>
+
+    <!-- Visor simple de imagen de la BIBLIOTECA -->
+    <div id="p-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="pCloseModal()">
+        <button class="fixed top-6 right-6 text-sky-400 hover:text-white text-4xl font-bold cursor-pointer z-[120]">&times;</button>
+        <div class="flex flex-col items-center gap-6 max-h-[92vh] overflow-y-auto py-6 px-2">
+            <div class="relative shrink-0 overflow-hidden rounded-lg">
+                <img id="p-modal-img" class="max-h-[70vh] max-w-[90vw] object-contain border border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.2)] rounded-lg select-none transition-transform duration-100" style="transform-origin: center center;" draggable="false">
+                <button id="p-modal-zoom-btn" onclick="pToggleZoom(event)" title="Zoom" class="absolute top-2 left-2 z-30 w-9 h-9 rounded-full bg-black/70 border border-sky-400/70 text-sky-400 flex items-center justify-center hover:bg-sky-400 hover:text-black transition-all">🔍</button>
+            </div>
+            <div class="flex flex-wrap justify-center gap-4" onclick="event.stopPropagation()">
+                <button onclick="openSendModal('p2w', event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black">⭐ Enviar a Wishlist</button>
+                <button onclick="pDeleteCurrentModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white">✕ Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enviar foto entre Wishlist <-> Pedido -->
+    <div id="send-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-lg shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
+            <h3 id="send-modal-title" class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase">Enviar a...</h3>
+            <div id="send-modal-list" class="space-y-1 mb-6"></div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeSendModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Elegir foto de la biblioteca para una fila del pedido -->
+    <div id="lib-picker-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-sky-400 p-6 rounded-lg shadow-[0_0_30px_rgba(56,189,248,0.3)] w-full max-w-3xl max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-black tracking-wider text-sky-400 uppercase">Elegir foto de la biblioteca</h3>
+                <button onclick="closeLibraryPicker()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <div id="lib-picker-body" class="space-y-6"></div>
+        </div>
+    </div>
+
+    <!-- Dirección de envío de una fila del pedido -->
+    <div id="p-address-modal" class="fixed inset-0 bg-black/90 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-lg shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm">
+            <h3 class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase">📍 Dirección de envío</h3>
+            <div class="space-y-3">
+                <input id="addr-dest" placeholder="Destinatario" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-dir" placeholder="Dirección" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-cp" placeholder="Código postal" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-ciudad" placeholder="Ciudad" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-prov" placeholder="Provincia/Estado" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-pais" placeholder="País" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-tel" placeholder="Teléfono" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+            </div>
+            <div class="flex justify-end gap-3 mt-6">
+                <button onclick="closeAddressModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+                <button onclick="saveAddressModal()" class="px-5 py-2 text-xs font-bold font-mono bg-[#39FF14] text-black rounded-md hover:bg-white transition-colors cursor-pointer">GUARDAR</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         localforage.config({ name: 'WishlistApp', storeName: 'images_db' });
@@ -640,6 +767,22 @@
                 const parent = structure.flatMap(g => g.collections).find(c => c.id === targetId);
                 const sub = parent && (parent.subCols || []).find(s => s.id === extraId);
                 inputEl.value = sub ? sub.name : "";
+            } else if (action === 'p-add-collection') {
+                titleEl.innerHTML = "➕ NUEVO EQUIPO/COLECCIÓN"; inputEl.placeholder = "Nombre del equipo...";
+            } else if (action === 'p-edit-collection') {
+                titleEl.innerHTML = "✏️ EDITAR EQUIPO";
+                const group = pStructure.find(g => g.groupId === targetId);
+                const col = group.collections.find(c => c.id === extraId);
+                inputEl.value = col.name;
+            } else if (action === 'p-add-subcollection') {
+                titleEl.innerHTML = "➕ NUEVA SUBCOLECCIÓN"; inputEl.placeholder = "Nombre de la subcolección...";
+            } else if (action === 'p-edit-subcollection') {
+                titleEl.innerHTML = "✏️ RENOMBRAR SUBCOLECCIÓN";
+                const parent = pStructure.flatMap(g => g.collections).find(c => c.id === targetId);
+                const sub = parent && (parent.subCols || []).find(s => s.id === extraId);
+                inputEl.value = sub ? sub.name : "";
+            } else if (action === 'add-order-column') {
+                titleEl.innerHTML = "➕ NUEVA COLUMNA"; inputEl.placeholder = "Ej: Talla EU, Color...";
             }
 
             modal.classList.remove('hidden');
@@ -695,6 +838,40 @@
                     const sub = parent && (parent.subCols || []).find(s => s.id === extraId);
                     if (sub) { sub.name = val; saveStructure(); init(); showView(targetId); }
                 }
+            } else if (action === 'p-add-collection') {
+                if (val) {
+                    const group = pStructure.find(g => g.groupId === targetId);
+                    const newId = `p-custom-${Date.now()}`;
+                    group.collections.push({ id: newId, name: val });
+                    if (!pDb[newId]) pDb[newId] = [];
+                    pSaveStructure(); pSaveDB(); pInit(); pShowView(newId);
+                }
+            } else if (action === 'p-edit-collection') {
+                if (val) {
+                    const group = pStructure.find(g => g.groupId === targetId);
+                    const col = group.collections.find(c => c.id === extraId);
+                    col.name = val;
+                    pSaveStructure(); pInit();
+                }
+            } else if (action === 'p-add-subcollection') {
+                if (val) {
+                    const parent = pStructure.flatMap(g => g.collections).find(c => c.id === targetId);
+                    if (parent) {
+                        if (!Array.isArray(parent.subCols)) parent.subCols = [];
+                        const newId = `p-sub-${Date.now()}`;
+                        parent.subCols.push({ id: newId, name: val });
+                        if (!pDb[newId]) pDb[newId] = [];
+                        pSaveStructure(); pSaveDB(); pInit(); pShowView(targetId);
+                    }
+                }
+            } else if (action === 'p-edit-subcollection') {
+                if (val) {
+                    const parent = pStructure.flatMap(g => g.collections).find(c => c.id === targetId);
+                    const sub = parent && (parent.subCols || []).find(s => s.id === extraId);
+                    if (sub) { sub.name = val; pSaveStructure(); pInit(); pShowView(targetId); }
+                }
+            } else if (action === 'add-order-column') {
+                if (val) addOrderColumnNamed(val);
             }
             closeCustomInput();
         };
@@ -1759,7 +1936,785 @@
             if (currentView === 'home') { recentSection.classList.remove('hidden'); } else { recentSection.classList.add('hidden'); }
         }
 
-        window.onload = loadDB;
+        // ============================================================
+        // ================  PESTAÑA "CREAR PEDIDO"  =================
+        // ============================================================
+
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+        function escAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
+
+        window.switchTab = function(tab) {
+            document.getElementById('view-wishlist').classList.toggle('hidden', tab !== 'wishlist');
+            document.getElementById('view-pedido').classList.toggle('hidden', tab !== 'pedido');
+            const wBtn = document.getElementById('tab-btn-wishlist'), pBtn = document.getElementById('tab-btn-pedido');
+            wBtn.classList.toggle('text-[#39FF14]', tab === 'wishlist');
+            wBtn.classList.toggle('border-[#39FF14]', tab === 'wishlist');
+            wBtn.classList.toggle('text-zinc-500', tab !== 'wishlist');
+            wBtn.classList.toggle('border-transparent', tab !== 'wishlist');
+            pBtn.classList.toggle('text-sky-400', tab === 'pedido');
+            pBtn.classList.toggle('border-sky-400', tab === 'pedido');
+            pBtn.classList.toggle('text-zinc-500', tab !== 'pedido');
+            pBtn.classList.toggle('border-transparent', tab !== 'pedido');
+            try { localStorage.setItem('wishlist_active_tab', tab); } catch (e) {}
+        };
+
+        // --- Estructura por defecto de la biblioteca: LaLiga + Selección España ---
+        const defaultPedidoStructure = [
+            {
+                groupTitle: "LALIGA", groupId: "laliga",
+                collections: [
+                    { id: "ll-realmadrid", name: "Real Madrid" }, { id: "ll-barcelona", name: "FC Barcelona" },
+                    { id: "ll-atletico", name: "Atlético de Madrid" }, { id: "ll-athletic", name: "Athletic Club" },
+                    { id: "ll-villarreal", name: "Villarreal CF" }, { id: "ll-betis", name: "Real Betis" },
+                    { id: "ll-celta", name: "RC Celta" }, { id: "ll-rayo", name: "Rayo Vallecano" },
+                    { id: "ll-osasuna", name: "CA Osasuna" }, { id: "ll-realsociedad", name: "Real Sociedad" },
+                    { id: "ll-mallorca", name: "RCD Mallorca" }, { id: "ll-girona", name: "Girona FC" },
+                    { id: "ll-getafe", name: "Getafe CF" }, { id: "ll-sevilla", name: "Sevilla FC" },
+                    { id: "ll-valencia", name: "Valencia CF" }, { id: "ll-alaves", name: "Deportivo Alavés" },
+                    { id: "ll-espanyol", name: "RCD Espanyol" }, { id: "ll-elche", name: "Elche CF" },
+                    { id: "ll-levante", name: "Levante UD" }, { id: "ll-oviedo", name: "Real Oviedo" }
+                ]
+            },
+            {
+                groupTitle: "SELECCIONES", groupId: "selecciones",
+                collections: [
+                    { id: "sel-espana", name: "Selección España" }
+                ]
+            }
+        ];
+
+        let pStructure;
+        try {
+            pStructure = JSON.parse(localStorage.getItem('pedido_structure_v2'));
+            if (!pStructure || !Array.isArray(pStructure) || !pStructure[0].collections) pStructure = defaultPedidoStructure;
+        } catch (e) { pStructure = defaultPedidoStructure; }
+
+        function pSaveStructure() { try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {} }
+
+        let pCollapsedGroups = new Set();
+        try { pCollapsedGroups = new Set(JSON.parse(localStorage.getItem('pedido_collapsed_groups') || '[]')); } catch (e) {}
+        function pSaveCollapsed() { try { localStorage.setItem('pedido_collapsed_groups', JSON.stringify([...pCollapsedGroups])); } catch (e) {} }
+        window.pToggleGroupCollapsed = function(groupId, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            if (pCollapsedGroups.has(groupId)) pCollapsedGroups.delete(groupId); else pCollapsedGroups.add(groupId);
+            pSaveCollapsed();
+            const ul = document.getElementById('p-grouplist-' + groupId);
+            const chev = document.getElementById('p-groupchev-' + groupId);
+            if (ul) ul.classList.toggle('hidden', pCollapsedGroups.has(groupId));
+            if (chev) chev.textContent = pCollapsedGroups.has(groupId) ? '▸' : '▾';
+        };
+
+        let pDb = {};
+        let pCurrentView = null;
+        try { pCurrentView = localStorage.getItem('pedido_current_view') || null; } catch (e) {}
+
+        async function loadPedido() {
+            try { pDb = (await localforage.getItem('pedido_db_v1')) || {}; } catch (e) { pDb = {}; }
+            initPedidoStaticListeners();
+            pInit();
+            await loadPOrder();
+        }
+
+        async function pSaveDB() {
+            try { await localforage.setItem('pedido_db_v1', pDb); } catch (e) {}
+            pRenderSidebarBadges();
+            pRenderLibraryBody();
+        }
+
+        function pFindCollection(id) {
+            for (const g of pStructure) { const c = g.collections.find(x => x.id === id); if (c) return c; }
+            return null;
+        }
+
+        function pRenderSidebarBadges() {
+            pStructure.forEach(g => g.collections.forEach(col => {
+                const total = (pDb[col.id] || []).length + (col.subCols || []).reduce((s, x) => s + (pDb[x.id] || []).length, 0);
+                const b = document.getElementById('p-badge-' + col.id);
+                if (b) {
+                    b.textContent = total;
+                    b.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded ml-1 pointer-events-none ' + (total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600');
+                }
+            }));
+        }
+
+        function pInit() {
+            const nav = document.getElementById('pedido-sidebar-nav');
+            nav.innerHTML = '';
+            pStructure.forEach(group => {
+                group.collections.forEach(col => {
+                    if (!pDb[col.id]) pDb[col.id] = [];
+                    (col.subCols || []).forEach(sub => { if (!pDb[sub.id]) pDb[sub.id] = []; });
+                });
+            });
+
+            pStructure.forEach((group, gi) => {
+                const isCollapsed = pCollapsedGroups.has(group.groupId);
+                const groupMenu = document.createElement('div');
+                groupMenu.innerHTML = `
+                    <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1 flex items-center justify-between gap-2">
+                        <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-sky-400 transition-colors" title="Minimizar / desplegar bloque">
+                            <span id="p-groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
+                            <span class="truncate">${group.groupTitle}</span>
+                        </button>
+                        <span class="flex items-center gap-1 shrink-0">
+                            <button onclick="pMoveGroup('${group.groupId}', -1, event)" class="text-zinc-600 hover:text-sky-400 text-sm leading-none p-0.5 transition-colors ${gi === 0 ? 'invisible' : ''}" title="Subir bloque">▲</button>
+                            <button onclick="pMoveGroup('${group.groupId}', 1, event)" class="text-zinc-600 hover:text-sky-400 text-sm leading-none p-0.5 transition-colors ${gi === pStructure.length - 1 ? 'invisible' : ''}" title="Bajar bloque">▼</button>
+                        </span>
+                    </h3>`;
+                const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6" + (isCollapsed ? " hidden" : ""); ul.id = "p-grouplist-" + group.groupId;
+
+                group.collections.forEach(col => {
+                    const total = (pDb[col.id] || []).length + (col.subCols || []).reduce((s, x) => s + (pDb[x.id] || []).length, 0);
+                    const li = document.createElement('li');
+                    li.innerHTML = `
+                        <a href="#" id="p-link-${col.id}"
+                           ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${col.id}')"
+                           onclick="pShowView('${col.id}'); return false;"
+                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-sky-400 hover:bg-zinc-900 rounded transition-all group select-none relative">
+                            <span class="truncate pointer-events-none">${col.name}</span>
+                            <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
+                                <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
+                                <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
+                                <button onclick="pMoveCollection('${group.groupId}', '${col.id}', -1, event)" class="text-zinc-600 hover:text-sky-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">▲</button>
+                                <button onclick="pMoveCollection('${group.groupId}', '${col.id}', 1, event)" class="text-zinc-600 hover:text-sky-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">▼</button>
+                                <span id="p-badge-${col.id}" class="text-[10px] font-mono px-1.5 py-0.5 rounded ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
+                            </div>
+                        </a>`;
+                    ul.appendChild(li);
+                });
+
+                const addLi = document.createElement('li'); addLi.className = "pt-2";
+                addLi.innerHTML = `<button onclick="openInput('p-add-collection', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-sky-400 transition-colors flex items-center gap-1 font-mono uppercase tracking-wider">➕ Añadir Colección</button>`;
+                ul.appendChild(addLi);
+                groupMenu.appendChild(ul); nav.appendChild(groupMenu);
+            });
+
+            if (!pFindCollection(pCurrentView)) {
+                const first = pStructure[0] && pStructure[0].collections[0];
+                pCurrentView = first ? first.id : null;
+            }
+            pShowView(pCurrentView);
+        }
+
+        window.pShowView = function(id) {
+            pCurrentView = id;
+            document.querySelectorAll('#pedido-sidebar-nav .sidebar-link').forEach(el => {
+                el.classList.remove('bg-zinc-900', 'text-sky-400'); el.classList.add('text-zinc-400');
+            });
+            const link = id && document.getElementById('p-link-' + id);
+            if (link) { link.classList.add('bg-zinc-900', 'text-sky-400'); link.classList.remove('text-zinc-400'); }
+            try { localStorage.setItem('pedido_current_view', id || ''); } catch (e) {}
+            pRenderLibraryBody();
+        };
+
+        window.pMoveGroup = function(groupId, dir, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            const i = pStructure.findIndex(g => g.groupId === groupId); const j = i + dir;
+            if (i === -1 || j < 0 || j >= pStructure.length) return;
+            const t = pStructure[i]; pStructure[i] = pStructure[j]; pStructure[j] = t;
+            pSaveStructure(); pInit();
+        };
+
+        window.pMoveCollection = function(groupId, colId, dir, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            const g = pStructure.find(x => x.groupId === groupId); if (!g) return;
+            const i = g.collections.findIndex(c => c.id === colId); const j = i + dir;
+            if (i === -1 || j < 0 || j >= g.collections.length) return;
+            const t = g.collections[i]; g.collections[i] = g.collections[j]; g.collections[j] = t;
+            pSaveStructure(); pInit();
+        };
+
+        window.pAddSubCollection = function(parentColId, event) { openInput('p-add-subcollection', parentColId, null, event); };
+
+        window.pDeleteSubCollection = function(parentColId, subId, event) {
+            if (event) event.stopPropagation();
+            const parent = pStructure.flatMap(g => g.collections).find(c => c.id === parentColId);
+            const sub = parent && (parent.subCols || []).find(s => s.id === subId);
+            const n = (pDb[subId] || []).length;
+            if (!confirm(`¿Eliminar la subcolección «${sub ? sub.name : ''}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`))) return;
+            parent.subCols = parent.subCols.filter(s => s.id !== subId);
+            if (!parent.subCols.length) delete parent.subCols;
+            delete pDb[subId];
+            pSaveStructure(); pSaveDB(); pInit();
+        };
+
+        window.pDeleteCollection = function(groupId, colId, event) {
+            if (event) event.stopPropagation();
+            const g = pStructure.find(x => x.groupId === groupId);
+            const col = g && g.collections.find(c => c.id === colId);
+            if (!col) return;
+            let n = (pDb[colId] || []).length; (col.subCols || []).forEach(s => { n += (pDb[s.id] || []).length; });
+            if (!confirm(`¿Eliminar la colección «${col.name}»` + (n > 0 ? ` y sus ${n} foto${n === 1 ? '' : 's'}? Esta acción no se puede deshacer.` : `?`))) return;
+            (col.subCols || []).forEach(s => { delete pDb[s.id]; });
+            delete pDb[colId];
+            g.collections = g.collections.filter(c => c.id !== colId);
+            if (pCurrentView === colId) pCurrentView = null;
+            pSaveStructure(); pSaveDB(); pInit();
+        };
+
+        window.pSidebarDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); e.currentTarget.classList.add('sidebar-drag-over'); } };
+        window.pSidebarDragLeave = function(e) { e.currentTarget.classList.remove('sidebar-drag-over'); };
+        window.pSidebarDrop = function(e, colId) {
+            e.stopPropagation(); e.preventDefault();
+            e.currentTarget.classList.remove('sidebar-drag-over');
+            if (dtHasDroppableImage(e.dataTransfer)) pAddDroppedImages(e.dataTransfer, colId);
+        };
+
+        window.toggleLibraryCollapsed = function() {
+            const body = document.getElementById('p-lib-body');
+            const btn = document.getElementById('p-lib-toggle');
+            const collapsed = body.classList.toggle('hidden');
+            btn.textContent = collapsed ? 'Mostrar ▾' : 'Ocultar ▴';
+            try { localStorage.setItem('pedido_lib_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+        };
+
+        function pCardHTML(item, colId, index) {
+            return `<div class="relative group aspect-[3/4] bg-zinc-900 rounded-md overflow-hidden border border-zinc-800 hover:border-sky-400 transition-all cursor-pointer"
+                    draggable="true" ondragstart="pDragStart(event, '${colId}', ${index})" ondragend="pDragEndCard()"
+                    onclick="pOpenModal('${colId}', ${index})">
+                <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none">
+                <button onclick="event.stopPropagation(); pDeleteImage('${colId}', ${index})" title="Eliminar" class="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-red-900/80 border border-red-500/50 text-red-300 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+            </div>`;
+        }
+
+        function pRenderLibraryBody() {
+            const col = pFindCollection(pCurrentView);
+            const titleEl = document.getElementById('p-lib-title');
+            const columnsWrap = document.getElementById('p-lib-columns');
+            const looseLabel = document.getElementById('p-lib-loose-label');
+            const grid = document.getElementById('p-lib-grid');
+            const countEl = document.getElementById('p-lib-count');
+
+            if (!col) {
+                titleEl.textContent = 'Sin colecciones';
+                columnsWrap.innerHTML = ''; grid.innerHTML = ''; looseLabel.classList.add('hidden'); countEl.textContent = '0 u.';
+                return;
+            }
+
+            titleEl.textContent = col.name;
+            const hasSubs = Array.isArray(col.subCols);
+            const items = pDb[col.id] || [];
+            let total = items.length;
+
+            if (hasSubs) {
+                const n = col.subCols.length;
+                let cls = 'grid-cols-1';
+                if (n === 2) cls = 'grid-cols-1 sm:grid-cols-2';
+                else if (n === 3) cls = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+                else if (n >= 4) cls = 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+                columnsWrap.className = 'grid ' + cls + ' gap-4 mb-6 items-start';
+                columnsWrap.innerHTML = col.subCols.length ? col.subCols.map(sub => {
+                    const sItems = pDb[sub.id] || []; total += sItems.length;
+                    return `<div id="p-subsec-${sub.id}" class="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3 transition-all">
+                        <div class="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
+                            <div class="w-2 h-2 rounded-full bg-sky-400/70 shrink-0"></div>
+                            <h3 class="font-bold text-white text-sm uppercase tracking-wide truncate flex-1">${sub.name}</h3>
+                            <span class="text-[10px] font-mono text-zinc-500 shrink-0">${sItems.length}</span>
+                            <button onclick="openInput('p-edit-subcollection', '${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 transition-colors" title="Renombrar subcolección">✏️</button>
+                            <button onclick="pDeleteSubCollection('${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 transition-colors" title="Eliminar subcolección">✕</button>
+                        </div>
+                        <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
+                            <div id="p-dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-sky-400 focus:outline-none">
+                                <span class="text-lg opacity-50 pointer-events-none">➕</span>
+                            </div>
+                            ${sItems.map((it, i) => pCardHTML(it, sub.id, i)).join('')}
+                        </div>
+                    </div>`;
+                }).join('') : `<p class="text-zinc-600 font-mono text-sm">Aún no hay subcolecciones. Pulsa «➕ Nueva subcolección» para crear una.</p>`;
+                (col.subCols || []).forEach(sub => pSetupSubDropzone(sub.id));
+            } else {
+                columnsWrap.innerHTML = ''; columnsWrap.className = 'hidden';
+            }
+
+            looseLabel.classList.toggle('hidden', !hasSubs);
+            grid.innerHTML = items.map((it, i) => pCardHTML(it, col.id, i)).join('');
+            countEl.textContent = total + ' u.';
+        }
+
+        function pSetupSubDropzone(subId) {
+            const box = document.getElementById('p-subsec-' + subId);
+            const dz = document.getElementById('p-dropzone-' + subId);
+            if (!box) return;
+            if (dz) dz.addEventListener('click', () => {
+                const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+                input.onchange = () => pHandleFiles(input.files, subId); input.click();
+            });
+            ['dragenter', 'dragover'].forEach(n => box.addEventListener(n, e => {
+                if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); box.classList.add('section-drop-active'); }
+            }));
+            ['dragleave', 'drop'].forEach(n => box.addEventListener(n, () => box.classList.remove('section-drop-active')));
+            box.addEventListener('drop', e => {
+                box.classList.remove('section-drop-active');
+                if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); pAddDroppedImages(e.dataTransfer, subId); }
+            });
+        }
+
+        function initPedidoStaticListeners() {
+            const dz = document.getElementById('p-dropzone');
+            dz.addEventListener('click', () => {
+                const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+                input.onchange = () => pHandleFiles(input.files, pCurrentView); input.click();
+            });
+            const area = document.getElementById('pedido-main-drop-area');
+            ['dragenter', 'dragover'].forEach(n => area.addEventListener(n, e => {
+                if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); area.classList.add('section-drop-active'); }
+            }));
+            ['dragleave', 'drop'].forEach(n => area.addEventListener(n, () => area.classList.remove('section-drop-active')));
+            area.addEventListener('drop', e => {
+                if (dtHasDroppableImage(e.dataTransfer) && pCurrentView) { e.preventDefault(); pAddDroppedImages(e.dataTransfer, pCurrentView); }
+            });
+        }
+
+        function pHandleFiles(files, colId) {
+            if (!colId) return;
+            ([...files]).forEach(file => {
+                if (!file.type || !file.type.startsWith('image/')) return;
+                fileToResizedDataURL(file).then(src => {
+                    if (!Array.isArray(pDb[colId])) pDb[colId] = [];
+                    pDb[colId].unshift({ src, timestamp: Date.now() });
+                    pSaveDB();
+                }).catch(() => {});
+            });
+        }
+
+        async function pAddDroppedImages(dt, colId) {
+            if (!colId) return false;
+            if (dt.files && dt.files.length) { pHandleFiles(dt.files, colId); return true; }
+            const urls = extractImageUrls(dt);
+            if (!urls.length) return false;
+            let ok = false;
+            for (const u of urls) {
+                if (u.startsWith('data:image/')) {
+                    try { const b = await (await fetch(u)).blob(); pHandleFiles([new File([b], 'img', { type: b.type })], colId); ok = true; continue; } catch (e) {}
+                }
+                const f = await urlToImageFile(u);
+                if (f) { pHandleFiles([f], colId); ok = true; }
+            }
+            if (!ok) alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Guárdala y arrástrala desde el ordenador, o pégala con Ctrl+V.');
+            return ok;
+        }
+
+        window.pDeleteImage = function(colId, index) {
+            if (!confirm('¿Eliminar esta foto de la biblioteca?')) return;
+            pDb[colId].splice(index, 1);
+            pSaveDB();
+        };
+
+        // --- Visor simple de la biblioteca (con zoom) ---
+        let pModalContext = { colId: null, index: null };
+        window.pOpenModal = function(colId, index) {
+            const item = pDb[colId] && pDb[colId][index]; if (!item) return;
+            pModalContext = { colId, index };
+            document.getElementById('p-modal-img').src = item.src;
+            pResetZoom();
+            document.getElementById('p-modal').classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        };
+        window.pCloseModal = function() {
+            document.getElementById('p-modal').classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            pResetZoom();
+        };
+        window.pDeleteCurrentModalImage = function(event) {
+            if (event) event.stopPropagation();
+            const { colId, index } = pModalContext;
+            if (colId == null || index == null || !pDb[colId] || !pDb[colId][index]) return;
+            if (!confirm('¿Eliminar esta foto de la biblioteca?')) return;
+            pDb[colId].splice(index, 1);
+            pSaveDB();
+            pCloseModal();
+        };
+
+        let pZoom = { scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, moved: false };
+        function pApplyZoom() {
+            const img = document.getElementById('p-modal-img'); if (!img) return;
+            img.style.transitionDuration = pZoom.dragging ? '0s' : '';
+            img.style.transform = `translate(${pZoom.x}px, ${pZoom.y}px) scale(${pZoom.scale})`;
+            img.style.cursor = pZoom.scale > 1 ? (pZoom.dragging ? 'grabbing' : 'grab') : 'zoom-in';
+            const zb = document.getElementById('p-modal-zoom-btn');
+            if (zb) { zb.classList.toggle('bg-sky-400', pZoom.scale > 1); zb.classList.toggle('text-black', pZoom.scale > 1); }
+        }
+        function pResetZoom() { pZoom = { scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, moved: false }; pApplyZoom(); }
+        window.pToggleZoom = function(event) {
+            if (event) event.stopPropagation();
+            pZoom.scale = pZoom.scale > 1 ? 1 : 2; pZoom.x = 0; pZoom.y = 0; pApplyZoom();
+        };
+        (function pWireZoom() {
+            const img = document.getElementById('p-modal-img'); if (!img) return;
+            img.addEventListener('wheel', e => {
+                e.preventDefault(); e.stopPropagation();
+                const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+                pZoom.scale = Math.min(6, Math.max(1, pZoom.scale * f));
+                if (pZoom.scale === 1) { pZoom.x = 0; pZoom.y = 0; }
+                pApplyZoom();
+            }, { passive: false });
+            img.addEventListener('dblclick', e => { e.stopPropagation(); pResetZoom(); });
+            img.addEventListener('mousedown', e => {
+                if (pZoom.scale <= 1) return;
+                e.preventDefault(); pZoom.dragging = true; pZoom.moved = false;
+                pZoom.sx = e.clientX - pZoom.x; pZoom.sy = e.clientY - pZoom.y; pApplyZoom();
+            });
+            window.addEventListener('mousemove', e => {
+                if (!pZoom.dragging) return;
+                pZoom.x = e.clientX - pZoom.sx; pZoom.y = e.clientY - pZoom.sy; pZoom.moved = true; pApplyZoom();
+            });
+            window.addEventListener('mouseup', () => { if (pZoom.dragging) { pZoom.dragging = false; pApplyZoom(); } });
+            img.addEventListener('click', e => { if (pZoom.scale > 1 || pZoom.moved) { e.stopPropagation(); pZoom.moved = false; } });
+        })();
+
+        let libraryDragSrc = null;
+        window.pDragStart = function(e, colId, index) {
+            const item = pDb[colId] && pDb[colId][index]; if (!item) return;
+            libraryDragSrc = { src: item.src };
+            try { e.dataTransfer.setData('text/plain', 'lib-img'); } catch (x) {}
+            e.dataTransfer.effectAllowed = 'copy';
+        };
+        window.pDragEndCard = function() { libraryDragSrc = null; };
+
+        // --- Copia de seguridad JSON de la biblioteca ---
+        window.pExportBackupJSON = function() {
+            try {
+                const blob = new Blob([JSON.stringify(pDb)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url;
+                a.download = `pedido_biblioteca_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            } catch (error) { alert("Error al guardar la copia JSON."); }
+        };
+        window.pImportBackupJSON = function(event) {
+            const file = event.target.files[0]; if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (confirm('⚠️ ¿Quieres restaurar esta copia de la biblioteca? Se reemplazarán los datos actuales de Crear Pedido.')) {
+                        pDb = imported; await pSaveDB(); pInit();
+                        alert('✅ ¡Biblioteca cargada con éxito!');
+                    }
+                } catch (err) { alert('❌ Archivo de copia no válido.'); }
+                document.getElementById('p-import-input').value = "";
+            };
+            reader.readAsText(file);
+        };
+
+        // --- Enviar foto Wishlist <-> Pedido ---
+        let sendContext = { direction: null, src: null };
+        window.openSendModal = function(direction, event) {
+            if (event) event.stopPropagation();
+            let src = null;
+            if (direction === 'w2p') { const it = getModalItem(); if (!it) return; src = it.src; }
+            else { const it = pDb[pModalContext.colId] && pDb[pModalContext.colId][pModalContext.index]; if (!it) return; src = it.src; }
+            sendContext = { direction, src };
+            const targetStruct = direction === 'w2p' ? pStructure : structure;
+            document.getElementById('send-modal-title').textContent = direction === 'w2p' ? '📦 Enviar a Pedido...' : '⭐ Enviar a Wishlist...';
+            const list = document.getElementById('send-modal-list');
+            list.innerHTML = '';
+            targetStruct.forEach(g => {
+                const title = document.createElement('div');
+                title.className = "text-[10px] text-zinc-500 font-bold mt-4 mb-2 tracking-widest uppercase";
+                title.innerText = g.groupTitle;
+                list.appendChild(title);
+                g.collections.forEach(col => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-green-900/50 text-zinc-300 hover:text-green-300 rounded transition-colors text-sm font-bold truncate";
+                    btn.innerText = col.name;
+                    btn.onclick = () => performSend(col.id);
+                    list.appendChild(btn);
+                    (col.subCols || []).forEach(sub => {
+                        const sbtn = document.createElement('button');
+                        sbtn.className = "w-full text-left pl-6 pr-3 py-1.5 bg-zinc-900/60 hover:bg-green-900/50 text-zinc-400 hover:text-green-300 rounded transition-colors text-xs font-bold truncate";
+                        sbtn.innerText = `↳ ${sub.name}`;
+                        sbtn.onclick = () => performSend(sub.id);
+                        list.appendChild(sbtn);
+                    });
+                });
+            });
+            document.getElementById('send-modal').classList.remove('hidden');
+        };
+        window.closeSendModal = function() { document.getElementById('send-modal').classList.add('hidden'); };
+        function performSend(targetColId) {
+            if (sendContext.direction === 'w2p') {
+                if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
+                pDb[targetColId].unshift({ src: sendContext.src, timestamp: Date.now() });
+                pSaveDB();
+            } else {
+                if (!Array.isArray(db[targetColId])) db[targetColId] = [];
+                db[targetColId].unshift({ src: sendContext.src, timestamp: Date.now(), nameNumber: "", patch: "" });
+                saveDB();
+            }
+            closeSendModal();
+        }
+
+        // ============================================================
+        // =================  TABLA / PLANTILLA DE PEDIDO  ============
+        // ============================================================
+
+        const ORDER_BASE_COLS = [
+            { key: 'version', zh: '版本', es: 'Versión', type: 'text' },
+            { key: 'img', zh: '产品图片', es: 'Producto', type: 'img' },
+            { key: 'size', zh: '尺码', es: 'Talla', type: 'text' },
+            { key: 'qty', zh: '数量', es: 'Cantidad', type: 'number' },
+            { key: 'name', zh: '印刷名字', es: 'Nombre', type: 'text-upper' },
+            { key: 'number', zh: '印刷号码', es: 'Número', type: 'text' },
+            { key: 'patch', zh: '补丁', es: 'Parche', type: 'text' },
+            { key: 'unitPrice', zh: '单价', es: 'P. unitario', type: 'number' },
+            { key: 'price', zh: '价格', es: 'Precio', type: 'number' },
+            { key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address' }
+        ];
+
+        let pOrder = { customColumns: [], rows: [] };
+
+        async function loadPOrder() {
+            try { pOrder = (await localforage.getItem('pedido_order_v1')) || { customColumns: [], rows: [] }; }
+            catch (e) { pOrder = { customColumns: [], rows: [] }; }
+            if (!Array.isArray(pOrder.rows)) pOrder.rows = [];
+            if (!Array.isArray(pOrder.customColumns)) pOrder.customColumns = [];
+            if (!pOrder.rows.length) pOrder.rows.push(newOrderRow());
+            renderOrderTable();
+            savePOrderTable();
+        }
+        async function savePOrderTable() { try { await localforage.setItem('pedido_order_v1', pOrder); } catch (e) {} }
+
+        function newOrderRow() {
+            return {
+                id: 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                version: '', img: '', size: '', qty: '', name: '', number: '', patch: '', unitPrice: '', price: '', priceManual: false,
+                address: { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' }, custom: {}
+            };
+        }
+        window.addOrderRow = function() { pOrder.rows.push(newOrderRow()); savePOrderTable(); renderOrderTable(); };
+        window.deleteOrderRow = function(rowId) {
+            if (!confirm('¿Eliminar esta fila del pedido?')) return;
+            pOrder.rows = pOrder.rows.filter(r => r.id !== rowId);
+            if (!pOrder.rows.length) pOrder.rows.push(newOrderRow());
+            savePOrderTable(); renderOrderTable();
+        };
+        function addOrderColumnNamed(name) {
+            pOrder.customColumns.push({ id: 'col-' + Date.now(), label: name });
+            savePOrderTable(); renderOrderTable();
+        }
+        window.deleteOrderColumn = function(colId) {
+            if (!confirm('¿Eliminar esta columna?')) return;
+            pOrder.customColumns = pOrder.customColumns.filter(c => c.id !== colId);
+            pOrder.rows.forEach(r => { delete r.custom[colId]; });
+            savePOrderTable(); renderOrderTable();
+        };
+
+        window.updateOrderField = function(rowId, field, value) {
+            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            row[field] = value;
+            if (field === 'price') row.priceManual = true;
+            if ((field === 'qty' || field === 'unitPrice') && !row.priceManual) {
+                const q = parseFloat(row.qty), u = parseFloat(row.unitPrice);
+                if (!isNaN(q) && !isNaN(u)) {
+                    row.price = String(Math.round(q * u * 100) / 100);
+                    const priceEl = document.getElementById('cell-price-' + rowId);
+                    if (priceEl) priceEl.value = row.price;
+                }
+            }
+            savePOrderTable();
+        };
+        window.updateOrderCustomField = function(rowId, colId, value) {
+            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            row.custom[colId] = value;
+            savePOrderTable();
+        };
+
+        function renderImgCellInner(row) {
+            if (row.img) {
+                return `<div class="relative group w-16 h-20">
+                    <img src="${row.img}" class="w-16 h-20 object-cover rounded border border-gray-300">
+                    <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded gap-1">
+                        <button onclick="openLibraryPicker('${row.id}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                        <button onclick="clearOrderRowImage('${row.id}')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
+                    </div>
+                </div>`;
+            }
+            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}')" onclick="openLibraryPicker('${row.id}')"
+                    class="w-16 h-20 border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
+                    <span class="text-lg leading-none">＋</span>Foto
+                </div>`;
+        }
+
+        function renderAddrCellInner(row) {
+            const a = row.address || {};
+            const has = a.dest || a.dir || a.cp || a.ciudad || a.prov || a.pais || a.tel;
+            if (!has) return `<button onclick="openAddressModal('${row.id}')" class="text-[10px] font-mono uppercase text-gray-400 border border-dashed border-gray-300 rounded px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
+            const line = (label, val) => val ? `<div><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
+            return `<div class="text-[10px] leading-snug text-gray-800 min-w-[9rem]">
+                    ${line('Destinatario', a.dest)}${line('Dirección', a.dir)}${line('C.P.', a.cp)}${line('Ciudad', a.ciudad)}${line('Provincia', a.prov)}${line('País', a.pais)}${line('Tel', a.tel)}
+                    <button onclick="openAddressModal('${row.id}')" class="text-sky-500 hover:text-sky-700 text-[10px] font-mono uppercase mt-1 print:hidden">✎ Editar</button>
+                </div>`;
+        }
+
+        function renderOrderRowHTML(row) {
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[4rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[6rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
+
+            const tds = ORDER_BASE_COLS.map(c => {
+                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-top">${renderImgCellInner(row)}</td>`;
+                if (c.key === 'address') return `<td id="cell-addr-${row.id}" class="border border-gray-300 p-2 align-top">${renderAddrCellInner(row)}</td>`;
+                if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-top">${nameCell}</td>`;
+                if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-top">${numCell(c.key)}</td>`;
+                return `<td class="border border-gray-300 p-1 align-top">${textCell(c.key)}</td>`;
+            }).join('');
+
+            const tdsCustom = pOrder.customColumns.map(c => `
+                <td class="border border-gray-300 p-1 align-top">
+                    <input type="text" value="${escAttr(row.custom[c.id] || '')}" oninput="updateOrderCustomField('${row.id}','${c.id}',this.value)" class="w-full min-w-[4rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
+                </td>`).join('');
+
+            return `<tr>${tds}${tdsCustom}<td class="border border-gray-300 p-1 text-center align-top print:hidden">
+                    <button onclick="deleteOrderRow('${row.id}')" class="text-gray-300 hover:text-red-500 text-sm" title="Eliminar fila">✕</button>
+                </td></tr>`;
+        }
+
+        function renderOrderTable() {
+            const thead = document.getElementById('order-thead');
+            const tbody = document.getElementById('order-tbody');
+            const thBase = ORDER_BASE_COLS.map(c => `
+                <th class="border border-gray-300 bg-white px-2 py-2 text-left align-bottom">
+                    <div class="text-[9px] text-gray-400 leading-none mb-0.5">${c.zh}</div>
+                    <div class="font-bold text-gray-800 text-[11px] leading-tight">${c.es}</div>
+                </th>`).join('');
+            const thCustom = pOrder.customColumns.map(c => `
+                <th class="border border-gray-300 bg-white px-2 py-2 text-left align-bottom">
+                    <div class="flex items-center gap-1">
+                        <span class="font-bold text-gray-800 text-[11px]">${escapeHtml(c.label)}</span>
+                        <button onclick="deleteOrderColumn('${c.id}')" class="text-gray-300 hover:text-red-500 text-xs print:hidden" title="Eliminar columna">✕</button>
+                    </div>
+                </th>`).join('');
+            thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 bg-white px-2 py-2 print:hidden"></th></tr>`;
+            tbody.innerHTML = pOrder.rows.map(renderOrderRowHTML).join('');
+        }
+
+        window.clearOrderRowImage = function(rowId) {
+            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            row.img = ''; savePOrderTable();
+            const cell = document.getElementById('cell-img-' + rowId);
+            if (cell) cell.innerHTML = renderImgCellInner(row);
+        };
+
+        window.orderCellDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer) || libraryDragSrc) { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); } };
+        window.orderCellDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400'); };
+        window.handleOrderImageDrop = function(e, rowId) {
+            e.preventDefault(); e.stopPropagation();
+            const cellEl = document.getElementById('cell-img-' + rowId);
+            if (cellEl) cellEl.querySelectorAll('.ring-2').forEach(el => el.classList.remove('ring-2', 'ring-sky-400'));
+            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+
+            if (libraryDragSrc) {
+                row.img = libraryDragSrc.src; libraryDragSrc = null;
+                savePOrderTable();
+                if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
+                return;
+            }
+            if (e.dataTransfer.files && e.dataTransfer.files.length) {
+                fileToResizedDataURL(e.dataTransfer.files[0]).then(src => {
+                    row.img = src; savePOrderTable();
+                    if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
+                }).catch(() => {});
+                return;
+            }
+            const urls = extractImageUrls(e.dataTransfer);
+            if (urls.length) {
+                (async () => {
+                    const f = await urlToImageFile(urls[0]);
+                    if (f) {
+                        const src = await fileToResizedDataURL(f);
+                        row.img = src; savePOrderTable();
+                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
+                    } else {
+                        alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Prueba a elegirla desde la biblioteca (📚) o arrástrala desde el ordenador.');
+                    }
+                })();
+            }
+        };
+
+        // --- Elegir foto de la biblioteca para una fila ---
+        let pickerImages = [];
+        let pickerTargetRow = null;
+        window.openLibraryPicker = function(rowId) {
+            pickerTargetRow = rowId;
+            pickerImages = [];
+            const body = document.getElementById('lib-picker-body');
+            let html = '';
+            pStructure.forEach(g => g.collections.forEach(col => {
+                const groups = [{ name: col.name, items: pDb[col.id] || [] }, ...((col.subCols || []).map(s => ({ name: col.name + ' · ' + s.name, items: pDb[s.id] || [] })))].filter(x => x.items.length);
+                groups.forEach(gr => {
+                    html += `<div><h4 class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">${escapeHtml(gr.name)}</h4><div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr))">`;
+                    gr.items.forEach(it => {
+                        pickerImages.push(it.src);
+                        html += `<img src="${it.src}" onclick="pickLibraryImage(${pickerImages.length - 1})" class="aspect-[3/4] w-full object-cover rounded-md border border-zinc-700 hover:border-sky-400 cursor-pointer">`;
+                    });
+                    html += `</div></div>`;
+                });
+            }));
+            body.innerHTML = html || '<p class="text-zinc-500 font-mono text-sm">La biblioteca está vacía. Añade fotos primero en el panel de la izquierda (pestaña Crear Pedido).</p>';
+            document.getElementById('lib-picker-modal').classList.remove('hidden');
+        };
+        window.closeLibraryPicker = function() { document.getElementById('lib-picker-modal').classList.add('hidden'); pickerTargetRow = null; };
+        window.pickLibraryImage = function(i) {
+            const row = pOrder.rows.find(r => r.id === pickerTargetRow);
+            if (row && pickerImages[i] != null) {
+                row.img = pickerImages[i]; savePOrderTable();
+                const cell = document.getElementById('cell-img-' + row.id);
+                if (cell) cell.innerHTML = renderImgCellInner(row);
+            }
+            closeLibraryPicker();
+        };
+
+        // --- Dirección de envío por fila ---
+        let addressModalRow = null;
+        window.openAddressModal = function(rowId) {
+            addressModalRow = rowId;
+            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            const a = row.address || {};
+            document.getElementById('addr-dest').value = a.dest || '';
+            document.getElementById('addr-dir').value = a.dir || '';
+            document.getElementById('addr-cp').value = a.cp || '';
+            document.getElementById('addr-ciudad').value = a.ciudad || '';
+            document.getElementById('addr-prov').value = a.prov || '';
+            document.getElementById('addr-pais').value = a.pais || '';
+            document.getElementById('addr-tel').value = a.tel || '';
+            document.getElementById('p-address-modal').classList.remove('hidden');
+        };
+        window.closeAddressModal = function() { document.getElementById('p-address-modal').classList.add('hidden'); addressModalRow = null; };
+        window.saveAddressModal = function() {
+            const row = pOrder.rows.find(r => r.id === addressModalRow);
+            if (row) {
+                row.address = {
+                    dest: document.getElementById('addr-dest').value.trim(),
+                    dir: document.getElementById('addr-dir').value.trim(),
+                    cp: document.getElementById('addr-cp').value.trim(),
+                    ciudad: document.getElementById('addr-ciudad').value.trim(),
+                    prov: document.getElementById('addr-prov').value.trim(),
+                    pais: document.getElementById('addr-pais').value.trim(),
+                    tel: document.getElementById('addr-tel').value.trim()
+                };
+                savePOrderTable();
+                const cell = document.getElementById('cell-addr-' + addressModalRow);
+                if (cell) cell.innerHTML = renderAddrCellInner(row);
+            }
+            closeAddressModal();
+        };
+
+        window.printOrder = function() { window.print(); };
+
+        window.onload = async function() {
+            await loadDB();
+            await loadPedido();
+            let savedTab = 'wishlist';
+            try { savedTab = localStorage.getItem('wishlist_active_tab') || 'wishlist'; } catch (e) {}
+            switchTab(savedTab);
+            try {
+                if (localStorage.getItem('pedido_lib_collapsed') === '1') {
+                    document.getElementById('p-lib-body').classList.add('hidden');
+                    document.getElementById('p-lib-toggle').textContent = 'Mostrar ▾';
+                }
+            } catch (e) {}
+        };
     </script>
 </body>
 </html>
