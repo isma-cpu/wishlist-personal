@@ -6,14 +6,18 @@
     <title>WISHLIST ⚽ - Pro Manager</title>
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👕</text></svg>">
-    
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/localforage/1.10.0/localforage.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     
     <style>
         html { scroll-behavior: smooth; }
-        body { background-color: #000000; color: #e5e7eb; }
+        body { background-color: #000000; color: #e5e7eb; font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif !important; }
         .hidden { display: none !important; }
         
         ::-webkit-scrollbar { width: 6px; }
@@ -54,60 +58,60 @@
 </head>
 <body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
 
-    <div id="tab-bar" class="fixed top-0 inset-x-0 h-11 z-[80] flex bg-black border-b border-zinc-800 print:hidden">
-        <button id="tab-btn-wishlist" onclick="switchTab('wishlist')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-[#39FF14] border-[#39FF14]">📋 Wishlist</button>
-        <button id="tab-btn-pedido" onclick="switchTab('pedido')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-zinc-500 border-transparent hover:text-sky-400">📦 Crear Pedido</button>
-        <button id="tab-btn-pedidos" onclick="switchTab('pedidos')" class="flex-1 md:flex-none md:px-10 h-full font-mono text-xs font-bold uppercase tracking-widest transition-colors border-b-2 text-zinc-500 border-transparent hover:text-amber-400">📑 Pedidos</button>
+    <div id="tab-bar" class="fixed top-0 inset-x-0 h-16 z-[80] flex items-center gap-2 px-4 bg-black/95 backdrop-blur border-b border-zinc-800 print:hidden">
+        <button id="tab-btn-wishlist" onclick="switchTab('wishlist')" class="flex-1 md:flex-none px-5 py-2.5 rounded-full text-sm font-bold transition-all bg-[#39FF14] text-black shadow-[0_0_15px_rgba(57,255,20,0.4)]">📋 Wishlist</button>
+        <button id="tab-btn-pedido" onclick="switchTab('pedido')" class="flex-1 md:flex-none px-5 py-2.5 rounded-full text-sm font-bold transition-all text-zinc-400 hover:text-white">📦 Crear Pedido</button>
+        <button id="tab-btn-pedidos" onclick="switchTab('pedidos')" class="flex-1 md:flex-none px-5 py-2.5 rounded-full text-sm font-bold transition-all text-zinc-400 hover:text-white">📑 Pedidos</button>
     </div>
 
     <div id="image-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="closeModal()">
         <button class="fixed top-6 right-6 text-[#39FF14] hover:text-white text-4xl font-bold cursor-pointer z-[120]">&times;</button>
 
         <div class="flex flex-col items-center gap-6 max-h-[92vh] overflow-y-auto py-6 px-2">
-            <div class="relative shrink-0 overflow-hidden rounded-lg">
-                <img id="modal-img" class="max-h-[65vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-lg select-none transition-transform duration-100 will-change-transform" style="transform-origin: center center;" draggable="false" />
-                <div id="modal-customization" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 border border-[#39FF14] text-center px-4 py-2 rounded-lg font-mono text-sm hidden shadow-[0_0_15px_rgba(0,0,0,0.8)] pointer-events-none z-30"></div>
+            <div class="relative shrink-0 overflow-hidden rounded-2xl">
+                <img id="modal-img" class="max-h-[65vh] max-w-[90vw] object-contain border border-[#39FF14] shadow-[0_0_30px_rgba(57,255,20,0.2)] rounded-2xl select-none transition-transform duration-100 will-change-transform" style="transform-origin: center center;" draggable="false" />
+                <div id="modal-customization" class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/90 border border-[#39FF14] text-center px-4 py-2 rounded-2xl font-mono text-sm hidden shadow-[0_0_15px_rgba(0,0,0,0.8)] pointer-events-none z-30"></div>
                 <button id="modal-zoom-btn" onclick="toggleZoom(event)" title="Zoom (rueda del ratón para acercar, arrastra para mover)" class="absolute top-2 left-2 z-30 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-black/70 border border-[#39FF14]/70 text-[#39FF14] text-base flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(0,0,0,0.6)]">🔍</button>
                 <button id="modal-nav-prev" onclick="navModal(-1, event)" title="Imagen anterior de este producto" class="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/70 border border-[#39FF14]/70 text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(0,0,0,0.6)]">‹</button>
                 <button id="modal-nav-next" onclick="navModal(1, event)" title="Imagen siguiente de este producto" class="absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-black/70 border border-[#39FF14]/70 text-[#39FF14] text-2xl sm:text-3xl flex items-center justify-center hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_15px_rgba(0,0,0,0.6)]">›</button>
             </div>
 
             <div id="modal-toolbar" class="flex flex-wrap justify-center gap-4 sm:gap-6" onclick="event.stopPropagation()">
-                <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
-                <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
-                <button onclick="openSendModal('w2p', event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-sky-400 text-sky-400 hover:bg-sky-400 hover:text-black shadow-[0_0_15px_rgba(56,189,248,0.3)]">📦 Enviar a Pedido</button>
+                <button id="modal-copy-btn" onclick="copyModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black shadow-[0_0_15px_rgba(57,255,20,0.3)]">📋 Copiar</button>
+                <button id="modal-obtained-btn" onclick="markAsObtained(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black shadow-[0_0_15px_rgba(251,191,36,0.3)]">✅ Conseguida</button>
+                <button onclick="openSendModal('w2p', event)" class="px-4 sm:px-5 py-2.5 rounded-2xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all backdrop-blur-sm bg-black/80 border border-sky-400 text-sky-400 hover:bg-sky-400 hover:text-black shadow-[0_0_15px_rgba(56,189,248,0.3)]">📦 Enviar a Pedido</button>
             </div>
 
-            <div id="modal-related" class="w-[92vw] max-w-3xl hidden mt-2 mb-4 rounded-xl transition-all" onclick="event.stopPropagation()"></div>
+            <div id="modal-related" class="w-[92vw] max-w-3xl hidden mt-2 mb-4 rounded-2xl transition-all" onclick="event.stopPropagation()"></div>
         </div>
     </div>
 
     <div id="custom-input-modal" class="fixed inset-0 bg-black/90 hidden z-[200] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
-        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-lg shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm transform scale-100 transition-all">
+        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm transform scale-100 transition-all">
             <h3 id="custom-input-title" class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase flex items-center gap-2"></h3>
-            <input type="text" id="custom-input-field" class="w-full bg-black border border-zinc-700 text-white px-4 py-3 font-mono focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14] rounded-md mb-6 transition-all placeholder:text-zinc-600" autocomplete="off">
+            <input type="text" id="custom-input-field" class="w-full bg-black border border-zinc-700 text-white px-4 py-3 font-mono focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14] rounded-xl mb-6 transition-all placeholder:text-zinc-600" autocomplete="off">
             <div class="flex justify-end gap-3">
                 <button onclick="closeCustomInput()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
-                <button onclick="saveCustomInput()" class="px-5 py-2 text-xs font-bold font-mono bg-[#39FF14] text-black rounded-md hover:bg-white transition-colors shadow-[0_0_15px_rgba(57,255,20,0.4)] cursor-pointer">GUARDAR</button>
+                <button onclick="saveCustomInput()" class="px-5 py-2 text-xs font-bold font-mono bg-[#39FF14] text-black rounded-xl hover:bg-white transition-colors shadow-[0_0_15px_rgba(57,255,20,0.4)] cursor-pointer">GUARDAR</button>
             </div>
         </div>
     </div>
 
     <div id="delete-confirm-modal" class="fixed inset-0 bg-black/90 hidden z-[250] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
-        <div class="bg-[#0a0a0a] border border-red-500 p-6 rounded-lg shadow-[0_0_30px_rgba(239,68,68,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
+        <div class="bg-[#0a0a0a] border border-red-500 p-6 rounded-2xl shadow-[0_0_30px_rgba(239,68,68,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
             <h3 class="text-xl font-black tracking-wider text-red-500 mb-3 uppercase flex flex-col items-center gap-2">
                 <span class="text-3xl">⚠️</span> Confirmar Eliminación
             </h3>
             <p id="delete-confirm-text" class="text-zinc-400 font-mono text-sm mb-6"></p>
             <div class="flex justify-center gap-4">
                 <button onclick="closeDeleteModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
-                <button id="delete-confirm-btn" class="px-5 py-2 text-xs font-bold font-mono bg-red-600 text-white rounded-md hover:bg-red-500 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.4)] cursor-pointer">ELIMINAR</button>
+                <button id="delete-confirm-btn" class="px-5 py-2 text-xs font-bold font-mono bg-red-600 text-white rounded-xl hover:bg-red-500 transition-colors shadow-[0_0_15px_rgba(239,68,68,0.4)] cursor-pointer">ELIMINAR</button>
             </div>
         </div>
     </div>
 
     <div id="move-multi-modal" class="fixed inset-0 bg-black/95 hidden z-[200] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-blue-400 p-6 rounded-lg shadow-[0_0_30px_rgba(96,165,250,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
+        <div class="bg-[#0a0a0a] border border-blue-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(96,165,250,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
             <h3 class="text-lg font-black tracking-wider text-blue-400 mb-4 uppercase">Mover a...</h3>
             <div id="move-multi-list" class="space-y-2 mb-6"></div>
             <div class="flex justify-end gap-3">
@@ -127,8 +131,8 @@
         </button>
     </div>
 
-    <div id="view-wishlist" class="w-full flex flex-col md:flex-row pt-11">
-    <aside class="w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-11 md:h-[calc(100vh-2.75rem)] overflow-y-auto">
+    <div id="view-wishlist" class="w-full flex flex-col md:flex-row pt-16">
+    <aside class="w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-16 md:h-[calc(100vh-4rem)] overflow-y-auto">
         <div class="mb-6 cursor-pointer group" onclick="showView('home')" title="Volver al inicio">
             <h1 class="text-3xl font-black tracking-tighter text-neon mb-1 flex items-center gap-2">
                 WISHLIST ⚽
@@ -136,21 +140,21 @@
             <p class="text-xs text-zinc-500 font-mono tracking-widest uppercase group-hover:text-[#39FF14] transition-colors">← Inicio (Últimas Añadidas)</p>
         </div>
 
-        <button onclick="toggleSelectMode()" id="btn-select-mode" class="mb-4 w-full py-2 border border-zinc-700 text-zinc-400 font-mono text-xs uppercase tracking-widest rounded hover:border-[#39FF14] hover:text-[#39FF14] transition-colors flex justify-center items-center gap-2 cursor-pointer">
+        <button onclick="toggleSelectMode()" id="btn-select-mode" class="mb-4 w-full py-2 border border-zinc-700 text-zinc-400 font-mono text-xs uppercase tracking-widest rounded-full hover:border-[#39FF14] hover:text-[#39FF14] transition-colors flex justify-center items-center gap-2 cursor-pointer">
             ☑️ Activar Selección
         </button>
 
         <div class="mb-8 space-y-2">
-            <button onclick="downloadAllImagesZip()" class="w-full py-2 border border-[#39FF14] bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded hover:bg-[#39FF14] hover:text-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_10px_rgba(57,255,20,0.2)]">
+            <button onclick="downloadAllImagesZip()" class="w-full py-2 border border-[#39FF14] bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded-full hover:bg-[#39FF14] hover:text-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-[0_0_10px_rgba(57,255,20,0.2)]">
                 <span>🖼️</span> Descargar Fotos (ZIP)
             </button>
 
             <div class="grid grid-cols-2 gap-2">
-                <button onclick="exportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guarda Wishlist, la biblioteca de Crear Pedido y los Pedidos guardados, todo en un archivo">
+                <button onclick="exportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded-full hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guarda Wishlist, la biblioteca de Crear Pedido y los Pedidos guardados, todo en un archivo">
                     <span>💾</span>
                     <span>Descargar JSON</span>
                 </button>
-                <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar datos desde copia JSON">
+                <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded-full hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar datos desde copia JSON">
                     <span>📂</span>
                     <span>Cargar JSON</span>
                     <input type="file" accept=".json" class="hidden" id="import-input" onchange="importBackupJSON(event)">
@@ -174,18 +178,18 @@
     </div>
 
     <!-- ============ PESTAÑA: CREAR PEDIDO ============ -->
-    <div id="view-pedido" class="hidden w-full flex flex-col md:flex-row pt-11">
-        <aside id="pedido-sidebar" class="print:hidden w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-11 md:h-[calc(100vh-2.75rem)] overflow-y-auto">
+    <div id="view-pedido" class="hidden w-full flex flex-col md:flex-row pt-16">
+        <aside id="pedido-sidebar" class="print:hidden w-full md:w-72 bg-[#0a0a0a] p-6 border-b md:border-b-0 md:border-r border-zinc-800 flex flex-col shrink-0 md:sticky md:top-16 md:h-[calc(100vh-4rem)] overflow-y-auto">
             <div class="mb-6">
                 <h1 class="text-2xl font-black tracking-tighter text-sky-400 mb-1">BIBLIOTECA 📦</h1>
                 <p class="text-xs text-zinc-500 font-mono tracking-widest uppercase">Equipos y selecciones</p>
             </div>
 
             <div class="mb-6 grid grid-cols-2 gap-2">
-                <button onclick="pExportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guarda Wishlist, la biblioteca de Crear Pedido y los Pedidos guardados, todo en un archivo">
+                <button onclick="pExportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded-full hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guarda Wishlist, la biblioteca de Crear Pedido y los Pedidos guardados, todo en un archivo">
                     <span>💾</span><span>Descargar JSON</span>
                 </button>
-                <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar biblioteca desde copia JSON">
+                <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 font-mono text-[10px] uppercase rounded-full hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar biblioteca desde copia JSON">
                     <span>📂</span><span>Cargar JSON</span>
                     <input type="file" accept=".json" class="hidden" id="p-import-input" onchange="pImportBackupJSON(event)">
                 </label>
@@ -200,14 +204,14 @@
                     <div class="w-3 h-3 rounded-full bg-sky-400 shadow-[0_0_8px_#38bdf8]"></div>
                     <h2 id="p-lib-title" class="text-2xl font-black text-white tracking-wide uppercase">Biblioteca</h2>
                     <span class="text-sm font-mono text-zinc-500 ml-auto" id="p-lib-count">0 u.</span>
-                    <button onclick="toggleLibraryCollapsed()" id="p-lib-toggle" class="text-zinc-500 hover:text-sky-400 text-xs font-mono uppercase border border-zinc-700 hover:border-sky-400 rounded px-2 py-1 transition-colors">Ocultar ▴</button>
+                    <button onclick="toggleLibraryCollapsed()" id="p-lib-toggle" class="text-zinc-500 hover:text-sky-400 text-xs font-mono uppercase border border-zinc-700 hover:border-sky-400 rounded-full px-2 py-1 transition-colors">Ocultar ▴</button>
                 </div>
-                <button onclick="pAddSubCollection(pCurrentView, event)" class="mb-4 px-4 py-2 border border-sky-400/60 bg-sky-400/10 text-sky-400 font-mono text-xs font-bold uppercase rounded hover:bg-sky-400 hover:text-black transition-all flex items-center gap-2 cursor-pointer">➕ Nueva subcolección</button>
+                <button onclick="pAddSubCollection(pCurrentView, event)" class="mb-4 px-4 py-2 border border-sky-400/60 bg-sky-400/10 text-sky-400 font-mono text-xs font-bold uppercase rounded-full hover:bg-sky-400 hover:text-black transition-all flex items-center gap-2 cursor-pointer">➕ Nueva subcolección</button>
                 <div id="p-lib-body">
                     <div id="p-lib-columns" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6"></div>
                     <div id="p-lib-loose-label" class="text-[11px] font-mono uppercase tracking-widest text-zinc-500 mb-3 border-t border-zinc-800 pt-4 hidden">Sin clasificar</div>
                     <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
-                        <div id="p-dropzone" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-sky-400 focus:outline-none">
+                        <div id="p-dropzone" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-xl flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-sky-400 focus:outline-none">
                             <span class="text-xl opacity-50 pointer-events-none">➕</span>
                         </div>
                         <div id="p-lib-grid" class="contents"></div>
@@ -215,14 +219,14 @@
                 </div>
             </section>
 
-            <section id="pedido-order-section" class="bg-white text-black rounded-lg shadow-xl overflow-hidden">
+            <section id="pedido-order-section" class="bg-white text-black rounded-2xl shadow-xl overflow-hidden">
                 <div class="flex flex-wrap items-center justify-between gap-3 p-4 border-b border-gray-200 bg-gray-50 print:hidden">
                     <h2 class="font-black text-lg tracking-wide text-black">📦 PLANTILLA DE PEDIDO</h2>
                     <div class="flex flex-wrap gap-2">
-                        <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
-                        <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
-                        <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
-                        <button onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
+                        <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
+                        <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
+                        <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
+                        <button onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
                     </div>
                 </div>
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
@@ -240,9 +244,9 @@
     </div>
 
     <!-- Menú desplegable de opciones de una hoja de pedido (renombrar/duplicar/mover/eliminar): fixed para no quedar recortado por el scroll de la barra de pestañas -->
-    <div id="sheet-options-menu" class="hidden fixed bg-white border border-gray-300 rounded shadow-lg z-[300] flex flex-col min-w-[10rem] py-1"></div>
+    <div id="sheet-options-menu" class="hidden fixed bg-white border border-gray-300 rounded-full shadow-lg z-[300] flex flex-col min-w-[10rem] py-1"></div>
 
-    <div id="view-pedidos" class="hidden w-full pt-11 p-4 md:p-8 max-w-5xl mx-auto">
+    <div id="view-pedidos" class="hidden w-full pt-16 p-4 md:p-8 max-w-5xl mx-auto">
         <div class="flex items-center gap-3 mb-2 border-b border-zinc-800 pb-3">
             <div class="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></div>
             <h2 class="text-2xl font-black text-white tracking-wide uppercase">Pedidos</h2>
@@ -252,13 +256,13 @@
         <div class="flex items-center gap-2 flex-wrap mb-6">
             <span class="text-xs text-zinc-500 font-mono uppercase">Clientes:</span>
             <div id="pedidos-clientes-chips" class="flex gap-2 flex-wrap"></div>
-            <button onclick="openInput('add-cliente', null, null, event)" class="text-xs text-sky-400 hover:text-sky-300 font-mono uppercase border border-sky-400/40 rounded px-2 py-1 cursor-pointer">➕ Cliente</button>
+            <button onclick="openInput('add-cliente', null, null, event)" class="text-xs text-sky-400 hover:text-sky-300 font-mono uppercase border border-sky-400/40 rounded-full px-2 py-1 cursor-pointer">➕ Cliente</button>
         </div>
         <div id="pedidos-list"></div>
     </div>
 
     <div id="pedido-view-modal" class="hidden fixed inset-0 bg-black/80 z-[95] flex items-center justify-center p-4">
-        <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[85vh] overflow-auto">
+        <div class="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[85vh] overflow-auto">
             <div class="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">
                 <h3 id="pedido-view-title" class="font-black text-black text-lg"></h3>
                 <button onclick="closePedidoView()" class="text-gray-400 hover:text-red-500 text-2xl leading-none cursor-pointer">✕</button>
@@ -271,22 +275,22 @@
     <div id="p-modal" class="fixed inset-0 bg-black/95 hidden z-[100] flex items-start sm:items-center justify-center p-4 backdrop-blur-sm transition-opacity" onclick="pCloseModal()">
         <button class="fixed top-6 right-6 text-sky-400 hover:text-white text-4xl font-bold cursor-pointer z-[120]">&times;</button>
         <div class="flex flex-col items-center gap-6 max-h-[92vh] overflow-y-auto py-6 px-2">
-            <div class="relative shrink-0 overflow-hidden rounded-lg">
-                <img id="p-modal-img" class="max-h-[70vh] max-w-[90vw] object-contain border border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.2)] rounded-lg select-none transition-transform duration-100" style="transform-origin: center center;" draggable="false">
+            <div class="relative shrink-0 overflow-hidden rounded-2xl">
+                <img id="p-modal-img" class="max-h-[70vh] max-w-[90vw] object-contain border border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.2)] rounded-2xl select-none transition-transform duration-100" style="transform-origin: center center;" draggable="false">
                 <button id="p-modal-zoom-btn" onclick="pToggleZoom(event)" title="Zoom" class="absolute top-2 left-2 z-30 w-9 h-9 rounded-full bg-black/70 border border-sky-400/70 text-sky-400 flex items-center justify-center hover:bg-sky-400 hover:text-black transition-all">🔍</button>
             </div>
             <div class="flex flex-wrap justify-center gap-4" onclick="event.stopPropagation()">
-                <button onclick="openSendModal('p2w', event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black">⭐ Enviar a Wishlist</button>
-                <button id="p-modal-addrow-btn" onclick="addLibraryPhotoToOrder(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black">🛒 Añadir al pedido</button>
-                <button id="p-modal-sendpatch-btn" onclick="sendPatchToOrderFromModal(event)" class="hidden px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-black">📎 Enviar como parche</button>
-                <button onclick="pDeleteCurrentModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white">✕ Eliminar</button>
+                <button onclick="openSendModal('p2w', event)" class="px-4 sm:px-5 py-2.5 rounded-2xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black">⭐ Enviar a Wishlist</button>
+                <button id="p-modal-addrow-btn" onclick="addLibraryPhotoToOrder(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black">🛒 Añadir al pedido</button>
+                <button id="p-modal-sendpatch-btn" onclick="sendPatchToOrderFromModal(event)" class="hidden px-4 sm:px-5 py-2.5 rounded-2xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-black">📎 Enviar como parche</button>
+                <button onclick="pDeleteCurrentModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white">✕ Eliminar</button>
             </div>
         </div>
     </div>
 
     <!-- Enviar foto entre Wishlist <-> Pedido -->
     <div id="send-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-lg shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
+        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
             <h3 id="send-modal-title" class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase">Enviar a...</h3>
             <div id="send-modal-list" class="space-y-1 mb-6"></div>
             <div class="flex justify-end gap-3">
@@ -297,7 +301,7 @@
 
     <!-- Elegir foto de la biblioteca para una fila del pedido -->
     <div id="lib-picker-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-sky-400 p-6 rounded-lg shadow-[0_0_30px_rgba(56,189,248,0.3)] w-full max-w-3xl max-h-[85vh] overflow-y-auto">
+        <div class="bg-[#0a0a0a] border border-sky-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(56,189,248,0.3)] w-full max-w-3xl max-h-[85vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-4">
                 <h3 class="text-lg font-black tracking-wider text-sky-400 uppercase">Elegir foto de la biblioteca</h3>
                 <button onclick="closeLibraryPicker()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
@@ -308,7 +312,7 @@
 
     <!-- Elegir en qué hoja de pedido añadir el producto -->
     <div id="sheet-picker-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-lg shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm max-h-[80vh] overflow-y-auto">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm max-h-[80vh] overflow-y-auto">
             <h3 class="text-lg font-black tracking-wider text-amber-400 mb-4 uppercase">¿En qué hoja lo añado?</h3>
             <div id="sheet-picker-list" class="space-y-2 mb-6"></div>
             <div class="flex justify-end gap-3">
@@ -319,7 +323,7 @@
 
     <!-- Enviar un parche de la biblioteca a un producto ya existente: paso 1, elegir hoja -->
     <div id="patch-sheet-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-lg shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm max-h-[80vh] overflow-y-auto">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm max-h-[80vh] overflow-y-auto">
             <h3 class="text-lg font-black tracking-wider text-amber-400 mb-4 uppercase">📎 ¿A qué hoja lo envío?</h3>
             <div id="patch-sheet-list" class="space-y-2 mb-6"></div>
             <div class="flex justify-end gap-3">
@@ -330,7 +334,7 @@
 
     <!-- Enviar un parche: paso 2, elegir a qué producto/fila de esa hoja -->
     <div id="patch-row-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-lg shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-2xl max-h-[80vh] overflow-y-auto">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-2xl max-h-[80vh] overflow-y-auto">
             <h3 id="patch-row-title" class="text-lg font-black tracking-wider text-amber-400 mb-4 uppercase"></h3>
             <div id="patch-row-body"></div>
             <div class="flex justify-end gap-3 mt-4">
@@ -341,41 +345,41 @@
 
     <!-- Guardar pedido: pide cliente y pagado antes de archivarlo en "Pedidos" -->
     <div id="save-order-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-emerald-500 p-6 rounded-lg shadow-[0_0_30px_rgba(16,185,129,0.3)] w-full max-w-sm">
+        <div class="bg-[#0a0a0a] border border-emerald-500 p-6 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.3)] w-full max-w-sm">
             <h3 class="text-lg font-black tracking-wider text-emerald-400 mb-4 uppercase">💾 Guardar pedido</h3>
             <div class="space-y-3">
                 <div>
                     <label class="text-[10px] text-zinc-500 font-mono uppercase block mb-1">Cliente</label>
-                    <select id="save-order-cliente" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-emerald-400"></select>
+                    <select id="save-order-cliente" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-emerald-400"></select>
                 </div>
                 <div>
                     <label class="text-[10px] text-zinc-500 font-mono uppercase block mb-1">¿Cuánto te ha pagado ya de este pedido?</label>
-                    <input id="save-order-paid" type="number" placeholder="0" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-emerald-400">
+                    <input id="save-order-paid" type="number" placeholder="0" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-emerald-400">
                 </div>
             </div>
             <div class="flex justify-end gap-3 mt-5">
                 <button onclick="closeSaveOrderModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
-                <button onclick="confirmSaveOrder()" class="px-4 py-2 text-xs font-mono font-bold uppercase bg-emerald-500 text-black rounded hover:bg-emerald-400 transition-colors cursor-pointer">GUARDAR</button>
+                <button onclick="confirmSaveOrder()" class="px-4 py-2 text-xs font-mono font-bold uppercase bg-emerald-500 text-black rounded-full hover:bg-emerald-400 transition-colors cursor-pointer">GUARDAR</button>
             </div>
         </div>
     </div>
 
     <!-- Dirección de envío de una fila del pedido -->
     <div id="p-address-modal" class="fixed inset-0 bg-black/90 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-lg shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm">
+        <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm">
             <h3 class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase">📍 Dirección de envío</h3>
             <div class="space-y-3">
-                <input id="addr-dest" placeholder="Destinatario" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
-                <input id="addr-dir" placeholder="Dirección" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
-                <input id="addr-cp" placeholder="Código postal" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
-                <input id="addr-ciudad" placeholder="Ciudad" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
-                <input id="addr-prov" placeholder="Provincia/Estado" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
-                <input id="addr-pais" placeholder="País" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
-                <input id="addr-tel" placeholder="Teléfono" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-dest" placeholder="Destinatario" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-dir" placeholder="Dirección" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-cp" placeholder="Código postal" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-ciudad" placeholder="Ciudad" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-prov" placeholder="Provincia/Estado" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-pais" placeholder="País" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
+                <input id="addr-tel" placeholder="Teléfono" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 font-mono text-sm rounded-full focus:outline-none focus:border-[#39FF14]">
             </div>
             <div class="flex justify-end gap-3 mt-6">
                 <button onclick="closeAddressModal()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
-                <button onclick="saveAddressModal()" class="px-5 py-2 text-xs font-bold font-mono bg-[#39FF14] text-black rounded-md hover:bg-white transition-colors cursor-pointer">GUARDAR</button>
+                <button onclick="saveAddressModal()" class="px-5 py-2 text-xs font-bold font-mono bg-[#39FF14] text-black rounded-xl hover:bg-white transition-colors cursor-pointer">GUARDAR</button>
             </div>
         </div>
     </div>
@@ -1170,13 +1174,13 @@
                 
                 group.collections.forEach(col => {
                     const btn = document.createElement('button');
-                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded transition-colors text-sm font-bold truncate";
+                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-blue-900/50 text-zinc-300 hover:text-blue-300 rounded-full transition-colors text-sm font-bold truncate";
                     btn.innerText = col.name;
                     btn.onclick = () => moveSelectedTo(col.id);
                     list.appendChild(btn);
                     (col.subCols || []).forEach(sub => {
                         const sbtn = document.createElement('button');
-                        sbtn.className = "w-full text-left pl-6 pr-3 py-1.5 bg-zinc-900/60 hover:bg-blue-900/50 text-zinc-400 hover:text-blue-300 rounded transition-colors text-xs font-bold truncate";
+                        sbtn.className = "w-full text-left pl-6 pr-3 py-1.5 bg-zinc-900/60 hover:bg-blue-900/50 text-zinc-400 hover:text-blue-300 rounded-full transition-colors text-xs font-bold truncate";
                         sbtn.innerText = `↳ ${sub.name}`;
                         sbtn.onclick = () => moveSelectedTo(sub.id);
                         list.appendChild(sbtn);
@@ -1559,11 +1563,11 @@
 
             const addTile = `
                 <button onclick="event.stopPropagation(); addRelatedImages(event)" title="Añadir imágenes relacionadas"
-                        class="aspect-[3/4] rounded-lg border-2 border-dashed border-zinc-600 bg-zinc-900/50 text-zinc-500 hover:border-[#39FF14] hover:text-[#39FF14] transition-all flex items-center justify-center text-3xl font-thin cursor-pointer">＋</button>`;
+                        class="aspect-[3/4] rounded-2xl border-2 border-dashed border-zinc-600 bg-zinc-900/50 text-zinc-500 hover:border-[#39FF14] hover:text-[#39FF14] transition-all flex items-center justify-center text-3xl font-thin cursor-pointer">＋</button>`;
 
             // Miniaturas en cuadrícula (hasta 5 por fila); se reordenan arrastrando
             const thumbs = rel.map((src, i) => `
-                <div class="relative group aspect-[3/4] rounded-lg overflow-hidden border-2 ${src === currentSrc ? 'border-[#39FF14]' : 'border-zinc-700'} hover:border-[#39FF14] transition-colors cursor-grab active:cursor-grabbing"
+                <div class="relative group aspect-[3/4] rounded-2xl overflow-hidden border-2 ${src === currentSrc ? 'border-[#39FF14]' : 'border-zinc-700'} hover:border-[#39FF14] transition-colors cursor-grab active:cursor-grabbing"
                      draggable="true"
                      ondragstart="relDragStart(event, ${i})" ondragover="relDragOver(event)" ondrop="relDrop(event, ${i})" ondragend="relDragEnd(event)"
                      onclick="event.stopPropagation(); openRelatedImage(${i})">
@@ -1695,14 +1699,14 @@
                            ondragleave="handleSidebarDragLeave(event)" 
                            ondrop="handleSidebarDrop(event, '${col.id}')"
                            onclick="showView('${col.id}'); return false;" 
-                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-[#39FF14] hover:bg-zinc-900 rounded transition-all group select-none relative">
+                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-[#39FF14] hover:bg-zinc-900 rounded-full transition-all group select-none relative">
                             <span class="truncate pointer-events-none">${col.name}</span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
                                 <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
                                 <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
                                 <button onclick="moveCollection('${group.groupId}', '${col.id}', -1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">▲</button>
                                 <button onclick="moveCollection('${group.groupId}', '${col.id}', 1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">▼</button>
-                                <span id="badge-${col.id}" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
+                                <span id="badge-${col.id}" class="text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
                             </div>
                         </a>
                     `;
@@ -1722,7 +1726,7 @@
                     const hasSubs = Array.isArray(col.subCols);
 
                     const subCardsHTML = hasSubs ? col.subCols.map(sub => `
-                            <div id="subsec-${sub.id}" class="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3 transition-all">
+                            <div id="subsec-${sub.id}" class="bg-zinc-950/60 border border-zinc-800 rounded-2xl p-3 transition-all">
                                 <div class="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
                                     <div class="w-2 h-2 rounded-full bg-[#39FF14]/70 shrink-0"></div>
                                     <h3 class="font-bold text-white text-sm uppercase tracking-wide truncate flex-1">${sub.name}</h3>
@@ -1731,7 +1735,7 @@
                                     <button onclick="deleteSubCollection('${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 transition-colors" title="Eliminar subcolección">✕</button>
                                 </div>
                                 <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
-                                    <div id="dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none">
+                                    <div id="dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-xl flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none">
                                         <span class="text-lg opacity-50 pointer-events-none">➕</span>
                                     </div>
                                     <div id="grid-${sub.id}" class="contents"></div>
@@ -1755,13 +1759,13 @@
 
                     colSection.innerHTML = `
                         ${headerHTML}
-                        <button onclick="addSubCollection('${col.id}', event)" class="mb-5 px-4 py-2 border border-[#39FF14]/60 bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded hover:bg-[#39FF14] hover:text-black transition-all flex items-center gap-2 cursor-pointer">
+                        <button onclick="addSubCollection('${col.id}', event)" class="mb-5 px-4 py-2 border border-[#39FF14]/60 bg-[#39FF14]/10 text-[#39FF14] font-mono text-xs font-bold uppercase rounded-full hover:bg-[#39FF14] hover:text-black transition-all flex items-center gap-2 cursor-pointer">
                             ➕ Nueva subcolección
                         </button>
                         ${columnsHTML}
                         ${looseLabelHTML}
                         <div class="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3">
-                            <div id="dropzone-${col.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-2 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none z-10 relative">
+                            <div id="dropzone-${col.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-xl flex flex-col items-center justify-center p-2 text-center cursor-pointer transition-all focus:border-[#39FF14] focus:outline-none z-10 relative">
                                 <span class="text-xl mb-1 opacity-50 pointer-events-none">➕</span>
                                 <span class="text-[9px] text-zinc-500 uppercase tracking-wide pointer-events-none">Subir archivo</span>
                             </div>
@@ -2028,7 +2032,7 @@
             
             const isSelected = selectedItems.has(`${colId}|${index}`);
             
-            div.className = `image-card-draggable relative aspect-[3/4] bg-zinc-900 rounded-md overflow-hidden border border-zinc-800 transition-all ${isRecentView ? '' : 'hover:border-[#39FF14]'} group ${isSelected ? 'selected-card' : ''}`;
+            div.className = `image-card-draggable relative aspect-[3/4] bg-zinc-900 rounded-xl overflow-hidden border border-zinc-800 transition-all ${isRecentView ? '' : 'hover:border-[#39FF14]'} group ${isSelected ? 'selected-card' : ''}`;
             
             if (!isRecentView && !isSelectMode) {
                 div.classList.add('cursor-grab', 'active:cursor-grabbing');
@@ -2055,11 +2059,11 @@
 
             const actionButtonsVisible = isSelectMode ? "hidden" : "flex";
             const relBadge = (Array.isArray(item.related) && item.related.length)
-                ? `<span class="absolute top-1 right-1 z-30 bg-black/80 text-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded pointer-events-none">🔗 ${item.related.length}</span>`
+                ? `<span class="absolute top-1 right-1 z-30 bg-black/80 text-sky-400 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full pointer-events-none">🔗 ${item.related.length}</span>`
                 : '';
             const favActive = !!item.fav;
             const favBtn = isSelectMode ? '' : `<button onclick="event.stopPropagation(); toggleFav('${colId}', ${index}, event)" title="Destacar"
-                    class="action-btn absolute top-1 left-1 z-30 w-7 h-7 flex items-center justify-center rounded-md text-sm leading-none transition-all ${favActive ? 'bg-black/70 opacity-100 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]' : 'bg-black/40 opacity-30 grayscale hover:opacity-90 hover:grayscale-0'}">⭐</button>`;
+                    class="action-btn absolute top-1 left-1 z-30 w-7 h-7 flex items-center justify-center rounded-xl text-sm leading-none transition-all ${favActive ? 'bg-black/70 opacity-100 drop-shadow-[0_0_4px_rgba(250,204,21,0.8)]' : 'bg-black/40 opacity-30 grayscale hover:opacity-90 hover:grayscale-0'}">⭐</button>`;
 
             div.innerHTML = `
                 <div class="absolute inset-0 z-0" ${dragAttrs}></div>
@@ -2069,9 +2073,9 @@
                 ${labelsHTML}
                 <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 ${actionButtonsVisible} flex-col justify-end p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
-                        <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-md text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
-                        <button onclick="openInput('patch', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-md text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
-                        <button onclick="openDeleteModal('${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-red-900/80 border border-red-500/50 text-red-300 rounded-md text-xs hover:bg-red-500 hover:text-white transition-all mt-1" title="Eliminar">✕</button>
+                        <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-xl text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
+                        <button onclick="openInput('patch', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-xl text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
+                        <button onclick="openDeleteModal('${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-red-900/80 border border-red-500/50 text-red-300 rounded-xl text-xs hover:bg-red-500 hover:text-white transition-all mt-1" title="Eliminar">✕</button>
                     </div>
                 </div>
             `;
@@ -2105,18 +2109,21 @@
             document.getElementById('view-pedido').classList.toggle('hidden', tab !== 'pedido');
             document.getElementById('view-pedidos').classList.toggle('hidden', tab !== 'pedidos');
             const wBtn = document.getElementById('tab-btn-wishlist'), pBtn = document.getElementById('tab-btn-pedido'), pdBtn = document.getElementById('tab-btn-pedidos');
-            wBtn.classList.toggle('text-[#39FF14]', tab === 'wishlist');
-            wBtn.classList.toggle('border-[#39FF14]', tab === 'wishlist');
-            wBtn.classList.toggle('text-zinc-500', tab !== 'wishlist');
-            wBtn.classList.toggle('border-transparent', tab !== 'wishlist');
-            pBtn.classList.toggle('text-sky-400', tab === 'pedido');
-            pBtn.classList.toggle('border-sky-400', tab === 'pedido');
-            pBtn.classList.toggle('text-zinc-500', tab !== 'pedido');
-            pBtn.classList.toggle('border-transparent', tab !== 'pedido');
-            pdBtn.classList.toggle('text-amber-400', tab === 'pedidos');
-            pdBtn.classList.toggle('border-amber-400', tab === 'pedidos');
-            pdBtn.classList.toggle('text-zinc-500', tab !== 'pedidos');
-            pdBtn.classList.toggle('border-transparent', tab !== 'pedidos');
+            wBtn.classList.toggle('bg-[#39FF14]', tab === 'wishlist');
+            wBtn.classList.toggle('text-black', tab === 'wishlist');
+            wBtn.classList.toggle('shadow-[0_0_15px_rgba(57,255,20,0.4)]', tab === 'wishlist');
+            wBtn.classList.toggle('text-zinc-400', tab !== 'wishlist');
+            wBtn.classList.toggle('hover:text-white', tab !== 'wishlist');
+            pBtn.classList.toggle('bg-sky-400', tab === 'pedido');
+            pBtn.classList.toggle('text-black', tab === 'pedido');
+            pBtn.classList.toggle('shadow-[0_0_15px_rgba(56,189,248,0.4)]', tab === 'pedido');
+            pBtn.classList.toggle('text-zinc-400', tab !== 'pedido');
+            pBtn.classList.toggle('hover:text-white', tab !== 'pedido');
+            pdBtn.classList.toggle('bg-amber-400', tab === 'pedidos');
+            pdBtn.classList.toggle('text-black', tab === 'pedidos');
+            pdBtn.classList.toggle('shadow-[0_0_15px_rgba(251,191,36,0.4)]', tab === 'pedidos');
+            pdBtn.classList.toggle('text-zinc-400', tab !== 'pedidos');
+            pdBtn.classList.toggle('hover:text-white', tab !== 'pedidos');
             try { localStorage.setItem('wishlist_active_tab', tab); } catch (e) {}
         };
 
@@ -2205,7 +2212,7 @@
                 const b = document.getElementById('p-badge-' + col.id);
                 if (b) {
                     b.textContent = total;
-                    b.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded ml-1 pointer-events-none ' + (total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600');
+                    b.className = 'text-[10px] font-mono px-1.5 py-0.5 rounded-full ml-1 pointer-events-none ' + (total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600');
                 }
             }));
         }
@@ -2244,14 +2251,14 @@
                         <a href="#" id="p-link-${col.id}"
                            ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${col.id}')"
                            onclick="pShowView('${col.id}'); return false;"
-                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded transition-all group select-none relative">
+                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded-full transition-all group select-none relative">
                             <span class="truncate pointer-events-none">${col.name}</span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
                                 <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
                                 <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
                                 <button onclick="pMoveCollection('${group.groupId}', '${col.id}', -1, event)" class="text-zinc-600 hover:text-sky-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">▲</button>
                                 <button onclick="pMoveCollection('${group.groupId}', '${col.id}', 1, event)" class="text-zinc-600 hover:text-sky-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">▼</button>
-                                <span id="p-badge-${col.id}" class="text-[10px] font-mono px-1.5 py-0.5 rounded ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
+                                <span id="p-badge-${col.id}" class="text-[10px] font-mono px-1.5 py-0.5 rounded-full ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
                             </div>
                         </a>`;
                     ul.appendChild(li);
@@ -2344,7 +2351,7 @@
 
         function pCardHTML(item, colId, index) {
             const isPatch = pIsPatchCollection(colId);
-            return `<div class="relative group aspect-[3/4] bg-zinc-900 rounded-md overflow-hidden border ${isPatch ? 'border-amber-500/40 hover:border-amber-400' : 'border-zinc-800 hover:border-sky-400'} transition-all cursor-pointer"
+            return `<div class="relative group aspect-[3/4] bg-zinc-900 rounded-xl overflow-hidden border ${isPatch ? 'border-amber-500/40 hover:border-amber-400' : 'border-zinc-800 hover:border-sky-400'} transition-all cursor-pointer"
                     draggable="true" ondragstart="pDragStart(event, '${colId}', ${index})" ondragend="pDragEndCard()"
                     onclick="pOpenModal('${colId}', ${index})">
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none">
@@ -2381,7 +2388,7 @@
                 columnsWrap.className = 'grid ' + cls + ' gap-4 mb-6 items-start';
                 columnsWrap.innerHTML = col.subCols.length ? col.subCols.map(sub => {
                     const sItems = pDb[sub.id] || []; total += sItems.length;
-                    return `<div id="p-subsec-${sub.id}" class="bg-zinc-950/60 border border-zinc-800 rounded-xl p-3 transition-all">
+                    return `<div id="p-subsec-${sub.id}" class="bg-zinc-950/60 border border-zinc-800 rounded-2xl p-3 transition-all">
                         <div class="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
                             <div class="w-2 h-2 rounded-full bg-sky-400/70 shrink-0"></div>
                             <h3 class="font-bold text-white text-sm uppercase tracking-wide truncate flex-1">${sub.name}</h3>
@@ -2390,7 +2397,7 @@
                             <button onclick="pDeleteSubCollection('${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-red-400 text-xs p-0.5 transition-colors" title="Eliminar subcolección">✕</button>
                         </div>
                         <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr));">
-                            <div id="p-dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-md flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-sky-400 focus:outline-none">
+                            <div id="p-dropzone-${sub.id}" tabindex="0" class="aspect-[3/4] border border-dashed border-zinc-700 bg-zinc-900/50 hover-neon rounded-xl flex flex-col items-center justify-center p-1 text-center cursor-pointer transition-all focus:border-sky-400 focus:outline-none">
                                 <span class="text-lg opacity-50 pointer-events-none">➕</span>
                             </div>
                             ${sItems.map((it, i) => pCardHTML(it, sub.id, i)).join('')}
@@ -2599,13 +2606,13 @@
                 list.appendChild(title);
                 g.collections.forEach(col => {
                     const btn = document.createElement('button');
-                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-green-900/50 text-zinc-300 hover:text-green-300 rounded transition-colors text-sm font-bold truncate";
+                    btn.className = "w-full text-left px-3 py-2 bg-zinc-900 hover:bg-green-900/50 text-zinc-300 hover:text-green-300 rounded-full transition-colors text-sm font-bold truncate";
                     btn.innerText = col.name;
                     btn.onclick = () => performSend(col.id);
                     list.appendChild(btn);
                     (col.subCols || []).forEach(sub => {
                         const sbtn = document.createElement('button');
-                        sbtn.className = "w-full text-left pl-6 pr-3 py-1.5 bg-zinc-900/60 hover:bg-green-900/50 text-zinc-400 hover:text-green-300 rounded transition-colors text-xs font-bold truncate";
+                        sbtn.className = "w-full text-left pl-6 pr-3 py-1.5 bg-zinc-900/60 hover:bg-green-900/50 text-zinc-400 hover:text-green-300 rounded-full transition-colors text-xs font-bold truncate";
                         sbtn.innerText = `↳ ${sub.name}`;
                         sbtn.onclick = () => performSend(sub.id);
                         list.appendChild(sbtn);
@@ -2663,7 +2670,7 @@
             sheetPickerSrc = src;
             sheetPickerCallback = onDone || null;
             const list = document.getElementById('sheet-picker-list');
-            list.innerHTML = pOrders.sheets.map(s => `<button onclick="chooseSheetForNewRow('${s.id}')" class="w-full text-left px-3 py-2 bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300 rounded transition-colors text-sm font-bold truncate">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class=\'text-[10px] text-zinc-500\'>(actual)</span>' : ''}</button>`).join('');
+            list.innerHTML = pOrders.sheets.map(s => `<button onclick="chooseSheetForNewRow('${s.id}')" class="w-full text-left px-3 py-2 bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300 rounded-full transition-colors text-sm font-bold truncate">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class=\'text-[10px] text-zinc-500\'>(actual)</span>' : ''}</button>`).join('');
             document.getElementById('sheet-picker-modal').classList.remove('hidden');
         }
         window.closeSheetPicker = function() {
@@ -2692,7 +2699,7 @@
         function openPatchSheetPicker(src) {
             patchTargetSrc = src;
             const list = document.getElementById('patch-sheet-list');
-            list.innerHTML = pOrders.sheets.map(s => `<button onclick="choosePatchSheet('${s.id}')" class="w-full text-left px-3 py-2 bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300 rounded transition-colors text-sm font-bold truncate">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class=\'text-[10px] text-zinc-500\'>(actual)</span>' : ''}</button>`).join('');
+            list.innerHTML = pOrders.sheets.map(s => `<button onclick="choosePatchSheet('${s.id}')" class="w-full text-left px-3 py-2 bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300 rounded-full transition-colors text-sm font-bold truncate">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class=\'text-[10px] text-zinc-500\'>(actual)</span>' : ''}</button>`).join('');
             document.getElementById('patch-sheet-modal').classList.remove('hidden');
         }
         window.closePatchSheetModal = function() {
@@ -2707,7 +2714,7 @@
                 body.innerHTML = `<p class="text-zinc-500 font-mono text-sm">Esta hoja todavía no tiene ninguna fila. Añade un producto primero.</p>`;
             } else {
                 body.innerHTML = `<div class="grid gap-3" style="grid-template-columns:repeat(auto-fill,minmax(5.5rem,1fr))">` + sheet.rows.map((r, i) => `
-                    <button onclick="choosePatchRow('${sheet.id}','${r.id}')" class="flex flex-col items-center gap-1 p-2 bg-zinc-900 hover:bg-amber-900/40 border border-zinc-800 hover:border-amber-400 rounded transition-colors">
+                    <button onclick="choosePatchRow('${sheet.id}','${r.id}')" class="flex flex-col items-center gap-1 p-2 bg-zinc-900 hover:bg-amber-900/40 border border-zinc-800 hover:border-amber-400 rounded-full transition-colors">
                         ${r.img && r.img.startsWith('data:image') ? `<img src="${r.img}" class="w-12 h-14 object-contain">` : `<div class="w-12 h-14 flex items-center justify-center text-zinc-600 text-2xl">＋</div>`}
                         <span class="text-[10px] text-zinc-400 font-mono uppercase truncate w-full text-center">${escapeHtml(r.name || ('Fila ' + (i + 1)))}</span>
                         ${r.patch && r.patch.startsWith('data:image') ? `<span class="text-[8px] text-amber-500">🛡️ ya tiene parche</span>` : ''}
@@ -2870,17 +2877,17 @@
             const bar = document.getElementById('order-sheets-bar');
             bar.innerHTML = pOrders.sheets.map(s => `
                 <div class="flex items-center gap-1 shrink-0 ${s.id === pOrders.activeSheetId ? '' : 'opacity-70'}">
-                    <button onclick="switchOrderSheet('${s.id}')" class="px-3 py-1.5 rounded-t-md text-xs font-mono font-bold uppercase border border-b-0 transition-colors ${s.id === pOrders.activeSheetId ? 'bg-white text-black border-gray-300' : 'bg-gray-200 text-gray-500 border-gray-200 hover:bg-gray-100'}">${escapeHtml(s.name)}</button>
+                    <button onclick="switchOrderSheet('${s.id}')" class="px-3 py-1.5 rounded-t-xl text-xs font-mono font-bold uppercase border border-b-0 transition-colors ${s.id === pOrders.activeSheetId ? 'bg-white text-black border-gray-300' : 'bg-gray-200 text-gray-500 border-gray-200 hover:bg-gray-100'}">${escapeHtml(s.name)}</button>
                     <button onclick="toggleSheetMenu('${s.id}', event)" class="text-gray-400 hover:text-black text-sm px-1 font-bold" title="Opciones de la hoja">⋯</button>
-                </div>`).join('') + `<button onclick="addOrderSheet()" class="px-3 py-1.5 rounded-t-md text-xs font-mono font-bold uppercase border border-b-0 border-dashed border-gray-300 text-gray-400 hover:text-black hover:border-black shrink-0">➕ Hoja</button>`;
+                </div>`).join('') + `<button onclick="addOrderSheet()" class="px-3 py-1.5 rounded-t-xl text-xs font-mono font-bold uppercase border border-b-0 border-dashed border-gray-300 text-gray-400 hover:text-black hover:border-black shrink-0">➕ Hoja</button>`;
             const as = activeSheet();
             const styleBar = document.getElementById('order-style-bar');
             if (styleBar && as) {
                 const es = as.style === 'es';
                 styleBar.innerHTML = `
                     <span class="text-[10px] font-mono uppercase text-gray-400">Estilo de esta hoja:</span>
-                    <button onclick="setSheetStyle('zh')" class="px-2 py-1 rounded text-[10px] font-mono font-bold uppercase border ${!es ? 'bg-green-200 border-green-300 text-gray-800' : 'bg-white border-gray-300 text-gray-400 hover:text-gray-600'}">🇨🇳 Con chino</button>
-                    <button onclick="setSheetStyle('es')" class="px-2 py-1 rounded text-[10px] font-mono font-bold uppercase border ${es ? 'bg-emerald-800 border-emerald-800 text-white' : 'bg-white border-gray-300 text-gray-400 hover:text-gray-600'}">🇪🇸 Solo español</button>`;
+                    <button onclick="setSheetStyle('zh')" class="px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase border ${!es ? 'bg-green-200 border-green-300 text-gray-800' : 'bg-white border-gray-300 text-gray-400 hover:text-gray-600'}">🇨🇳 Con chino</button>
+                    <button onclick="setSheetStyle('es')" class="px-2 py-1 rounded-full text-[10px] font-mono font-bold uppercase border ${es ? 'bg-emerald-800 border-emerald-800 text-white' : 'bg-white border-gray-300 text-gray-400 hover:text-gray-600'}">🇪🇸 Solo español</button>`;
             }
         }
         window.addOrderSheet = function() {
@@ -3024,7 +3031,7 @@
             if (src && src.startsWith('data:image')) {
                 return `<div class="relative group w-14 h-16 mx-auto">
                     <img src="${src}" class="w-14 h-16 object-contain mx-auto">
-                    <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded gap-1">
+                    <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-full gap-1">
                         <button onclick="openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
                         <button onclick="clearOrderRowImage('${row.id}','${field}')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
                     </div>
@@ -3035,26 +3042,26 @@
                     // Parche antiguo guardado como texto libre (antes de que los parches fueran siempre imagen) - se conserva visible.
                     return `<div class="relative group w-14 h-16 mx-auto flex items-center justify-center text-center px-1">
                         <span class="text-[9px] text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
-                        <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded gap-1">
+                        <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-full gap-1">
                             <button onclick="openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
                             <button onclick="clearOrderRowImage('${row.id}','patch')" title="Quitar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">✕</button>
                         </div>
                     </div>`;
                 }
                 return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" onclick="openLibraryPicker('${row.id}','patch')"
-                        class="w-14 h-16 mx-auto border border-dashed border-amber-300 rounded flex flex-col items-center justify-center text-amber-400 hover:border-amber-500 hover:text-amber-600 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
+                        class="w-14 h-16 mx-auto border border-dashed border-amber-300 rounded-full flex flex-col items-center justify-center text-amber-400 hover:border-amber-500 hover:text-amber-600 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
                         <span class="text-lg leading-none">＋</span>Parche
                     </div>`;
             }
             return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="openLibraryPicker('${row.id}','img')"
-                    class="w-16 h-20 mx-auto border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
+                    class="w-16 h-20 mx-auto border border-dashed border-gray-300 rounded-full flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
                     <span class="text-lg leading-none">＋</span>Foto
                 </div>`;
         }
 
         function renderAddrCellInner(sheet) {
             const a = sheet.address || {};
-            if (!hasAddressData(a)) return `<button onclick="openAddressModal()" class="text-[10px] font-mono uppercase text-gray-400 border border-dashed border-gray-300 rounded px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
+            if (!hasAddressData(a)) return `<button onclick="openAddressModal()" class="text-[10px] font-mono uppercase text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
             const line = (label, val) => val ? `<div><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
             return `<div class="text-[10px] leading-snug text-gray-800 min-w-[9rem] text-center">
                     ${line('Destinatario', a.dest)}${line('Dirección', a.dir)}${line('C.P.', a.cp)}${line('Ciudad', a.ciudad)}${line('Provincia', a.prov)}${line('País', a.pais)}${line('Tel', a.tel)}
@@ -3066,15 +3073,15 @@
         // con rowspan a todas las filas, y solo se pinta en la primera.
         function renderOrderRowHTML(row, isFirstRow, totalRows) {
             const sheet = activeSheet();
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
             const priceCell = `<span id="cell-price-${row.id}" class="font-bold text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
                 if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
+                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
                     </td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
@@ -3254,7 +3261,7 @@
                     html += `<div><h4 class="text-xs font-mono uppercase tracking-widest text-zinc-500 mb-2">${escapeHtml(gr.name)}</h4><div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr))">`;
                     gr.items.forEach(it => {
                         pickerImages.push(it.src);
-                        html += `<img src="${it.src}" onclick="pickLibraryImage(${pickerImages.length - 1})" class="aspect-[3/4] w-full object-cover rounded-md border border-zinc-700 hover:border-sky-400 cursor-pointer">`;
+                        html += `<img src="${it.src}" onclick="pickLibraryImage(${pickerImages.length - 1})" class="aspect-[3/4] w-full object-cover rounded-xl border border-zinc-700 hover:border-sky-400 cursor-pointer">`;
                     });
                     html += `</div></div>`;
                 });
@@ -3436,7 +3443,7 @@
         function renderClientesChips() {
             const el = document.getElementById('pedidos-clientes-chips');
             if (!el) return;
-            el.innerHTML = pedidosClientes.map(c => `<span class="text-[10px] font-mono uppercase bg-zinc-800 text-zinc-300 rounded px-2 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="text-zinc-500 hover:text-red-400 cursor-pointer" title="Quitar de la lista">✕</button></span>`).join('');
+            el.innerHTML = pedidosClientes.map(c => `<span class="text-[10px] font-mono uppercase bg-zinc-800 text-zinc-300 rounded-full px-2 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="text-zinc-500 hover:text-red-400 cursor-pointer" title="Quitar de la lista">✕</button></span>`).join('');
         }
         window.removePedidoCliente = function(name) {
             if (!confirm('¿Quitar "' + name + '" de la lista de clientes? Los pedidos ya asignados a este cliente mantendrán el nombre guardado.')) return;
@@ -3457,13 +3464,13 @@
                 const paid = parseFloat(p.paid) || 0;
                 const debe = Math.max(0, (p.total || 0) - paid);
                 const fecha = new Date(p.date).toLocaleDateString('es-ES');
-                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="bg-zinc-900 border border-zinc-800 rounded-lg p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
+                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
                     <span class="text-zinc-500 text-lg select-none" title="Arrastra para reordenar">☰</span>
                     <div class="flex-1 min-w-[10rem]">
-                        <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-sky-400 rounded px-1 w-full">
+                        <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-sky-400 rounded-full px-1 w-full">
                         <div class="text-[10px] text-zinc-500 font-mono uppercase mt-0.5">${fecha}</div>
                     </div>
-                    <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-800 text-white text-xs font-mono uppercase rounded px-2 py-1.5 border border-zinc-700">
+                    <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-800 text-white text-xs font-mono uppercase rounded-full px-2 py-1.5 border border-zinc-700">
                         <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
                         ${pedidosClientes.map(c => `<option value="${escAttr(c)}" ${p.cliente === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
                     </select>
@@ -3473,13 +3480,13 @@
                     </div>
                     <div class="text-center">
                         <div class="text-[9px] text-zinc-500 font-mono uppercase">Pagado</div>
-                        <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-20 text-center bg-zinc-800 text-white text-sm font-bold rounded px-1 py-1 border border-zinc-700">
+                        <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-20 text-center bg-zinc-800 text-white text-sm font-bold rounded-full px-1 py-1 border border-zinc-700">
                     </div>
                     <div class="text-center">
                         <div class="text-[9px] text-zinc-500 font-mono uppercase">Debe</div>
                         <div id="pedido-debe-${p.id}" class="${debe > 0 ? 'text-red-400' : 'text-emerald-400'} font-bold text-sm">${formatMoney(debe)} €</div>
                     </div>
-                    <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs font-mono uppercase border border-sky-400/40 rounded px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                    <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs font-mono uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
                     <button onclick="deletePedido('${p.id}')" class="text-zinc-500 hover:text-red-500 text-lg px-1 cursor-pointer" title="Eliminar">✕</button>
                 </div>`;
             }).join('');
