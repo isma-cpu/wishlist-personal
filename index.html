@@ -40,10 +40,15 @@
 
         #order-tbody tr:nth-child(even) td { background-color: #f9fafb; }
 
+        @page { size: landscape; margin: 10mm; }
         @media print {
-            @page { size: landscape; margin: 10mm; }
             html, body { background: #fff !important; }
         }
+
+        .col-resizer { position: absolute; top: 0; right: -3px; width: 6px; height: 100%; cursor: col-resize; z-index: 5; }
+        .col-resizer:hover { background: rgba(56, 189, 248, 0.5); }
+        .row-resizer { position: absolute; left: 0; bottom: -3px; width: 100%; height: 6px; cursor: row-resize; z-index: 5; }
+        .row-resizer:hover { background: rgba(56, 189, 248, 0.5); }
     </style>
 </head>
 <body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
@@ -219,7 +224,8 @@
                 </div>
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
                 <div class="overflow-x-auto print:overflow-visible">
-                    <table id="order-table" class="w-full border-collapse text-xs">
+                    <table id="order-table" class="w-full border-collapse text-xs" style="table-layout: fixed;">
+                        <colgroup id="order-colgroup"></colgroup>
                         <thead id="order-thead"></thead>
                         <tbody id="order-tbody"></tbody>
                         <tfoot id="order-tfoot"></tfoot>
@@ -240,7 +246,7 @@
             </div>
             <div class="flex flex-wrap justify-center gap-4" onclick="event.stopPropagation()">
                 <button onclick="openSendModal('p2w', event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black">⭐ Enviar a Wishlist</button>
-                <button id="p-modal-addrow-btn" onclick="addLibraryPhotoToOrder(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black">🛒 Añadir a fila del pedido</button>
+                <button id="p-modal-addrow-btn" onclick="addLibraryPhotoToOrder(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black">🛒 Añadir al pedido</button>
                 <button onclick="pDeleteCurrentModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white">✕ Eliminar</button>
             </div>
         </div>
@@ -265,6 +271,17 @@
                 <button onclick="closeLibraryPicker()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
             </div>
             <div id="lib-picker-body" class="space-y-6"></div>
+        </div>
+    </div>
+
+    <!-- Elegir en qué hoja de pedido añadir el producto -->
+    <div id="sheet-picker-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-lg shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm max-h-[80vh] overflow-y-auto">
+            <h3 class="text-lg font-black tracking-wider text-amber-400 mb-4 uppercase">¿En qué hoja lo añado?</h3>
+            <div id="sheet-picker-list" class="space-y-2 mb-6"></div>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeSheetPicker()" class="px-4 py-2 text-xs font-mono text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+            </div>
         </div>
     </div>
 
@@ -2460,19 +2477,20 @@
                 if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
                 pDb[targetColId].unshift({ src: sendContext.src, timestamp: Date.now() });
                 pSaveDB();
-                addOrderRowWithImage(sendContext.src);
                 closeSendModal();
 
-                const remove = confirm('Foto enviada a Pedido ✔ (y añadida como fila nueva en la hoja de pedido activa).\n\n¿Quieres eliminarla también de la Wishlist?\n\nAceptar = moverla (se borra de la Wishlist)\nCancelar = mantenerla también en la Wishlist');
-                if (remove) {
-                    const { wishlistColId, wishlistIndex } = sendContext;
-                    const arr = wishlistColId != null ? db[wishlistColId] : null;
-                    if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === sendContext.src) {
-                        arr.splice(wishlistIndex, 1);
-                        saveDB();
+                openSheetPicker(sendContext.src, () => {
+                    const remove = confirm('Foto añadida al pedido ✔\n\n¿Quieres eliminarla también de la Wishlist?\n\nAceptar = moverla (se borra de la Wishlist)\nCancelar = mantenerla también en la Wishlist');
+                    if (remove) {
+                        const { wishlistColId, wishlistIndex } = sendContext;
+                        const arr = wishlistColId != null ? db[wishlistColId] : null;
+                        if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === sendContext.src) {
+                            arr.splice(wishlistIndex, 1);
+                            saveDB();
+                        }
+                        closeModal();
                     }
-                    closeModal();
-                }
+                });
             } else {
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
                 db[targetColId].unshift({ src: sendContext.src, timestamp: Date.now(), nameNumber: "", patch: "" });
@@ -2485,13 +2503,36 @@
             if (event) event.stopPropagation();
             const item = pDb[pModalContext.colId] && pDb[pModalContext.colId][pModalContext.index];
             if (!item) return;
-            addOrderRowWithImage(item.src);
-            const btn = document.getElementById('p-modal-addrow-btn');
-            if (btn) {
-                const original = btn.innerHTML;
-                btn.innerHTML = '✔ Añadida al pedido';
-                setTimeout(() => { btn.innerHTML = original; }, 1600);
-            }
+            openSheetPicker(item.src, () => {
+                const btn = document.getElementById('p-modal-addrow-btn');
+                if (btn) {
+                    const original = btn.innerHTML;
+                    btn.innerHTML = '✔ Añadida al pedido';
+                    setTimeout(() => { btn.innerHTML = original; }, 1600);
+                }
+            });
+        };
+
+        // --- Elegir en qué hoja de pedido se añade una foto nueva ---
+        let sheetPickerSrc = null;
+        let sheetPickerCallback = null;
+        function openSheetPicker(src, onDone) {
+            sheetPickerSrc = src;
+            sheetPickerCallback = onDone || null;
+            const list = document.getElementById('sheet-picker-list');
+            list.innerHTML = pOrders.sheets.map(s => `<button onclick="chooseSheetForNewRow('${s.id}')" class="w-full text-left px-3 py-2 bg-zinc-900 hover:bg-amber-900/40 text-zinc-300 hover:text-amber-300 rounded transition-colors text-sm font-bold truncate">${escapeHtml(s.name)}${s.id === pOrders.activeSheetId ? ' <span class=\'text-[10px] text-zinc-500\'>(actual)</span>' : ''}</button>`).join('');
+            document.getElementById('sheet-picker-modal').classList.remove('hidden');
+        }
+        window.closeSheetPicker = function() {
+            document.getElementById('sheet-picker-modal').classList.add('hidden');
+            sheetPickerSrc = null; sheetPickerCallback = null;
+        };
+        window.chooseSheetForNewRow = function(sheetId) {
+            addOrderRowWithImage(sheetPickerSrc, sheetId);
+            document.getElementById('sheet-picker-modal').classList.add('hidden');
+            const cb = sheetPickerCallback;
+            sheetPickerSrc = null; sheetPickerCallback = null;
+            if (cb) cb();
         };
 
         // ============================================================
@@ -2499,16 +2540,16 @@
         // ============================================================
 
         const ORDER_BASE_COLS = [
-            { key: 'version', zh: '版本', es: 'Versión', type: 'text' },
-            { key: 'img', zh: '产品图片', es: 'Producto', type: 'img' },
-            { key: 'size', zh: '尺码', es: 'Talla', type: 'text' },
-            { key: 'qty', zh: '数量', es: 'Cantidad', type: 'number' },
-            { key: 'name', zh: '印刷名字', es: 'Nombre', type: 'text-upper' },
-            { key: 'number', zh: '印刷号码', es: 'Número', type: 'text' },
-            { key: 'patch', zh: '补丁', es: 'Parche', type: 'text' },
-            { key: 'unitPrice', zh: '单价', es: 'P. unitario', type: 'number' },
-            { key: 'price', zh: '价格', es: 'Precio', type: 'number' },
-            { key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address' }
+            { key: 'version', zh: '版本', es: 'Versión', type: 'text', w: 70 },
+            { key: 'img', zh: '产品图片', es: 'Producto', type: 'img', w: 90 },
+            { key: 'qty', zh: '数量', es: 'Cantidad', type: 'number', w: 65 },
+            { key: 'size', zh: '尺码', es: 'Talla', type: 'text', w: 65 },
+            { key: 'name', zh: '印刷名字', es: 'Nombre', type: 'text-upper', w: 110 },
+            { key: 'number', zh: '印刷号码', es: 'Número', type: 'text', w: 75 },
+            { key: 'patch', zh: '补丁', es: 'Parche', type: 'text', w: 90 },
+            { key: 'unitPrice', zh: '单价', es: 'P. unitario', type: 'number', w: 80 },
+            { key: 'price', zh: '价格', es: 'Precio', type: 'number', w: 80 },
+            { key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address', w: 190 }
         ];
 
         // --- Varias "hojas" de pedido (como pestañas de Excel) ---
@@ -2584,16 +2625,19 @@
         function newOrderRow() {
             return {
                 id: 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-                version: '', img: '', size: '', qty: '', name: '', number: '', patch: '', unitPrice: '', price: '', priceManual: false,
+                version: '', img: '', size: '', qty: '', name: '', number: '', patch: '', unitPrice: '', price: 0, height: null,
                 address: { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' }, custom: {}
             };
         }
         window.addOrderRow = function() { activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
-        // Añade una fila nueva con la foto ya puesta (usado al "Enviar a Pedido" / "Añadir a fila del pedido")
-        function addOrderRowWithImage(src) {
+        // Añade una fila nueva con la foto ya puesta, en la hoja indicada (o la activa) - usado al enviar desde Wishlist o la biblioteca
+        function addOrderRowWithImage(src, sheetId) {
+            const sheet = sheetId ? pOrders.sheets.find(s => s.id === sheetId) : activeSheet();
+            if (!sheet) return;
             const row = newOrderRow();
             row.img = src;
-            activeSheet().rows.push(row);
+            sheet.rows.push(row);
+            if (sheetId && sheetId !== pOrders.activeSheetId) pOrders.activeSheetId = sheetId;
             savePOrders();
             if (!document.getElementById('view-pedido').classList.contains('hidden')) { renderOrderSheetsBar(); renderOrderTable(); }
         }
@@ -2616,19 +2660,21 @@
             savePOrders(); renderOrderTable();
         };
 
+        // El precio SIEMPRE lo calcula la app: cantidad × precio unitario (no es editable a mano)
+        function computeRowPrice(row) {
+            const q = parseFloat(row.qty), u = parseFloat(row.unitPrice);
+            return (!isNaN(q) && !isNaN(u)) ? q * u : 0;
+        }
+
         window.updateOrderField = function(rowId, field, value) {
             const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
             row[field] = value;
-            if (field === 'price') row.priceManual = true;
-            if ((field === 'qty' || field === 'unitPrice') && !row.priceManual) {
-                const q = parseFloat(row.qty), u = parseFloat(row.unitPrice);
-                if (!isNaN(q) && !isNaN(u)) {
-                    row.price = String(Math.round(q * u * 100) / 100);
-                    const priceEl = document.getElementById('cell-price-' + rowId);
-                    if (priceEl) priceEl.value = row.price;
-                }
+            if (field === 'qty' || field === 'unitPrice') {
+                row.price = computeRowPrice(row);
+                const priceEl = document.getElementById('cell-price-' + rowId);
+                if (priceEl) priceEl.textContent = formatMoney(row.price);
+                renderOrderFooter(activeSheet());
             }
-            if (field === 'price' || field === 'qty' || field === 'unitPrice') renderOrderFooter(activeSheet());
             savePOrders();
         };
         window.updateOrderCustomField = function(rowId, colId, value) {
@@ -2665,14 +2711,16 @@
         }
 
         function renderOrderRowHTML(row) {
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[6rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
+            const priceCell = `<span id="cell-price-${row.id}" class="font-bold text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = ORDER_BASE_COLS.map(c => {
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row)}</td>`;
                 if (c.key === 'address') return `<td id="cell-addr-${row.id}" class="border border-gray-300 p-2 align-middle text-center">${renderAddrCellInner(row)}</td>`;
                 if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-middle text-center">${nameCell}</td>`;
+                if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
                 return `<td class="border border-gray-300 p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
@@ -2682,28 +2730,43 @@
                     <input type="text" value="${escAttr(row.custom[c.id] || '')}" oninput="updateOrderCustomField('${row.id}','${c.id}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
                 </td>`).join('');
 
-            return `<tr>${tds}${tdsCustom}<td class="border border-gray-300 p-1 text-center align-middle print:hidden">
+            const heightStyle = row.height ? ` style="height:${row.height}px"` : '';
+            return `<tr id="tr-${row.id}"${heightStyle}>${tds}${tdsCustom}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
                     <button onclick="deleteOrderRow('${row.id}')" class="text-gray-300 hover:text-red-500 text-sm" title="Eliminar fila">✕</button>
+                    <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer" title="Arrastra para cambiar la altura de la fila"></span>
                 </td></tr>`;
+        }
+
+        function renderColgroupHTML(sheet) {
+            const widths = pOrders.colWidths || {};
+            let html = ORDER_BASE_COLS.map(c => `<col id="col-${c.key}" style="width:${widths[c.key] || c.w || 90}px">`).join('');
+            html += sheet.customColumns.map(c => `<col id="col-${c.id}" style="width:${widths[c.id] || 100}px">`).join('');
+            html += `<col style="width:32px">`;
+            return html;
         }
 
         function renderOrderTable() {
             const sheet = activeSheet();
+            sheet.rows.forEach(r => { r.price = computeRowPrice(r); }); // el precio siempre reflejado cantidad × unitario
+            const colgroup = document.getElementById('order-colgroup');
             const thead = document.getElementById('order-thead');
             const tbody = document.getElementById('order-tbody');
+            colgroup.innerHTML = renderColgroupHTML(sheet);
             const thBase = ORDER_BASE_COLS.map(c => `
-                <th class="border border-gray-300 bg-white px-2 py-2 text-center align-bottom">
-                    <div class="text-[9px] text-gray-400 leading-none mb-0.5">${c.zh}</div>
+                <th class="border border-gray-300 bg-green-200 px-2 py-2 text-center align-bottom relative">
+                    <div class="text-[9px] text-gray-500 leading-none mb-0.5">${c.zh}</div>
                     <div class="font-bold text-gray-800 text-[11px] leading-tight">${c.es}</div>
+                    <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
             const thCustom = sheet.customColumns.map(c => `
-                <th class="border border-gray-300 bg-white px-2 py-2 text-center align-bottom">
+                <th class="border border-gray-300 bg-green-200 px-2 py-2 text-center align-bottom relative">
                     <div class="flex items-center justify-center gap-1">
                         <span class="font-bold text-gray-800 text-[11px]">${escapeHtml(c.label)}</span>
-                        <button onclick="deleteOrderColumn('${c.id}')" class="text-gray-300 hover:text-red-500 text-xs print:hidden" title="Eliminar columna">✕</button>
+                        <button onclick="deleteOrderColumn('${c.id}')" class="text-gray-400 hover:text-red-500 text-xs print:hidden" title="Eliminar columna">✕</button>
                     </div>
+                    <span onmousedown="startColResize(event, '${c.id}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
-            thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 bg-white px-2 py-2 print:hidden"></th></tr>`;
+            thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 bg-green-200 px-2 py-2 print:hidden"></th></tr>`;
             tbody.innerHTML = sheet.rows.map(renderOrderRowHTML).join('');
             renderOrderFooter(sheet);
         }
@@ -2715,12 +2778,64 @@
             if (!tfoot) return;
             const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
             const cells = ORDER_BASE_COLS.map(c => {
-                if (c.key === 'version') return `<td class="border border-gray-300 bg-gray-100 px-2 py-2 text-center font-bold text-gray-500 text-[10px] uppercase">总价<br>Total</td>`;
-                if (c.key === 'price') return `<td class="border border-gray-300 bg-gray-100 px-2 py-2 text-center font-black text-gray-900 text-xs">${formatMoney(total)} €</td>`;
-                return `<td class="border border-gray-300 bg-gray-100"></td>`;
+                if (c.key === 'version') return `<td class="border border-gray-300 bg-yellow-200 px-2 py-2 text-center font-bold text-gray-700 text-[10px] uppercase">总价<br>PRECIO TOTAL</td>`;
+                if (c.key === 'price') return `<td class="border border-gray-300 bg-yellow-200 px-2 py-2 text-center font-black text-gray-900 text-xs">${formatMoney(total)} €</td>`;
+                return `<td class="border border-gray-300 bg-yellow-200"></td>`;
             }).join('');
-            const customCells = sheet.customColumns.map(() => `<td class="border border-gray-300 bg-gray-100"></td>`).join('');
-            tfoot.innerHTML = `<tr>${cells}${customCells}<td class="border border-gray-300 bg-gray-100 print:hidden"></td></tr>`;
+            const customCells = sheet.customColumns.map(() => `<td class="border border-gray-300 bg-yellow-200"></td>`).join('');
+            tfoot.innerHTML = `<tr>${cells}${customCells}<td class="border border-gray-300 bg-yellow-200 print:hidden"></td></tr>`;
+        }
+
+        // --- Redimensionar columnas (ancho) y filas (altura) arrastrando ---
+        let colResizing = null;
+        window.startColResize = function(e, key) {
+            e.preventDefault(); e.stopPropagation();
+            const col = document.getElementById('col-' + key);
+            if (!col) return;
+            colResizing = { key, startX: e.clientX, startWidth: col.getBoundingClientRect().width || 90 };
+            document.addEventListener('mousemove', onColResizeMove);
+            document.addEventListener('mouseup', onColResizeUp);
+        };
+        function onColResizeMove(e) {
+            if (!colResizing) return;
+            const w = Math.max(32, Math.round(colResizing.startWidth + (e.clientX - colResizing.startX)));
+            const col = document.getElementById('col-' + colResizing.key);
+            if (col) col.style.width = w + 'px';
+        }
+        function onColResizeUp(e) {
+            if (!colResizing) return;
+            const w = Math.max(32, Math.round(colResizing.startWidth + (e.clientX - colResizing.startX)));
+            if (!pOrders.colWidths) pOrders.colWidths = {};
+            pOrders.colWidths[colResizing.key] = w;
+            savePOrders();
+            colResizing = null;
+            document.removeEventListener('mousemove', onColResizeMove);
+            document.removeEventListener('mouseup', onColResizeUp);
+        }
+
+        let rowResizing = null;
+        window.startRowResize = function(e, rowId) {
+            e.preventDefault(); e.stopPropagation();
+            const tr = document.getElementById('tr-' + rowId);
+            if (!tr) return;
+            rowResizing = { rowId, startY: e.clientY, startHeight: tr.getBoundingClientRect().height || 60 };
+            document.addEventListener('mousemove', onRowResizeMove);
+            document.addEventListener('mouseup', onRowResizeUp);
+        };
+        function onRowResizeMove(e) {
+            if (!rowResizing) return;
+            const h = Math.max(28, Math.round(rowResizing.startHeight + (e.clientY - rowResizing.startY)));
+            const tr = document.getElementById('tr-' + rowResizing.rowId);
+            if (tr) tr.style.height = h + 'px';
+        }
+        function onRowResizeUp(e) {
+            if (!rowResizing) return;
+            const h = Math.max(28, Math.round(rowResizing.startHeight + (e.clientY - rowResizing.startY)));
+            const row = activeSheet().rows.find(r => r.id === rowResizing.rowId);
+            if (row) { row.height = h; savePOrders(); }
+            rowResizing = null;
+            document.removeEventListener('mousemove', onRowResizeMove);
+            document.removeEventListener('mouseup', onRowResizeUp);
         }
 
         window.clearOrderRowImage = function(rowId) {
