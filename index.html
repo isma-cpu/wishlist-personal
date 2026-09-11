@@ -286,6 +286,7 @@
 
     <!-- Enviar foto entre Wishlist <-> Pedido -->
     <!-- Enviar un producto de la Wishlist directamente a una hoja de Crear Pedido (opción principal), con opción de ir solo a la biblioteca -->
+    <!-- Enviar a Pedido: paso 1, elegir la hoja -->
     <div id="send-to-pedido-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
         <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-lg max-h-[85vh] overflow-y-auto">
             <div class="flex items-center justify-between mb-1">
@@ -295,10 +296,26 @@
             <button onclick="openSendToLibraryFallback(event)" class="text-[11px] text-zinc-500 hover:text-sky-400 underline mb-4 cursor-pointer">📚 Enviar solo a la biblioteca (Equipos/Selecciones) en su lugar</button>
 
             <div class="text-[10px] text-zinc-500 uppercase mb-1">¿A qué hoja?</div>
-            <div id="send-pedido-sheet-list" class="space-y-1 mb-4"></div>
+            <div id="send-pedido-sheet-list" class="space-y-1"></div>
+        </div>
+    </div>
 
-            <div id="send-pedido-details" class="hidden border-t border-zinc-800 pt-4 space-y-3">
-                <div id="send-pedido-preview" class="mb-2"></div>
+    <!-- Enviar a Pedido: paso 2, variantes + vista previa de la hoja elegida -->
+    <div id="send-to-pedido-details-modal" class="fixed inset-0 bg-black/95 hidden z-[210] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-lg max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-3">
+                <button onclick="backToSendPedidoSheetList()" class="text-xs text-zinc-500 hover:text-amber-400 cursor-pointer">← Cambiar hoja</button>
+                <button onclick="closeSendToPedidoDetailsModal()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <h3 id="send-pedido-details-title" class="text-lg font-black tracking-wider text-amber-400 uppercase mb-3"></h3>
+            <div class="space-y-3">
+                <div>
+                    <button onclick="toggleSendPedidoFullPreview()" class="w-full flex items-center justify-between gap-2 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-300 hover:border-amber-400 hover:text-amber-400 transition-colors cursor-pointer">
+                        <span id="send-pedido-preview-summary"></span>
+                        <span id="send-pedido-preview-chevron" class="shrink-0">▾ Ver completa</span>
+                    </button>
+                    <div id="send-pedido-preview-full" class="hidden mt-2 border border-zinc-800 rounded-xl overflow-auto max-h-64"></div>
+                </div>
                 <label class="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
                     <input type="checkbox" id="send-pedido-novariants" onchange="document.getElementById('send-pedido-variant-fields').classList.toggle('hidden', this.checked)">
                     Enviar sin variantes (las añado después en la plantilla)
@@ -1005,6 +1022,15 @@
                 const group = structure.find(g => g.groupId === targetId);
                 const folder = group.folders && group.folders.find(f => f.id === extraId);
                 inputEl.value = folder ? folder.name : "";
+            } else if (action === 'set-group-emoji') {
+                titleEl.innerHTML = "😀 EMOJI DEL BLOQUE"; inputEl.placeholder = "Pega o escribe un emoji...";
+                const group = structure.find(g => g.groupId === targetId);
+                inputEl.value = group ? (group.emoji || "") : "";
+            } else if (action === 'set-folder-emoji') {
+                titleEl.innerHTML = "😀 EMOJI DE LA CARPETA"; inputEl.placeholder = "Pega o escribe un emoji...";
+                const group = structure.find(g => g.groupId === targetId);
+                const folder = group && group.folders && group.folders.find(f => f.id === extraId);
+                inputEl.value = folder ? (folder.emoji || "") : "";
             } else if (action === 'add-subcollection') {
                 titleEl.innerHTML = "➕ NUEVA SUBCOLECCIÓN"; inputEl.placeholder = "Nombre de la subcolección...";
             } else if (action === 'edit-subcollection') {
@@ -1097,6 +1123,13 @@
                     const folder = group.folders && group.folders.find(f => f.id === extraId);
                     if (folder) { folder.name = val; saveStructure(); init(); }
                 }
+            } else if (action === 'set-group-emoji') {
+                const group = structure.find(g => g.groupId === targetId);
+                if (group) { group.emoji = val || ''; saveStructure(); init(); }
+            } else if (action === 'set-folder-emoji') {
+                const group = structure.find(g => g.groupId === targetId);
+                const folder = group && group.folders && group.folders.find(f => f.id === extraId);
+                if (folder) { folder.emoji = val || ''; saveStructure(); init(); }
             } else if (action === 'add-subcollection') {
                 if(val) {
                     const parent = structure.flatMap(g => g.collections).find(c => c.id === targetId);
@@ -1928,9 +1961,12 @@
                     <h3 class="text-xs font-bold text-[#39FF14] uppercase tracking-widest mb-3 border-b border-[#39FF14]/30 pb-2 flex items-center justify-between gap-2" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
                         <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
                             <span id="groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
-                            <span class="truncate">${group.groupTitle}</span>
+                            <span class="truncate">${group.emoji ? group.emoji + ' ' : ''}${group.groupTitle}</span>
                         </button>
-                        <span draggable="true" ondragstart="groupDragStart(event, '${group.groupId}')" class="text-[#39FF14]/60 hover:text-[#39FF14] cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
+                        <span class="flex items-center gap-1 shrink-0">
+                            <button onclick="openInput('set-group-emoji', '${group.groupId}', null, event)" class="text-[#39FF14]/60 hover:text-[#39FF14] text-xs p-0.5 transition-colors" title="Elegir emoji del bloque">😀</button>
+                            <span draggable="true" ondragstart="groupDragStart(event, '${group.groupId}')" class="text-[#39FF14]/60 hover:text-[#39FF14] cursor-grab text-sm leading-none p-0.5 transition-colors" title="Arrastra para reordenar el bloque">⠿</span>
+                        </span>
                     </h3>`;
                 const ul = document.createElement('ul'); ul.className = "space-y-1" + (isCollapsed ? " hidden" : ""); ul.id = "grouplist-" + group.groupId;
                 ul.setAttribute('ondragover', 'groupListDragOver(event)');
@@ -1947,11 +1983,12 @@
                              class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-full hover:bg-zinc-900 transition-all group select-none">
                             <button onclick="toggleFolderCollapsed('${folder.id}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 text-sm font-bold text-zinc-300 hover:text-[#39FF14] transition-colors text-left">
                                 <span id="folderchev-${folder.id}" class="text-[10px] shrink-0">${isFolderCollapsed ? '▸' : '▾'}</span>
-                                <span class="shrink-0">📁</span>
+                                <span class="shrink-0">${folder.emoji || '📁'}</span>
                                 <span class="truncate">${folder.name}</span>
                             </button>
                             <div class="flex items-center gap-1 shrink-0">
                                 <span draggable="true" ondragstart="folderDragStart(event, '${group.groupId}', '${folder.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity" title="Arrastra para reordenar la carpeta">⠿</span>
+                                <button onclick="openInput('set-folder-emoji', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Elegir emoji de la carpeta">😀</button>
                                 <button onclick="openInput('edit-folder', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Renombrar carpeta">✏️</button>
                                 <button onclick="deleteFolder('${group.groupId}', '${folder.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar carpeta (las colecciones no se borran)">✕</button>
                             </div>
@@ -2391,29 +2428,51 @@
         // --- Estructura por defecto de la biblioteca: LaLiga + Selección España ---
         const defaultPedidoStructure = [
             {
+                groupTitle: "PARCHES", groupId: "parches", isPatchGroup: true,
+                collections: [{ id: "parches-general", name: "Parches" }]
+            },
+            {
                 groupTitle: "LALIGA", groupId: "laliga",
                 collections: [
-                    { id: "ll-realmadrid", name: "Real Madrid" }, { id: "ll-barcelona", name: "FC Barcelona" },
-                    { id: "ll-atletico", name: "Atlético de Madrid" }, { id: "ll-athletic", name: "Athletic Club" },
-                    { id: "ll-villarreal", name: "Villarreal CF" }, { id: "ll-betis", name: "Real Betis" },
-                    { id: "ll-celta", name: "RC Celta" }, { id: "ll-rayo", name: "Rayo Vallecano" },
-                    { id: "ll-osasuna", name: "CA Osasuna" }, { id: "ll-realsociedad", name: "Real Sociedad" },
-                    { id: "ll-mallorca", name: "RCD Mallorca" }, { id: "ll-girona", name: "Girona FC" },
-                    { id: "ll-getafe", name: "Getafe CF" }, { id: "ll-sevilla", name: "Sevilla FC" },
-                    { id: "ll-valencia", name: "Valencia CF" }, { id: "ll-alaves", name: "Deportivo Alavés" },
-                    { id: "ll-espanyol", name: "RCD Espanyol" }, { id: "ll-elche", name: "Elche CF" },
-                    { id: "ll-levante", name: "Levante UD" }, { id: "ll-oviedo", name: "Real Oviedo" }
+                    { id: "ll-realmadrid", name: "Real Madrid", emoji: "⚪" }, { id: "ll-barcelona", name: "FC Barcelona", emoji: "🔴🔵" },
+                    { id: "ll-atletico", name: "Atlético de Madrid", emoji: "🔴⚪" }, { id: "ll-athletic", name: "Athletic Club", emoji: "🦁" },
+                    { id: "ll-villarreal", name: "Villarreal CF", emoji: "🟡" }, { id: "ll-betis", name: "Real Betis", emoji: "🟢⚪" },
+                    { id: "ll-celta", name: "RC Celta", emoji: "🩵" }, { id: "ll-rayo", name: "Rayo Vallecano", emoji: "⚡" },
+                    { id: "ll-osasuna", name: "CA Osasuna", emoji: "🔴" }, { id: "ll-realsociedad", name: "Real Sociedad", emoji: "🔵⚪" },
+                    { id: "ll-mallorca", name: "RCD Mallorca", emoji: "🏝️" }, { id: "ll-girona", name: "Girona FC", emoji: "🔴⚪" },
+                    { id: "ll-getafe", name: "Getafe CF", emoji: "🔵" }, { id: "ll-sevilla", name: "Sevilla FC", emoji: "⚪🔴" },
+                    { id: "ll-valencia", name: "Valencia CF", emoji: "🦇" }, { id: "ll-alaves", name: "Deportivo Alavés", emoji: "🔵⚪" },
+                    { id: "ll-espanyol", name: "RCD Espanyol", emoji: "🔵⚪" }, { id: "ll-elche", name: "Elche CF", emoji: "🌴" },
+                    { id: "ll-levante", name: "Levante UD", emoji: "🔵🔴" }, { id: "ll-oviedo", name: "Real Oviedo", emoji: "🔵" }
+                ]
+            },
+            {
+                groupTitle: "PREMIER LEAGUE", groupId: "premier",
+                collections: [
+                    { id: "pl-mancity", name: "Manchester City", emoji: "🩵" }, { id: "pl-arsenal", name: "Arsenal", emoji: "🔴⚪" },
+                    { id: "pl-liverpool", name: "Liverpool", emoji: "🔴" }, { id: "pl-chelsea", name: "Chelsea", emoji: "🔵" },
+                    { id: "pl-manutd", name: "Manchester United", emoji: "😈" }, { id: "pl-newcastle", name: "Newcastle United", emoji: "⚫⚪" },
+                    { id: "pl-astonvilla", name: "Aston Villa", emoji: "🟣" }, { id: "pl-tottenham", name: "Tottenham Hotspur", emoji: "🐓" },
+                    { id: "pl-brighton", name: "Brighton & Hove Albion", emoji: "🔵⚪" }, { id: "pl-bournemouth", name: "Bournemouth", emoji: "🍒" },
+                    { id: "pl-fulham", name: "Fulham", emoji: "⚪⚫" }, { id: "pl-crystalpalace", name: "Crystal Palace", emoji: "🦅" },
+                    { id: "pl-everton", name: "Everton", emoji: "🔵" }, { id: "pl-westham", name: "West Ham United", emoji: "⚒️" },
+                    { id: "pl-wolves", name: "Wolverhampton Wanderers", emoji: "🐺" }, { id: "pl-brentford", name: "Brentford", emoji: "🐝" },
+                    { id: "pl-forest", name: "Nottingham Forest", emoji: "🌳" }, { id: "pl-leeds", name: "Leeds United", emoji: "⚪" },
+                    { id: "pl-burnley", name: "Burnley", emoji: "🟣" }, { id: "pl-sunderland", name: "Sunderland", emoji: "🔴⚪" }
                 ]
             },
             {
                 groupTitle: "SELECCIONES", groupId: "selecciones",
                 collections: [
-                    { id: "sel-espana", name: "Selección España" }
+                    { id: "sel-espana", name: "España", emoji: "🇪🇸" },
+                    { id: "sel-brasil", name: "Brasil", emoji: "🇧🇷" },
+                    { id: "sel-argentina", name: "Argentina", emoji: "🇦🇷" },
+                    { id: "sel-francia", name: "Francia", emoji: "🇫🇷" },
+                    { id: "sel-alemania", name: "Alemania", emoji: "🇩🇪" },
+                    { id: "sel-portugal", name: "Portugal", emoji: "🇵🇹" },
+                    { id: "sel-italia", name: "Italia", emoji: "🇮🇹" },
+                    { id: "sel-holanda", name: "Holanda", emoji: "🇳🇱" }
                 ]
-            },
-            {
-                groupTitle: "PARCHES", groupId: "parches", isPatchGroup: true,
-                collections: [{ id: "parches-general", name: "Parches" }]
             }
         ];
 
@@ -2423,11 +2482,49 @@
             if (!pStructure || !Array.isArray(pStructure) || !pStructure[0].collections) pStructure = defaultPedidoStructure;
         } catch (e) { pStructure = defaultPedidoStructure; }
 
-        // Carpeta especial "Parches" (solo imágenes, se puede enviar directamente a un producto de cualquier hoja de pedido) - migración aditiva, no toca nada existente.
-        (function pEnsureParchesGroup() {
-            if (pStructure.some(g => g.groupId === 'parches')) return;
-            pStructure.push({ groupTitle: "PARCHES", groupId: "parches", isPatchGroup: true, collections: [{ id: "parches-general", name: "Parches" }] });
-            try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {}
+        // Migraciones aditivas de la biblioteca: carpeta Parches, Premier League, más selecciones, emojis/logos por defecto - nunca tocan nada que el usuario ya haya personalizado.
+        (function pEnsurePedidoContent() {
+            let changed = false;
+            const findDefaultGroup = (groupId) => defaultPedidoStructure.find(g => g.groupId === groupId);
+
+            if (!pStructure.some(g => g.groupId === 'parches')) {
+                pStructure.push(JSON.parse(JSON.stringify(findDefaultGroup('parches'))));
+                changed = true;
+            }
+            if (!pStructure.some(g => g.groupId === 'premier')) {
+                pStructure.push(JSON.parse(JSON.stringify(findDefaultGroup('premier'))));
+                changed = true;
+            }
+            const selecciones = pStructure.find(g => g.groupId === 'selecciones');
+            if (selecciones) {
+                findDefaultGroup('selecciones').collections.forEach(defCol => {
+                    if (!selecciones.collections.some(c => c.id === defCol.id)) {
+                        selecciones.collections.push(JSON.parse(JSON.stringify(defCol)));
+                        changed = true;
+                    }
+                });
+                // "Selección España" -> "España" (solo si el usuario no le puso ya otro nombre)
+                const espana = selecciones.collections.find(c => c.id === 'sel-espana');
+                if (espana && espana.name === 'Selección España') { espana.name = 'España'; changed = true; }
+            }
+            // Logo/emoji por defecto para colecciones que aún no tengan uno propio (nunca sobrescribe uno ya elegido)
+            pStructure.forEach(g => {
+                const defGroup = findDefaultGroup(g.groupId);
+                if (!defGroup) return;
+                g.collections.forEach(col => {
+                    if (!col.emoji) {
+                        const defCol = defGroup.collections.find(c => c.id === col.id);
+                        if (defCol && defCol.emoji) { col.emoji = defCol.emoji; changed = true; }
+                    }
+                });
+            });
+            // La carpeta Parches queda fijada siempre la primera del array (se renderiza igual aunque el usuario arrastre otros bloques).
+            if (pStructure[0] && pStructure[0].groupId !== 'parches') {
+                const idx = pStructure.findIndex(g => g.groupId === 'parches');
+                if (idx > 0) { const [pg] = pStructure.splice(idx, 1); pStructure.unshift(pg); changed = true; }
+            }
+
+            if (changed) { try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {} }
         })();
 
         function pSaveStructure() { try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {} }
@@ -2500,7 +2597,7 @@
                             <span id="p-groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.isPatchGroup ? '🛡️ ' : ''}${group.groupTitle}</span>
                         </button>
-                        <span draggable="true" ondragstart="pGroupDragStart(event, '${group.groupId}')" class="opacity-60 hover:opacity-100 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
+                        ${group.isPatchGroup ? `<span class="text-[9px] uppercase opacity-60 shrink-0" title="Este bloque está fijado arriba">📌 fijo</span>` : `<span draggable="true" ondragstart="pGroupDragStart(event, '${group.groupId}')" class="opacity-60 hover:opacity-100 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>`}
                     </h3>`;
                 const ul = document.createElement('ul'); ul.className = "space-y-1" + (isCollapsed ? " hidden" : ""); ul.id = "p-grouplist-" + group.groupId;
 
@@ -2514,6 +2611,7 @@
                            class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded-full transition-all group select-none relative">
                             <span class="flex items-center gap-1.5 min-w-0 pointer-events-none">
                                 <span draggable="true" ondragstart="pCollectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar">⠿</span>
+                                ${col.emoji ? `<span class="shrink-0">${col.emoji}</span>` : ''}
                                 <span class="truncate">${col.name}</span>
                             </span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
@@ -2611,6 +2709,8 @@
             if (from === -1 || to === -1) return;
             const [moved] = pStructure.splice(from, 1);
             pStructure.splice(to, 0, moved);
+            // La carpeta Parches se queda siempre fijada arriba del todo (sort estable: no altera el orden relativo del resto).
+            pStructure.sort((a, b) => (a.isPatchGroup ? 0 : 1) - (b.isPatchGroup ? 0 : 1));
             pSaveStructure(); pInit();
         };
         let pCollectionDragSrc = null;
@@ -2922,13 +3022,6 @@
             if (event) event.stopPropagation();
             const it = getModalItem(); if (!it) return;
             sendToPedidoCtx = { src: it.src, wishlistColId: modalContext.colId, wishlistIndex: modalContext.index, selectedSheetId: null, patchSrc: '' };
-            document.getElementById('send-pedido-details').classList.add('hidden');
-            document.getElementById('send-pedido-novariants').checked = false;
-            document.getElementById('send-pedido-version').value = '';
-            document.getElementById('send-pedido-name').value = '';
-            document.getElementById('send-pedido-number').value = '';
-            document.getElementById('send-pedido-variant-fields').classList.remove('hidden');
-            renderSendPedidoPatchPreview();
             renderSendPedidoSheetList();
             document.getElementById('send-to-pedido-modal').classList.remove('hidden');
         };
@@ -2943,17 +3036,68 @@
         }
         window.chooseSendToPedidoSheet = function(sheetId) {
             sendToPedidoCtx.selectedSheetId = sheetId;
-            renderSendPedidoSheetList();
             const sheet = pOrders.sheets.find(s => s.id === sheetId);
-            document.getElementById('send-pedido-preview').innerHTML = renderSendPedidoPreview(sheet);
-            document.getElementById('send-pedido-details').classList.remove('hidden');
+            if (!sheet) return;
+            closeSendToPedidoModal();
+            document.getElementById('send-pedido-details-title').textContent = `📦 Enviar a "${sheet.name}"`;
+            document.getElementById('send-pedido-preview-summary').textContent = `Vista previa de "${sheet.name}" · ${sheet.rows.length} fila${sheet.rows.length === 1 ? '' : 's'}`;
+            document.getElementById('send-pedido-preview-chevron').textContent = '▾ Ver completa';
+            document.getElementById('send-pedido-preview-full').classList.add('hidden');
+            document.getElementById('send-pedido-preview-full').innerHTML = '';
+            document.getElementById('send-pedido-novariants').checked = false;
+            document.getElementById('send-pedido-version').value = '';
+            document.getElementById('send-pedido-name').value = '';
+            document.getElementById('send-pedido-number').value = '';
+            document.getElementById('send-pedido-variant-fields').classList.remove('hidden');
+            renderSendPedidoPatchPreview();
+            document.getElementById('send-to-pedido-details-modal').classList.remove('hidden');
         };
-        function renderSendPedidoPreview(sheet) {
-            const rows = sheet.rows.slice(-4);
-            return `<div class="text-[10px] text-zinc-500 uppercase mb-1">Vista previa de "${escapeHtml(sheet.name)}" · ${sheet.rows.length} fila${sheet.rows.length === 1 ? '' : 's'}</div>
-                <div class="flex gap-1.5 overflow-x-auto pb-1">
-                    ${rows.map(r => `<div class="shrink-0 w-10 h-12 bg-zinc-900 rounded border border-zinc-700 overflow-hidden flex items-center justify-center">${r.img && r.img.startsWith('data:image') ? `<img src="${r.img}" class="w-full h-full object-contain">` : '<span class="text-zinc-700 text-lg">＋</span>'}</div>`).join('')}
-                </div>`;
+        window.backToSendPedidoSheetList = function() {
+            document.getElementById('send-to-pedido-details-modal').classList.add('hidden');
+            renderSendPedidoSheetList();
+            document.getElementById('send-to-pedido-modal').classList.remove('hidden');
+        };
+        window.closeSendToPedidoDetailsModal = function() { document.getElementById('send-to-pedido-details-modal').classList.add('hidden'); };
+        window.toggleSendPedidoFullPreview = function() {
+            const box = document.getElementById('send-pedido-preview-full');
+            const isHidden = box.classList.contains('hidden');
+            if (isHidden) {
+                const sheet = pOrders.sheets.find(s => s.id === sendToPedidoCtx.selectedSheetId);
+                if (sheet) box.innerHTML = renderFullSheetPreviewTable(sheet);
+            }
+            box.classList.toggle('hidden');
+            document.getElementById('send-pedido-preview-chevron').textContent = isHidden ? '▴ Ocultar' : '▾ Ver completa';
+        };
+        // Vista previa COMPLETA y de solo lectura de una hoja en vivo (misma idea que viewPedidoDetail, pero sobre la hoja real, no un pedido archivado).
+        function renderFullSheetPreviewTable(sheet) {
+            if (!sheet.rows.length) return '<p class="text-zinc-500 text-xs p-3 bg-white">Esta hoja todavía no tiene ninguna fila.</p>';
+            const es = sheet.style === 'es';
+            const headerBg = es ? 'bg-emerald-800' : 'bg-yellow-200';
+            const headerText = es ? 'text-white' : 'text-gray-800';
+            const headerZh = es ? 'hidden' : 'text-gray-500';
+            const cols = getOrderedColumns(sheet);
+            const theadHtml = `<tr>` + cols.map(c => `<th class="border border-gray-300 ${headerBg} px-1.5 py-1 text-center">
+                    ${c.isCustom ? `<span class="font-bold ${headerText} text-[9px] uppercase">${escapeHtml(c.es)}</span>` : `
+                        <div class="text-[7px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
+                        <div class="font-bold ${headerText} text-[9px] uppercase">${c.es}</div>`}
+                </th>`).join('') + `</tr>`;
+            const rows = sheet.rows;
+            const tbodyHtml = rows.map((r, i) => {
+                const isFirst = i === 0, totalRows = rows.length;
+                const tds = cols.map(c => {
+                    if (c.isCustom) return `<td class="border border-gray-300 p-1 text-center">${escapeHtml((r.custom && r.custom[c.key]) || '')}</td>`;
+                    if (c.key === 'img' || c.key === 'patch') {
+                        const src = r[c.key];
+                        return `<td class="border border-gray-300 p-1 text-center">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-8 h-10 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
+                    }
+                    if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center whitespace-nowrap"><span class="font-bold uppercase">${escapeHtml(r.name || '')}</span>${r.number ? ' ' + escapeHtml(r.number) : ''}</td>`;
+                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle bg-white">${renderAddrCellInner(sheet)}</td>`; }
+                    if (c.key === 'priceTotal') { if (!isFirst) return ''; const total = rows.reduce((s, rr) => s + (parseFloat(rr.price) || 0), 0); return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-middle font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`; }
+                    return `<td class="border border-gray-300 p-1 text-center">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
+                }).join('');
+                return `<tr>${tds}</tr>`;
+            }).join('');
+            return `<table class="w-full border-collapse text-[9px] bg-white text-black"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table>`;
         }
         window.openSendToPedidoPatchPicker = function() {
             pickerMode = 'send-to-pedido-patch';
@@ -2990,7 +3134,7 @@
             };
             const src = sendToPedidoCtx.src;
             addOrderRowWithImage(src, sheetId, extra);
-            closeSendToPedidoModal();
+            closeSendToPedidoDetailsModal();
             const remove = confirm('Producto añadido al pedido ✔\n\n¿Quieres eliminarlo también de la Wishlist?\n\nAceptar = moverlo (se borra de la Wishlist)\nCancelar = mantenerlo también en la Wishlist');
             if (remove) {
                 const { wishlistColId, wishlistIndex } = sendToPedidoCtx;
@@ -3668,7 +3812,7 @@
                     renderSendPedidoPatchPreview();
                 }
                 closeLibraryPicker();
-                document.getElementById('send-to-pedido-modal').classList.remove('hidden');
+                document.getElementById('send-to-pedido-details-modal').classList.remove('hidden');
                 return;
             }
             const row = activeSheet().rows.find(r => r.id === pickerTargetRow);
