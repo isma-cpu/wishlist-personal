@@ -468,6 +468,20 @@
             if (chev) chev.textContent = collapsedGroups.has(groupId) ? '▸' : '▾';
         };
 
+        // Carpetas dentro de un bloque (agrupan colecciones ya existentes en el menú, sin moverlas de sitio en `db`).
+        let collapsedFolders = new Set();
+        try { collapsedFolders = new Set(JSON.parse(localStorage.getItem('wishlist_collapsed_folders') || '[]')); } catch (e) {}
+        function saveCollapsedFolders() { try { localStorage.setItem('wishlist_collapsed_folders', JSON.stringify([...collapsedFolders])); } catch (e) {} }
+        window.toggleFolderCollapsed = function(folderId, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            if (collapsedFolders.has(folderId)) collapsedFolders.delete(folderId); else collapsedFolders.add(folderId);
+            saveCollapsedFolders();
+            const ul = document.getElementById('folderlist-' + folderId);
+            const chev = document.getElementById('folderchev-' + folderId);
+            if (ul) ul.classList.toggle('hidden', collapsedFolders.has(folderId));
+            if (chev) chev.textContent = collapsedFolders.has(folderId) ? '▸' : '▾';
+        };
+
         // Añade bloques nuevos a estructuras ya guardadas SIN tocar el resto.
         (function ensureBlocks() {
             let changed = false;
@@ -502,6 +516,20 @@
                     { id: "sakura-sub-3", name: "Subcolección 3" }
                 ];
                 changed = true;
+            }
+
+            // Carpeta de menú "Camisetas" en PERSONAL, agrupando visualmente 4 colecciones ya existentes (no mueve ninguna foto).
+            const personal = structure.find(g => g.groupId === 'personal');
+            if (personal) {
+                if (!Array.isArray(personal.folders)) personal.folders = [];
+                if (!personal.folders.some(f => f.id === 'folder-camisetas')) {
+                    personal.folders.push({ id: 'folder-camisetas', name: 'Camisetas' });
+                    changed = true;
+                }
+                ['per-camisetas', 'per-cantantes', 'per-entreno', 'per-retro'].forEach(id => {
+                    const col = personal.collections.find(c => c.id === id);
+                    if (col && !col.folderId) { col.folderId = 'folder-camisetas'; changed = true; }
+                });
             }
 
             if (changed) { try { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); } catch(e) {} }
@@ -874,6 +902,22 @@
             e.stopPropagation(); e.preventDefault();
             e.currentTarget.classList.remove('sidebar-drag-over');
 
+            if (collectionDragSrc) {
+                const srcColId = collectionDragSrc.colId, groupId = collectionDragSrc.groupId;
+                collectionDragSrc = null;
+                if (srcColId === targetColId) return false;
+                const group = structure.find(g => g.groupId === groupId);
+                const target = group && group.collections.find(c => c.id === targetColId);
+                const srcIdx = group && group.collections.findIndex(c => c.id === srcColId);
+                if (!group || !target || srcIdx === -1) return false;
+                const [moved] = group.collections.splice(srcIdx, 1);
+                moved.folderId = target.folderId || null;
+                const targetIdx = group.collections.findIndex(c => c.id === targetColId);
+                group.collections.splice(targetIdx + 1, 0, moved);
+                saveStructure(); init();
+                return false;
+            }
+
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 handleFiles(e.dataTransfer.files, targetColId);
                 return false;
@@ -911,6 +955,13 @@
                 const group = structure.find(g => g.groupId === targetId);
                 const col = group.collections.find(c => c.id === extraId);
                 inputEl.value = col.name;
+            } else if (action === 'add-folder') {
+                titleEl.innerHTML = "📁 NUEVA CARPETA"; inputEl.placeholder = "Nombre de la carpeta...";
+            } else if (action === 'edit-folder') {
+                titleEl.innerHTML = "✏️ RENOMBRAR CARPETA";
+                const group = structure.find(g => g.groupId === targetId);
+                const folder = group.folders && group.folders.find(f => f.id === extraId);
+                inputEl.value = folder ? folder.name : "";
             } else if (action === 'add-subcollection') {
                 titleEl.innerHTML = "➕ NUEVA SUBCOLECCIÓN"; inputEl.placeholder = "Nombre de la subcolección...";
             } else if (action === 'edit-subcollection') {
@@ -977,6 +1028,19 @@
                     const col = group.collections.find(c => c.id === extraId);
                     col.name = val;
                     saveStructure(); init();
+                }
+            } else if (action === 'add-folder') {
+                if (val) {
+                    const group = structure.find(g => g.groupId === targetId);
+                    if (!Array.isArray(group.folders)) group.folders = [];
+                    group.folders.push({ id: 'folder-' + Date.now(), name: val });
+                    saveStructure(); init();
+                }
+            } else if (action === 'edit-folder') {
+                if (val) {
+                    const group = structure.find(g => g.groupId === targetId);
+                    const folder = group.folders && group.folders.find(f => f.id === extraId);
+                    if (folder) { folder.name = val; saveStructure(); init(); }
                 }
             } else if (action === 'add-subcollection') {
                 if(val) {
@@ -1249,35 +1313,9 @@
             }
         }
 
-        window.moveCollection = function(groupId, colId, direction, event) {
-            event.stopPropagation(); event.preventDefault();
-            const group = structure.find(g => g.groupId === groupId);
-            if (!group) return;
-            const index = group.collections.findIndex(c => c.id === colId);
-            if (index === -1) return;
-            const newIndex = index + direction;
-            if (newIndex < 0 || newIndex >= group.collections.length) return;
-            const temp = group.collections[index];
-            group.collections[index] = group.collections[newIndex];
-            group.collections[newIndex] = temp;
-            saveStructure(); init();
-        };
 
         window.addSubCollection = function(parentColId, event) {
             openInput('add-subcollection', parentColId, null, event);
-        };
-
-        // Reordenar bloques (grupos) enteros
-        window.moveGroup = function(groupId, direction, event) {
-            event.stopPropagation(); event.preventDefault();
-            const index = structure.findIndex(g => g.groupId === groupId);
-            if (index === -1) return;
-            const newIndex = index + direction;
-            if (newIndex < 0 || newIndex >= structure.length) return;
-            const temp = structure[index];
-            structure[index] = structure[newIndex];
-            structure[newIndex] = temp;
-            saveStructure(); init();
         };
 
         // Destacar / quitar destacado de una foto (estrella en la esquina)
@@ -1406,8 +1444,19 @@
             img.addEventListener('wheel', e => {
                 e.preventDefault(); e.stopPropagation();
                 const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-                zoom.scale = Math.min(6, Math.max(1, zoom.scale * factor));
-                if (zoom.scale === 1) { zoom.x = 0; zoom.y = 0; }
+                const newScale = Math.min(6, Math.max(1, zoom.scale * factor));
+                if (newScale === 1) {
+                    zoom.x = 0; zoom.y = 0;
+                } else {
+                    // Ancla el zoom al punto del cursor, no al centro de la imagen.
+                    const rect = img.getBoundingClientRect();
+                    const dx = e.clientX - (rect.left + rect.width / 2);
+                    const dy = e.clientY - (rect.top + rect.height / 2);
+                    const f = newScale / zoom.scale;
+                    zoom.x = zoom.x + dx * (1 - f);
+                    zoom.y = zoom.y + dy * (1 - f);
+                }
+                zoom.scale = newScale;
                 applyZoom();
             }, { passive: false });
 
@@ -1671,6 +1720,97 @@
             }
         });
 
+        // --- Carpetas de menú + reordenar arrastrando (grupos, carpetas y colecciones) ---
+        function buildCollectionLinkHTML(group, col) {
+            return `
+                <a href="#" id="link-${col.id}"
+                   ondragover="handleSidebarDragOver(event, '${col.id}')"
+                   ondragleave="handleSidebarDragLeave(event)"
+                   ondrop="handleSidebarDrop(event, '${col.id}')"
+                   onclick="showView('${col.id}'); return false;"
+                   class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-[#39FF14] hover:bg-zinc-900 rounded-full transition-all group select-none relative">
+                    <span class="flex items-center gap-1.5 min-w-0 pointer-events-none">
+                        <span draggable="true" ondragstart="collectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar o mover a otra carpeta">⠿</span>
+                        <span class="truncate">${col.name}</span>
+                    </span>
+                    <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
+                        <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
+                        <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
+                        <span id="badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
+                    </div>
+                </a>`;
+        }
+
+        let groupDragSrc = null;
+        window.groupDragStart = function(e, groupId) { groupDragSrc = groupId; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
+        window.groupDragOver = function(e) { if (groupDragSrc) e.preventDefault(); };
+        window.groupDrop = function(e, targetGroupId) {
+            e.preventDefault();
+            if (!groupDragSrc || groupDragSrc === targetGroupId) { groupDragSrc = null; return; }
+            const from = structure.findIndex(g => g.groupId === groupDragSrc);
+            const to = structure.findIndex(g => g.groupId === targetGroupId);
+            groupDragSrc = null;
+            if (from === -1 || to === -1) return;
+            const [moved] = structure.splice(from, 1);
+            structure.splice(to, 0, moved);
+            saveStructure(); init();
+        };
+
+        let folderDragSrc = null;
+        window.folderDragStart = function(e, groupId, folderId) { folderDragSrc = { groupId, folderId }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
+        window.folderDragOver = function(e) { if (folderDragSrc || collectionDragSrc) { e.preventDefault(); e.currentTarget.classList.add('sidebar-drag-over'); } };
+        window.folderDragLeave = function(e) { e.currentTarget.classList.remove('sidebar-drag-over'); };
+        window.folderDrop = function(e, groupId, targetFolderId) {
+            e.preventDefault(); e.stopPropagation();
+            e.currentTarget.classList.remove('sidebar-drag-over');
+            const group = structure.find(g => g.groupId === groupId);
+            if (!group) return;
+            if (collectionDragSrc) {
+                // Soltar una colección sobre la cabecera de una carpeta = moverla dentro de esa carpeta
+                const srcIdx = group.collections.findIndex(c => c.id === collectionDragSrc.colId);
+                collectionDragSrc = null;
+                if (srcIdx === -1) return;
+                const [moved] = group.collections.splice(srcIdx, 1);
+                moved.folderId = targetFolderId;
+                group.collections.push(moved);
+                saveStructure(); init();
+                return;
+            }
+            if (folderDragSrc && folderDragSrc.folderId !== targetFolderId) {
+                const from = group.folders.findIndex(f => f.id === folderDragSrc.folderId);
+                const to = group.folders.findIndex(f => f.id === targetFolderId);
+                folderDragSrc = null;
+                if (from === -1 || to === -1) return;
+                const [moved] = group.folders.splice(from, 1);
+                group.folders.splice(to, 0, moved);
+                saveStructure(); init();
+            }
+        };
+
+        let collectionDragSrc = null;
+        window.collectionDragStart = function(e, groupId, colId) { collectionDragSrc = { groupId, colId }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
+        window.groupListDragOver = function(e) { if (collectionDragSrc) e.preventDefault(); };
+        window.groupListDrop = function(e, groupId) {
+            if (!collectionDragSrc || e.target !== e.currentTarget) return;
+            e.preventDefault();
+            const group = structure.find(g => g.groupId === groupId);
+            const srcIdx = group && group.collections.findIndex(c => c.id === collectionDragSrc.colId);
+            collectionDragSrc = null;
+            if (!group || srcIdx === -1) return;
+            group.collections[srcIdx].folderId = null;
+            saveStructure(); init();
+        };
+
+        window.deleteFolder = function(groupId, folderId, event) {
+            if (event) event.stopPropagation();
+            const group = structure.find(g => g.groupId === groupId);
+            if (!group) return;
+            if (!confirm('¿Eliminar esta carpeta? Las colecciones que contiene NO se borran, solo salen de la carpeta.')) return;
+            group.collections.forEach(c => { if (c.folderId === folderId) c.folderId = null; });
+            group.folders = group.folders.filter(f => f.id !== folderId);
+            saveStructure(); init();
+        };
+
         // --- INICIALIZACIÓN INTERFAZ ---
         function init() {
             const sidebarNav = document.getElementById('sidebar-nav');
@@ -1686,40 +1826,51 @@
                 const isCollapsed = collapsedGroups.has(group.groupId);
                 const groupMenu = document.createElement('div');
                 groupMenu.innerHTML = `
-                    <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1 flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-widest mb-3 border-b border-zinc-800 pb-1 flex items-center justify-between gap-2" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
                         <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-[#39FF14] transition-colors" title="Minimizar / desplegar bloque">
                             <span id="groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.groupTitle}</span>
                         </button>
-                        <span class="flex items-center gap-1 shrink-0">
-                            <button onclick="moveGroup('${group.groupId}', -1, event)" class="text-zinc-600 hover:text-[#39FF14] text-sm leading-none p-0.5 transition-colors ${gi === 0 ? 'invisible' : ''}" title="Subir bloque">▲</button>
-                            <button onclick="moveGroup('${group.groupId}', 1, event)" class="text-zinc-600 hover:text-[#39FF14] text-sm leading-none p-0.5 transition-colors ${gi === structure.length - 1 ? 'invisible' : ''}" title="Bajar bloque">▼</button>
-                        </span>
+                        <span draggable="true" ondragstart="groupDragStart(event, '${group.groupId}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
                     </h3>`;
                 const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6" + (isCollapsed ? " hidden" : ""); ul.id = "grouplist-" + group.groupId;
+                ul.setAttribute('ondragover', 'groupListDragOver(event)');
+                ul.setAttribute('ondrop', `groupListDrop(event, '${group.groupId}')`);
+
+                const folders = Array.isArray(group.folders) ? group.folders : [];
+                folders.forEach(folder => {
+                    const isFolderCollapsed = collapsedFolders.has(folder.id);
+                    const children = group.collections.filter(c => c.folderId === folder.id);
+                    const childrenHTML = children.map(c => `<li>${buildCollectionLinkHTML(group, c)}</li>`).join('');
+                    const folderLi = document.createElement('li');
+                    folderLi.innerHTML = `
+                        <div ondragover="folderDragOver(event)" ondragleave="folderDragLeave(event)" ondrop="folderDrop(event, '${group.groupId}', '${folder.id}')"
+                             class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-full hover:bg-zinc-900 transition-all group select-none">
+                            <button onclick="toggleFolderCollapsed('${folder.id}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 text-sm font-bold text-zinc-300 hover:text-[#39FF14] transition-colors text-left">
+                                <span id="folderchev-${folder.id}" class="text-[10px] shrink-0">${isFolderCollapsed ? '▸' : '▾'}</span>
+                                <span class="shrink-0">📁</span>
+                                <span class="truncate">${folder.name}</span>
+                            </button>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <span draggable="true" ondragstart="folderDragStart(event, '${group.groupId}', '${folder.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity" title="Arrastra para reordenar la carpeta">⠿</span>
+                                <button onclick="openInput('edit-folder', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Renombrar carpeta">✏️</button>
+                                <button onclick="deleteFolder('${group.groupId}', '${folder.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar carpeta (las colecciones no se borran)">✕</button>
+                            </div>
+                        </div>
+                        <ul id="folderlist-${folder.id}" class="ml-5 mt-1 space-y-1 border-l border-zinc-800 pl-2 ${isFolderCollapsed ? 'hidden' : ''}">
+                            ${childrenHTML}
+                        </ul>`;
+                    ul.appendChild(folderLi);
+                });
+
+                const topLevelCols = group.collections.filter(c => !c.folderId || !folders.some(f => f.id === c.folderId));
+                topLevelCols.forEach(col => {
+                    const li = document.createElement('li');
+                    li.innerHTML = buildCollectionLinkHTML(group, col);
+                    ul.appendChild(li);
+                });
 
                 group.collections.forEach(col => {
-                    const li = document.createElement('li');
-                    
-                    li.innerHTML = `
-                        <a href="#" id="link-${col.id}" 
-                           ondragover="handleSidebarDragOver(event, '${col.id}')" 
-                           ondragleave="handleSidebarDragLeave(event)" 
-                           ondrop="handleSidebarDrop(event, '${col.id}')"
-                           onclick="showView('${col.id}'); return false;" 
-                           class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-[#39FF14] hover:bg-zinc-900 rounded-full transition-all group select-none relative">
-                            <span class="truncate pointer-events-none">${col.name}</span>
-                            <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
-                                <button onclick="openInput('edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
-                                <button onclick="deleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
-                                <button onclick="moveCollection('${group.groupId}', '${col.id}', -1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">▲</button>
-                                <button onclick="moveCollection('${group.groupId}', '${col.id}', 1, event)" class="text-zinc-600 hover:text-[#39FF14] text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">▼</button>
-                                <span id="badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full bg-zinc-900 text-zinc-600 group-hover:text-[#39FF14] ml-1 pointer-events-none">0</span>
-                            </div>
-                        </a>
-                    `;
-                    ul.appendChild(li);
-
                     const colSection = document.createElement('section');
                     colSection.id = `sec-${col.id}`;
                     colSection.className = "collection-section hidden p-4 -m-4 transition-all duration-300";
@@ -1783,8 +1934,10 @@
                     mainContent.appendChild(colSection);
                 });
 
-                const addLi = document.createElement('li'); addLi.className = "pt-2";
-                addLi.innerHTML = `<button onclick="openInput('add-collection', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-[#39FF14] transition-colors flex items-center gap-1 uppercase tracking-wider">➕ Añadir Colección</button>`;
+                const addLi = document.createElement('li'); addLi.className = "pt-2 flex flex-col gap-1";
+                addLi.innerHTML = `
+                    <button onclick="openInput('add-collection', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-[#39FF14] transition-colors flex items-center gap-1 uppercase tracking-wider">➕ Añadir Colección</button>
+                    <button onclick="openInput('add-folder', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-[#39FF14] transition-colors flex items-center gap-1 uppercase tracking-wider">📁 Nueva carpeta</button>`;
                 ul.appendChild(addLi);
                 groupMenu.appendChild(ul); sidebarNav.appendChild(groupMenu);
             });
@@ -2247,15 +2400,12 @@
                 const groupMenu = document.createElement('div');
                 const patchCls = group.isPatchGroup ? 'text-amber-500 border-amber-500/40' : 'text-zinc-600 border-zinc-800';
                 groupMenu.innerHTML = `
-                    <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-1 flex items-center justify-between gap-2">
+                    <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-1 flex items-center justify-between gap-2" ondragover="pGroupDragOver(event)" ondrop="pGroupDrop(event, '${group.groupId}')">
                         <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-sky-400 transition-colors" title="Minimizar / desplegar bloque">
                             <span id="p-groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.isPatchGroup ? '🛡️ ' : ''}${group.groupTitle}</span>
                         </button>
-                        <span class="flex items-center gap-1 shrink-0">
-                            <button onclick="pMoveGroup('${group.groupId}', -1, event)" class="text-zinc-600 hover:text-sky-400 text-sm leading-none p-0.5 transition-colors ${gi === 0 ? 'invisible' : ''}" title="Subir bloque">▲</button>
-                            <button onclick="pMoveGroup('${group.groupId}', 1, event)" class="text-zinc-600 hover:text-sky-400 text-sm leading-none p-0.5 transition-colors ${gi === pStructure.length - 1 ? 'invisible' : ''}" title="Bajar bloque">▼</button>
-                        </span>
+                        <span draggable="true" ondragstart="pGroupDragStart(event, '${group.groupId}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>
                     </h3>`;
                 const ul = document.createElement('ul'); ul.className = "space-y-1 mb-6" + (isCollapsed ? " hidden" : ""); ul.id = "p-grouplist-" + group.groupId;
 
@@ -2264,15 +2414,16 @@
                     const li = document.createElement('li');
                     li.innerHTML = `
                         <a href="#" id="p-link-${col.id}"
-                           ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${col.id}')"
+                           ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${group.groupId}', '${col.id}')"
                            onclick="pShowView('${col.id}'); return false;"
                            class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded-full transition-all group select-none relative">
-                            <span class="truncate pointer-events-none">${col.name}</span>
+                            <span class="flex items-center gap-1.5 min-w-0 pointer-events-none">
+                                <span draggable="true" ondragstart="pCollectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar">⠿</span>
+                                <span class="truncate">${col.name}</span>
+                            </span>
                             <div class="flex items-center gap-1 shrink-0 ml-2 pointer-events-auto">
                                 <button onclick="openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Editar Nombre">✏️</button>
                                 <button onclick="pDeleteCollection('${group.groupId}', '${col.id}', event)" class="text-red-500 hover:text-red-400 font-black text-xs p-0.5 leading-none opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar colección">✕</button>
-                                <button onclick="pMoveCollection('${group.groupId}', '${col.id}', -1, event)" class="text-zinc-600 hover:text-sky-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover arriba">▲</button>
-                                <button onclick="pMoveCollection('${group.groupId}', '${col.id}', 1, event)" class="text-zinc-600 hover:text-sky-400 text-xs p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" title="Mover abajo">▼</button>
                                 <span id="p-badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
                             </div>
                         </a>`;
@@ -2303,23 +2454,6 @@
             pRenderLibraryBody();
         };
 
-        window.pMoveGroup = function(groupId, dir, event) {
-            if (event) { event.stopPropagation(); event.preventDefault(); }
-            const i = pStructure.findIndex(g => g.groupId === groupId); const j = i + dir;
-            if (i === -1 || j < 0 || j >= pStructure.length) return;
-            const t = pStructure[i]; pStructure[i] = pStructure[j]; pStructure[j] = t;
-            pSaveStructure(); pInit();
-        };
-
-        window.pMoveCollection = function(groupId, colId, dir, event) {
-            if (event) { event.stopPropagation(); event.preventDefault(); }
-            const g = pStructure.find(x => x.groupId === groupId); if (!g) return;
-            const i = g.collections.findIndex(c => c.id === colId); const j = i + dir;
-            if (i === -1 || j < 0 || j >= g.collections.length) return;
-            const t = g.collections[i]; g.collections[i] = g.collections[j]; g.collections[j] = t;
-            pSaveStructure(); pInit();
-        };
-
         window.pAddSubCollection = function(parentColId, event) { openInput('p-add-subcollection', parentColId, null, event); };
 
         window.pDeleteSubCollection = function(parentColId, subId, event) {
@@ -2348,13 +2482,44 @@
             pSaveStructure(); pSaveDB(); pInit();
         };
 
-        window.pSidebarDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); e.currentTarget.classList.add('sidebar-drag-over'); } };
+        window.pSidebarDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer) || pCollectionDragSrc) { e.preventDefault(); e.currentTarget.classList.add('sidebar-drag-over'); } };
         window.pSidebarDragLeave = function(e) { e.currentTarget.classList.remove('sidebar-drag-over'); };
-        window.pSidebarDrop = function(e, colId) {
+        window.pSidebarDrop = function(e, groupId, colId) {
             e.stopPropagation(); e.preventDefault();
             e.currentTarget.classList.remove('sidebar-drag-over');
+            if (pCollectionDragSrc) {
+                const srcColId = pCollectionDragSrc.colId;
+                pCollectionDragSrc = null;
+                if (srcColId === colId) return;
+                const group = pStructure.find(g => g.groupId === groupId);
+                const srcIdx = group && group.collections.findIndex(c => c.id === srcColId);
+                if (!group || srcIdx === -1) return;
+                const [moved] = group.collections.splice(srcIdx, 1);
+                const targetIdx = group.collections.findIndex(c => c.id === colId);
+                group.collections.splice(targetIdx + 1, 0, moved);
+                pSaveStructure(); pInit();
+                return;
+            }
             if (dtHasDroppableImage(e.dataTransfer)) pAddDroppedImages(e.dataTransfer, colId);
         };
+
+        // --- Reordenar bloques y colecciones de la biblioteca de Crear Pedido arrastrando ---
+        let pGroupDragSrc = null;
+        window.pGroupDragStart = function(e, groupId) { pGroupDragSrc = groupId; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
+        window.pGroupDragOver = function(e) { if (pGroupDragSrc) e.preventDefault(); };
+        window.pGroupDrop = function(e, targetGroupId) {
+            e.preventDefault();
+            if (!pGroupDragSrc || pGroupDragSrc === targetGroupId) { pGroupDragSrc = null; return; }
+            const from = pStructure.findIndex(g => g.groupId === pGroupDragSrc);
+            const to = pStructure.findIndex(g => g.groupId === targetGroupId);
+            pGroupDragSrc = null;
+            if (from === -1 || to === -1) return;
+            const [moved] = pStructure.splice(from, 1);
+            pStructure.splice(to, 0, moved);
+            pSaveStructure(); pInit();
+        };
+        let pCollectionDragSrc = null;
+        window.pCollectionDragStart = function(e, groupId, colId) { pCollectionDragSrc = { groupId, colId }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
 
         window.toggleLibraryCollapsed = function() {
             const body = document.getElementById('p-lib-body');
@@ -2553,9 +2718,20 @@
             const img = document.getElementById('p-modal-img'); if (!img) return;
             img.addEventListener('wheel', e => {
                 e.preventDefault(); e.stopPropagation();
-                const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-                pZoom.scale = Math.min(6, Math.max(1, pZoom.scale * f));
-                if (pZoom.scale === 1) { pZoom.x = 0; pZoom.y = 0; }
+                const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+                const newScale = Math.min(6, Math.max(1, pZoom.scale * factor));
+                if (newScale === 1) {
+                    pZoom.x = 0; pZoom.y = 0;
+                } else {
+                    // Ancla el zoom al punto del cursor, no al centro de la imagen.
+                    const rect = img.getBoundingClientRect();
+                    const dx = e.clientX - (rect.left + rect.width / 2);
+                    const dy = e.clientY - (rect.top + rect.height / 2);
+                    const f = newScale / pZoom.scale;
+                    pZoom.x = pZoom.x + dx * (1 - f);
+                    pZoom.y = pZoom.y + dy * (1 - f);
+                }
+                pZoom.scale = newScale;
                 pApplyZoom();
             }, { passive: false });
             img.addEventListener('dblclick', e => { e.stopPropagation(); pResetZoom(); });
