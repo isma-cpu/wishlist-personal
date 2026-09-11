@@ -220,7 +220,7 @@
                     <div class="flex flex-wrap gap-2">
                         <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
                         <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 font-mono text-[11px] font-bold uppercase rounded hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
-                        <button onclick="printOrder()" class="px-3 py-1.5 border border-emerald-600 bg-emerald-600 text-white font-mono text-[11px] font-bold uppercase rounded hover:bg-emerald-500 transition-colors cursor-pointer">🖨️ Descargar PDF</button>
+                        <button onclick="printOrder(event)" class="px-3 py-1.5 border border-emerald-600 bg-emerald-600 text-white font-mono text-[11px] font-bold uppercase rounded hover:bg-emerald-500 transition-colors cursor-pointer">🖨️ Descargar PDF</button>
                     </div>
                 </div>
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
@@ -2958,7 +2958,76 @@
             closeAddressModal();
         };
 
-        window.printOrder = function() { window.print(); };
+        // --- Descargar PDF: lo generamos nosotros mismos (html2canvas + jsPDF) ---
+        // Así el PDF sale SIEMPRE en horizontal, con colores, tal cual se ve en pantalla,
+        // sin depender de cómo cada navegador/impresora interprete la orientación de impresión.
+        function loadScriptOnce(src) {
+            return new Promise((resolve, reject) => {
+                if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
+                const s = document.createElement('script');
+                s.src = src;
+                s.onload = () => resolve();
+                s.onerror = () => reject(new Error('No se pudo cargar ' + src));
+                document.head.appendChild(s);
+            });
+        }
+        async function ensurePdfLibs() {
+            if (!window.html2canvas) await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+            if (!window.jspdf) await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+        }
+
+        window.printOrder = async function(event) {
+            const btn = event && event.target && event.target.closest ? event.target.closest('button') : null;
+            const btnOriginal = btn ? btn.innerHTML : null;
+            if (btn) btn.innerHTML = '⏳ Generando PDF...';
+            try {
+                await ensurePdfLibs();
+                const table = document.getElementById('order-table');
+
+                const canvas = await html2canvas(table, {
+                    scale: 2,
+                    backgroundColor: '#ffffff',
+                    width: table.scrollWidth,
+                    height: table.scrollHeight,
+                    windowWidth: table.scrollWidth,
+                    onclone: (clonedDoc) => {
+                        // Ocultamos en la captura los botones/tiradores que no deben salir en el PDF
+                        clonedDoc.querySelectorAll('[class*="print:hidden"]').forEach(el => { el.style.display = 'none'; });
+                    }
+                });
+
+                const { jsPDF } = window.jspdf;
+                const pageW = 297, pageH = 210; // A4 horizontal, en mm
+                const margin = 8;
+                const usableW = pageW - margin * 2;
+                const usableH = pageH - margin * 2;
+                const pxPerMm = canvas.width / usableW;
+                const pageHeightPx = Math.floor(usableH * pxPerMm);
+
+                const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+                let y = 0, first = true;
+                while (y < canvas.height) {
+                    const sliceH = Math.min(pageHeightPx, canvas.height - y);
+                    const pageCanvas = document.createElement('canvas');
+                    pageCanvas.width = canvas.width;
+                    pageCanvas.height = sliceH;
+                    pageCanvas.getContext('2d').drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+                    if (!first) pdf.addPage('a4', 'landscape');
+                    pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', margin, margin, usableW, sliceH / pxPerMm);
+                    y += sliceH;
+                    first = false;
+                }
+
+                const fecha = new Date().toISOString().split('T')[0];
+                const nombreHoja = (activeSheet().name || 'pedido').replace(/[^a-z0-9]+/gi, '_');
+                pdf.save(`pedido_${nombreHoja}_${fecha}.pdf`);
+            } catch (err) {
+                console.error('Error generando el PDF:', err);
+                alert('No se pudo generar el PDF. Comprueba tu conexión a internet (se necesita para cargar la herramienta la primera vez) e inténtalo de nuevo.');
+            } finally {
+                if (btn) btn.innerHTML = btnOriginal;
+            }
+        };
 
         window.onload = async function() {
             await loadDB();
