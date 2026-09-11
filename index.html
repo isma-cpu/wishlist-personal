@@ -191,16 +191,6 @@
                 <p class="text-xs text-zinc-500 tracking-widest uppercase">Equipos y selecciones</p>
             </div>
 
-            <div class="mb-6 grid grid-cols-2 gap-2">
-                <button onclick="pExportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 text-[10px] uppercase rounded-full hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guarda Wishlist, la biblioteca de Crear Pedido y los Pedidos guardados, todo en un archivo">
-                    <span>💾</span><span>Descargar JSON</span>
-                </button>
-                <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 text-[10px] uppercase rounded-full hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar biblioteca desde copia JSON">
-                    <span>📂</span><span>Cargar JSON</span>
-                    <input type="file" accept=".json" class="hidden" id="p-import-input" onchange="pImportBackupJSON(event)">
-                </label>
-            </div>
-
             <nav id="pedido-sidebar-nav" class="space-y-8 flex-1"></nav>
         </aside>
 
@@ -2839,28 +2829,6 @@
             e.dataTransfer.effectAllowed = 'copy';
         };
         window.pDragEndCard = function() { libraryDragSrc = null; };
-
-        // --- Copia de seguridad JSON: mismo archivo completo (Wishlist + biblioteca + Pedidos) que el botón de la pestaña Wishlist ---
-        window.pExportBackupJSON = function() { exportBackupJSON(); };
-        window.pImportBackupJSON = function(event) {
-            const file = event.target.files[0]; if (!file) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    if (confirm('⚠️ ¿Quieres restaurar esta copia de seguridad? Se reemplazarán los datos actuales.')) {
-                        if (!(await tryRestoreFullBackup(imported))) {
-                            pDb = imported; // copia antigua: solo contenía la biblioteca
-                            await pSaveDB();
-                        }
-                        alert('✅ ¡Datos cargados con éxito!');
-                        location.reload();
-                    }
-                } catch (err) { alert('❌ Archivo de copia no válido.'); }
-                document.getElementById('p-import-input').value = "";
-            };
-            reader.readAsText(file);
-        };
 
         // --- Enviar foto Wishlist <-> Pedido ---
         let sendContext = { direction: null, src: null };
