@@ -37,6 +37,13 @@
         .selected-card::after { content: '✓'; position: absolute; top: 10px; right: 10px; background: #39FF14; color: black; font-weight: bold; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; z-index: 30; }
         
         .section-drop-active { background-color: rgba(57, 255, 20, 0.05); border: 2px dashed #39FF14; border-radius: 1rem; }
+
+        #order-tbody tr:nth-child(even) td { background-color: #f9fafb; }
+
+        @media print {
+            @page { size: landscape; margin: 10mm; }
+            html, body { background: #fff !important; }
+        }
     </style>
 </head>
 <body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
@@ -210,10 +217,12 @@
                         <button onclick="printOrder()" class="px-3 py-1.5 border border-emerald-600 bg-emerald-600 text-white font-mono text-[11px] font-bold uppercase rounded hover:bg-emerald-500 transition-colors cursor-pointer">🖨️ Descargar PDF</button>
                     </div>
                 </div>
-                <div class="overflow-x-auto">
+                <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
+                <div class="overflow-x-auto print:overflow-visible">
                     <table id="order-table" class="w-full border-collapse text-xs">
                         <thead id="order-thead"></thead>
                         <tbody id="order-tbody"></tbody>
+                        <tfoot id="order-tfoot"></tfoot>
                     </table>
                 </div>
                 <button onclick="addOrderRow()" class="w-full py-3 text-center text-gray-400 hover:text-black hover:bg-gray-50 font-mono text-xs uppercase tracking-widest transition-colors cursor-pointer print:hidden border-t border-gray-200">➕ Añadir producto</button>
@@ -231,6 +240,7 @@
             </div>
             <div class="flex flex-wrap justify-center gap-4" onclick="event.stopPropagation()">
                 <button onclick="openSendModal('p2w', event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black">⭐ Enviar a Wishlist</button>
+                <button id="p-modal-addrow-btn" onclick="addLibraryPhotoToOrder(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black">🛒 Añadir a fila del pedido</button>
                 <button onclick="pDeleteCurrentModalImage(event)" class="px-4 sm:px-5 py-2.5 rounded-lg font-mono text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-red-500 text-red-400 hover:bg-red-500 hover:text-white">✕ Eliminar</button>
             </div>
         </div>
@@ -783,6 +793,10 @@
                 inputEl.value = sub ? sub.name : "";
             } else if (action === 'add-order-column') {
                 titleEl.innerHTML = "➕ NUEVA COLUMNA"; inputEl.placeholder = "Ej: Talla EU, Color...";
+            } else if (action === 'rename-order-sheet') {
+                titleEl.innerHTML = "✏️ RENOMBRAR HOJA";
+                const sheet = pOrders.sheets.find(s => s.id === targetId);
+                inputEl.value = sheet ? sheet.name : "";
             }
 
             modal.classList.remove('hidden');
@@ -872,6 +886,11 @@
                 }
             } else if (action === 'add-order-column') {
                 if (val) addOrderColumnNamed(val);
+            } else if (action === 'rename-order-sheet') {
+                if (val) {
+                    const sheet = pOrders.sheets.find(s => s.id === targetId);
+                    if (sheet) { sheet.name = val; savePOrders(); renderOrderSheetsBar(); }
+                }
             }
             closeCustomInput();
         };
@@ -2402,9 +2421,13 @@
         window.openSendModal = function(direction, event) {
             if (event) event.stopPropagation();
             let src = null;
-            if (direction === 'w2p') { const it = getModalItem(); if (!it) return; src = it.src; }
-            else { const it = pDb[pModalContext.colId] && pDb[pModalContext.colId][pModalContext.index]; if (!it) return; src = it.src; }
-            sendContext = { direction, src };
+            if (direction === 'w2p') {
+                const it = getModalItem(); if (!it) return; src = it.src;
+                sendContext = { direction, src, wishlistColId: modalContext.colId, wishlistIndex: modalContext.index };
+            } else {
+                const it = pDb[pModalContext.colId] && pDb[pModalContext.colId][pModalContext.index]; if (!it) return; src = it.src;
+                sendContext = { direction, src };
+            }
             const targetStruct = direction === 'w2p' ? pStructure : structure;
             document.getElementById('send-modal-title').textContent = direction === 'w2p' ? '📦 Enviar a Pedido...' : '⭐ Enviar a Wishlist...';
             const list = document.getElementById('send-modal-list');
@@ -2437,13 +2460,39 @@
                 if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
                 pDb[targetColId].unshift({ src: sendContext.src, timestamp: Date.now() });
                 pSaveDB();
+                addOrderRowWithImage(sendContext.src);
+                closeSendModal();
+
+                const remove = confirm('Foto enviada a Pedido ✔ (y añadida como fila nueva en la hoja de pedido activa).\n\n¿Quieres eliminarla también de la Wishlist?\n\nAceptar = moverla (se borra de la Wishlist)\nCancelar = mantenerla también en la Wishlist');
+                if (remove) {
+                    const { wishlistColId, wishlistIndex } = sendContext;
+                    const arr = wishlistColId != null ? db[wishlistColId] : null;
+                    if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === sendContext.src) {
+                        arr.splice(wishlistIndex, 1);
+                        saveDB();
+                    }
+                    closeModal();
+                }
             } else {
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
                 db[targetColId].unshift({ src: sendContext.src, timestamp: Date.now(), nameNumber: "", patch: "" });
                 saveDB();
+                closeSendModal();
             }
-            closeSendModal();
         }
+
+        window.addLibraryPhotoToOrder = function(event) {
+            if (event) event.stopPropagation();
+            const item = pDb[pModalContext.colId] && pDb[pModalContext.colId][pModalContext.index];
+            if (!item) return;
+            addOrderRowWithImage(item.src);
+            const btn = document.getElementById('p-modal-addrow-btn');
+            if (btn) {
+                const original = btn.innerHTML;
+                btn.innerHTML = '✔ Añadida al pedido';
+                setTimeout(() => { btn.innerHTML = original; }, 1600);
+            }
+        };
 
         // ============================================================
         // =================  TABLA / PLANTILLA DE PEDIDO  ============
@@ -2462,18 +2511,75 @@
             { key: 'address', zh: '送货地址', es: 'Dirección de envío', type: 'address' }
         ];
 
-        let pOrder = { customColumns: [], rows: [] };
+        // --- Varias "hojas" de pedido (como pestañas de Excel) ---
+        let pOrders = { sheets: [], activeSheetId: null };
+        function activeSheet() { return pOrders.sheets.find(s => s.id === pOrders.activeSheetId) || pOrders.sheets[0]; }
+        function newSheet(name) {
+            return { id: 'sheet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), name: name || ('Pedido ' + (pOrders.sheets.length + 1)), customColumns: [], rows: [] };
+        }
 
         async function loadPOrder() {
-            try { pOrder = (await localforage.getItem('pedido_order_v1')) || { customColumns: [], rows: [] }; }
-            catch (e) { pOrder = { customColumns: [], rows: [] }; }
-            if (!Array.isArray(pOrder.rows)) pOrder.rows = [];
-            if (!Array.isArray(pOrder.customColumns)) pOrder.customColumns = [];
-            if (!pOrder.rows.length) pOrder.rows.push(newOrderRow());
+            try {
+                const stored = await localforage.getItem('pedido_orders_v2');
+                if (stored && Array.isArray(stored.sheets) && stored.sheets.length) {
+                    pOrders = stored;
+                } else {
+                    // Migración desde la versión de una sola hoja (sin perder datos)
+                    let legacy = null;
+                    try { legacy = await localforage.getItem('pedido_order_v1'); } catch (e) {}
+                    const sheet = newSheet('Pedido 1');
+                    if (legacy && (Array.isArray(legacy.rows) || Array.isArray(legacy.customColumns))) {
+                        sheet.rows = Array.isArray(legacy.rows) ? legacy.rows : [];
+                        sheet.customColumns = Array.isArray(legacy.customColumns) ? legacy.customColumns : [];
+                    }
+                    pOrders = { sheets: [sheet], activeSheetId: sheet.id };
+                }
+            } catch (e) {
+                const sheet = newSheet('Pedido 1');
+                pOrders = { sheets: [sheet], activeSheetId: sheet.id };
+            }
+            if (!pOrders.sheets.length) { const s = newSheet('Pedido 1'); pOrders.sheets.push(s); pOrders.activeSheetId = s.id; }
+            if (!pOrders.activeSheetId || !pOrders.sheets.some(s => s.id === pOrders.activeSheetId)) pOrders.activeSheetId = pOrders.sheets[0].id;
+            pOrders.sheets.forEach(s => {
+                if (!Array.isArray(s.rows)) s.rows = [];
+                if (!Array.isArray(s.customColumns)) s.customColumns = [];
+            });
+            const as = activeSheet();
+            if (!as.rows.length) as.rows.push(newOrderRow());
+            renderOrderSheetsBar();
             renderOrderTable();
-            savePOrderTable();
+            savePOrders();
         }
-        async function savePOrderTable() { try { await localforage.setItem('pedido_order_v1', pOrder); } catch (e) {} }
+        async function savePOrders() { try { await localforage.setItem('pedido_orders_v2', pOrders); } catch (e) {} }
+
+        function renderOrderSheetsBar() {
+            const bar = document.getElementById('order-sheets-bar');
+            bar.innerHTML = pOrders.sheets.map(s => `
+                <div class="flex items-center gap-1 shrink-0 ${s.id === pOrders.activeSheetId ? '' : 'opacity-70'}">
+                    <button onclick="switchOrderSheet('${s.id}')" class="px-3 py-1.5 rounded-t-md text-xs font-mono font-bold uppercase border border-b-0 transition-colors ${s.id === pOrders.activeSheetId ? 'bg-white text-black border-gray-300' : 'bg-gray-200 text-gray-500 border-gray-200 hover:bg-gray-100'}">${escapeHtml(s.name)}</button>
+                    <button onclick="renameOrderSheet('${s.id}', event)" class="text-gray-400 hover:text-black text-xs px-0.5" title="Renombrar hoja">✏️</button>
+                    ${pOrders.sheets.length > 1 ? `<button onclick="deleteOrderSheet('${s.id}', event)" class="text-gray-400 hover:text-red-500 text-xs px-0.5" title="Eliminar hoja">✕</button>` : ''}
+                </div>`).join('') + `<button onclick="addOrderSheet()" class="px-3 py-1.5 rounded-t-md text-xs font-mono font-bold uppercase border border-b-0 border-dashed border-gray-300 text-gray-400 hover:text-black hover:border-black shrink-0">➕ Hoja</button>`;
+        }
+        window.addOrderSheet = function() {
+            const s = newSheet();
+            s.rows.push(newOrderRow());
+            pOrders.sheets.push(s); pOrders.activeSheetId = s.id;
+            savePOrders(); renderOrderSheetsBar(); renderOrderTable();
+        };
+        window.switchOrderSheet = function(id) {
+            pOrders.activeSheetId = id;
+            savePOrders(); renderOrderSheetsBar(); renderOrderTable();
+        };
+        window.renameOrderSheet = function(id, event) { if (event) event.stopPropagation(); openInput('rename-order-sheet', id, null, event); };
+        window.deleteOrderSheet = function(id, event) {
+            if (event) event.stopPropagation();
+            if (pOrders.sheets.length <= 1) return;
+            if (!confirm('¿Eliminar esta hoja de pedido y todas sus filas? Esta acción no se puede deshacer.')) return;
+            pOrders.sheets = pOrders.sheets.filter(s => s.id !== id);
+            if (pOrders.activeSheetId === id) pOrders.activeSheetId = pOrders.sheets[0].id;
+            savePOrders(); renderOrderSheetsBar(); renderOrderTable();
+        };
 
         function newOrderRow() {
             return {
@@ -2482,26 +2588,36 @@
                 address: { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' }, custom: {}
             };
         }
-        window.addOrderRow = function() { pOrder.rows.push(newOrderRow()); savePOrderTable(); renderOrderTable(); };
+        window.addOrderRow = function() { activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
+        // Añade una fila nueva con la foto ya puesta (usado al "Enviar a Pedido" / "Añadir a fila del pedido")
+        function addOrderRowWithImage(src) {
+            const row = newOrderRow();
+            row.img = src;
+            activeSheet().rows.push(row);
+            savePOrders();
+            if (!document.getElementById('view-pedido').classList.contains('hidden')) { renderOrderSheetsBar(); renderOrderTable(); }
+        }
         window.deleteOrderRow = function(rowId) {
             if (!confirm('¿Eliminar esta fila del pedido?')) return;
-            pOrder.rows = pOrder.rows.filter(r => r.id !== rowId);
-            if (!pOrder.rows.length) pOrder.rows.push(newOrderRow());
-            savePOrderTable(); renderOrderTable();
+            const sheet = activeSheet();
+            sheet.rows = sheet.rows.filter(r => r.id !== rowId);
+            if (!sheet.rows.length) sheet.rows.push(newOrderRow());
+            savePOrders(); renderOrderTable();
         };
         function addOrderColumnNamed(name) {
-            pOrder.customColumns.push({ id: 'col-' + Date.now(), label: name });
-            savePOrderTable(); renderOrderTable();
+            activeSheet().customColumns.push({ id: 'col-' + Date.now(), label: name });
+            savePOrders(); renderOrderTable();
         }
         window.deleteOrderColumn = function(colId) {
             if (!confirm('¿Eliminar esta columna?')) return;
-            pOrder.customColumns = pOrder.customColumns.filter(c => c.id !== colId);
-            pOrder.rows.forEach(r => { delete r.custom[colId]; });
-            savePOrderTable(); renderOrderTable();
+            const sheet = activeSheet();
+            sheet.customColumns = sheet.customColumns.filter(c => c.id !== colId);
+            sheet.rows.forEach(r => { delete r.custom[colId]; });
+            savePOrders(); renderOrderTable();
         };
 
         window.updateOrderField = function(rowId, field, value) {
-            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
             row[field] = value;
             if (field === 'price') row.priceManual = true;
             if ((field === 'qty' || field === 'unitPrice') && !row.priceManual) {
@@ -2512,17 +2628,18 @@
                     if (priceEl) priceEl.value = row.price;
                 }
             }
-            savePOrderTable();
+            if (field === 'price' || field === 'qty' || field === 'unitPrice') renderOrderFooter(activeSheet());
+            savePOrders();
         };
         window.updateOrderCustomField = function(rowId, colId, value) {
-            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
             row.custom[colId] = value;
-            savePOrderTable();
+            savePOrders();
         };
 
         function renderImgCellInner(row) {
             if (row.img) {
-                return `<div class="relative group w-16 h-20">
+                return `<div class="relative group w-16 h-20 mx-auto">
                     <img src="${row.img}" class="w-16 h-20 object-cover rounded border border-gray-300">
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded gap-1">
                         <button onclick="openLibraryPicker('${row.id}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
@@ -2531,7 +2648,7 @@
                 </div>`;
             }
             return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}')" onclick="openLibraryPicker('${row.id}')"
-                    class="w-16 h-20 border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
+                    class="w-16 h-20 mx-auto border border-dashed border-gray-300 rounded flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
                     <span class="text-lg leading-none">＋</span>Foto
                 </div>`;
         }
@@ -2541,57 +2658,74 @@
             const has = a.dest || a.dir || a.cp || a.ciudad || a.prov || a.pais || a.tel;
             if (!has) return `<button onclick="openAddressModal('${row.id}')" class="text-[10px] font-mono uppercase text-gray-400 border border-dashed border-gray-300 rounded px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
             const line = (label, val) => val ? `<div><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
-            return `<div class="text-[10px] leading-snug text-gray-800 min-w-[9rem]">
+            return `<div class="text-[10px] leading-snug text-gray-800 min-w-[9rem] text-center">
                     ${line('Destinatario', a.dest)}${line('Dirección', a.dir)}${line('C.P.', a.cp)}${line('Ciudad', a.ciudad)}${line('Provincia', a.prov)}${line('País', a.pais)}${line('Tel', a.tel)}
                     <button onclick="openAddressModal('${row.id}')" class="text-sky-500 hover:text-sky-700 text-[10px] font-mono uppercase mt-1 print:hidden">✎ Editar</button>
                 </div>`;
         }
 
         function renderOrderRowHTML(row) {
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[4rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[6rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="w-full min-w-[6rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 font-bold uppercase print:border-0" id="cell-name-${row.id}">`;
 
             const tds = ORDER_BASE_COLS.map(c => {
-                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-top">${renderImgCellInner(row)}</td>`;
-                if (c.key === 'address') return `<td id="cell-addr-${row.id}" class="border border-gray-300 p-2 align-top">${renderAddrCellInner(row)}</td>`;
-                if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-top">${nameCell}</td>`;
-                if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-top">${numCell(c.key)}</td>`;
-                return `<td class="border border-gray-300 p-1 align-top">${textCell(c.key)}</td>`;
+                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row)}</td>`;
+                if (c.key === 'address') return `<td id="cell-addr-${row.id}" class="border border-gray-300 p-2 align-middle text-center">${renderAddrCellInner(row)}</td>`;
+                if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-middle text-center">${nameCell}</td>`;
+                if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
+                return `<td class="border border-gray-300 p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
 
-            const tdsCustom = pOrder.customColumns.map(c => `
-                <td class="border border-gray-300 p-1 align-top">
-                    <input type="text" value="${escAttr(row.custom[c.id] || '')}" oninput="updateOrderCustomField('${row.id}','${c.id}',this.value)" class="w-full min-w-[4rem] bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
+            const tdsCustom = activeSheet().customColumns.map(c => `
+                <td class="border border-gray-300 p-1 align-middle text-center">
+                    <input type="text" value="${escAttr(row.custom[c.id] || '')}" oninput="updateOrderCustomField('${row.id}','${c.id}',this.value)" class="w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded px-1 py-1 text-gray-900 print:border-0">
                 </td>`).join('');
 
-            return `<tr>${tds}${tdsCustom}<td class="border border-gray-300 p-1 text-center align-top print:hidden">
+            return `<tr>${tds}${tdsCustom}<td class="border border-gray-300 p-1 text-center align-middle print:hidden">
                     <button onclick="deleteOrderRow('${row.id}')" class="text-gray-300 hover:text-red-500 text-sm" title="Eliminar fila">✕</button>
                 </td></tr>`;
         }
 
         function renderOrderTable() {
+            const sheet = activeSheet();
             const thead = document.getElementById('order-thead');
             const tbody = document.getElementById('order-tbody');
             const thBase = ORDER_BASE_COLS.map(c => `
-                <th class="border border-gray-300 bg-white px-2 py-2 text-left align-bottom">
+                <th class="border border-gray-300 bg-white px-2 py-2 text-center align-bottom">
                     <div class="text-[9px] text-gray-400 leading-none mb-0.5">${c.zh}</div>
                     <div class="font-bold text-gray-800 text-[11px] leading-tight">${c.es}</div>
                 </th>`).join('');
-            const thCustom = pOrder.customColumns.map(c => `
-                <th class="border border-gray-300 bg-white px-2 py-2 text-left align-bottom">
-                    <div class="flex items-center gap-1">
+            const thCustom = sheet.customColumns.map(c => `
+                <th class="border border-gray-300 bg-white px-2 py-2 text-center align-bottom">
+                    <div class="flex items-center justify-center gap-1">
                         <span class="font-bold text-gray-800 text-[11px]">${escapeHtml(c.label)}</span>
                         <button onclick="deleteOrderColumn('${c.id}')" class="text-gray-300 hover:text-red-500 text-xs print:hidden" title="Eliminar columna">✕</button>
                     </div>
                 </th>`).join('');
             thead.innerHTML = `<tr>${thBase}${thCustom}<th class="border border-gray-300 bg-white px-2 py-2 print:hidden"></th></tr>`;
-            tbody.innerHTML = pOrder.rows.map(renderOrderRowHTML).join('');
+            tbody.innerHTML = sheet.rows.map(renderOrderRowHTML).join('');
+            renderOrderFooter(sheet);
+        }
+
+        function formatMoney(n) { return (Math.round((n || 0) * 100) / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+        function renderOrderFooter(sheet) {
+            const tfoot = document.getElementById('order-tfoot');
+            if (!tfoot) return;
+            const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
+            const cells = ORDER_BASE_COLS.map(c => {
+                if (c.key === 'version') return `<td class="border border-gray-300 bg-gray-100 px-2 py-2 text-center font-bold text-gray-500 text-[10px] uppercase">总价<br>Total</td>`;
+                if (c.key === 'price') return `<td class="border border-gray-300 bg-gray-100 px-2 py-2 text-center font-black text-gray-900 text-xs">${formatMoney(total)} €</td>`;
+                return `<td class="border border-gray-300 bg-gray-100"></td>`;
+            }).join('');
+            const customCells = sheet.customColumns.map(() => `<td class="border border-gray-300 bg-gray-100"></td>`).join('');
+            tfoot.innerHTML = `<tr>${cells}${customCells}<td class="border border-gray-300 bg-gray-100 print:hidden"></td></tr>`;
         }
 
         window.clearOrderRowImage = function(rowId) {
-            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
-            row.img = ''; savePOrderTable();
+            const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
+            row.img = ''; savePOrders();
             const cell = document.getElementById('cell-img-' + rowId);
             if (cell) cell.innerHTML = renderImgCellInner(row);
         };
@@ -2602,17 +2736,17 @@
             e.preventDefault(); e.stopPropagation();
             const cellEl = document.getElementById('cell-img-' + rowId);
             if (cellEl) cellEl.querySelectorAll('.ring-2').forEach(el => el.classList.remove('ring-2', 'ring-sky-400'));
-            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
 
             if (libraryDragSrc) {
                 row.img = libraryDragSrc.src; libraryDragSrc = null;
-                savePOrderTable();
+                savePOrders();
                 if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
                 return;
             }
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
                 fileToResizedDataURL(e.dataTransfer.files[0]).then(src => {
-                    row.img = src; savePOrderTable();
+                    row.img = src; savePOrders();
                     if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
                 }).catch(() => {});
                 return;
@@ -2623,7 +2757,7 @@
                     const f = await urlToImageFile(urls[0]);
                     if (f) {
                         const src = await fileToResizedDataURL(f);
-                        row.img = src; savePOrderTable();
+                        row.img = src; savePOrders();
                         if (cellEl) cellEl.innerHTML = renderImgCellInner(row);
                     } else {
                         alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Prueba a elegirla desde la biblioteca (📚) o arrástrala desde el ordenador.');
@@ -2656,9 +2790,9 @@
         };
         window.closeLibraryPicker = function() { document.getElementById('lib-picker-modal').classList.add('hidden'); pickerTargetRow = null; };
         window.pickLibraryImage = function(i) {
-            const row = pOrder.rows.find(r => r.id === pickerTargetRow);
+            const row = activeSheet().rows.find(r => r.id === pickerTargetRow);
             if (row && pickerImages[i] != null) {
-                row.img = pickerImages[i]; savePOrderTable();
+                row.img = pickerImages[i]; savePOrders();
                 const cell = document.getElementById('cell-img-' + row.id);
                 if (cell) cell.innerHTML = renderImgCellInner(row);
             }
@@ -2669,7 +2803,7 @@
         let addressModalRow = null;
         window.openAddressModal = function(rowId) {
             addressModalRow = rowId;
-            const row = pOrder.rows.find(r => r.id === rowId); if (!row) return;
+            const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
             const a = row.address || {};
             document.getElementById('addr-dest').value = a.dest || '';
             document.getElementById('addr-dir').value = a.dir || '';
@@ -2682,7 +2816,7 @@
         };
         window.closeAddressModal = function() { document.getElementById('p-address-modal').classList.add('hidden'); addressModalRow = null; };
         window.saveAddressModal = function() {
-            const row = pOrder.rows.find(r => r.id === addressModalRow);
+            const row = activeSheet().rows.find(r => r.id === addressModalRow);
             if (row) {
                 row.address = {
                     dest: document.getElementById('addr-dest').value.trim(),
@@ -2693,7 +2827,7 @@
                     pais: document.getElementById('addr-pais').value.trim(),
                     tel: document.getElementById('addr-tel').value.trim()
                 };
-                savePOrderTable();
+                savePOrders();
                 const cell = document.getElementById('cell-addr-' + addressModalRow);
                 if (cell) cell.innerHTML = renderAddrCellInner(row);
             }
