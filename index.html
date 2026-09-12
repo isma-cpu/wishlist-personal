@@ -212,7 +212,7 @@
                 <p class="text-xs text-zinc-500 tracking-widest uppercase">Equipos y selecciones</p>
             </div>
 
-            <button onclick="pToggleOnlyTemplateView()" id="p-only-template-btn" class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-xs font-bold uppercase tracking-wide border border-sky-400/40 text-zinc-400 hover:text-sky-400 hover:border-sky-400 transition-all mb-6 cursor-pointer" title="Ver solo la plantilla de pedido, sin la biblioteca">📦 Solo Plantilla de Pedido</button>
+            <button onclick="pToggleOnlyTemplateView()" id="p-only-template-btn" class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-xs font-bold uppercase tracking-wide border border-sky-400/40 text-zinc-400 hover:text-sky-400 hover:border-sky-400 transition-all mb-6 cursor-pointer" title="Ver solo la plantilla de pedido, sin la biblioteca">📦 Plantilla de Pedido</button>
             <nav id="pedido-sidebar-nav" class="space-y-8 flex-1"></nav>
             <input type="file" accept="image/*" class="hidden" id="p-crest-upload-input" onchange="handleCrestUpload(event)">
         </aside>
@@ -2827,7 +2827,7 @@
         // real. Solo cubre las colecciones que trae la app por defecto; una colección nueva creada por el usuario
         // cae al color por hash de siempre (CREST_FALLBACK_PALETTE).
         const TEAM_COLORS = {
-            'll-realmadrid': '#1F3F77', 'll-barcelona': '#004D98', 'll-atletico': '#CB3524', 'll-athletic': '#EE2523',
+            'll-realmadrid': '#FFFFFF', 'll-barcelona': '#004D98', 'll-atletico': '#CB3524', 'll-athletic': '#EE2523',
             'll-villarreal': '#FFE667', 'll-betis': '#00954C', 'll-celta': '#8AC3EE', 'll-rayo': '#E30613',
             'll-osasuna': '#D2122E', 'll-realsociedad': '#0067B1', 'll-mallorca': '#E20E17', 'll-girona': '#CC0000',
             'll-getafe': '#005CA9', 'll-sevilla': '#D00027', 'll-valencia': '#EE8707', 'll-alaves': '#1B4297',
@@ -4220,6 +4220,44 @@
             if (cell) cell.textContent = formatMoney(total) + ' €';
         }
 
+        // --- Copiar/pegar cualquier celda de la plantilla (Ctrl+C / Ctrl+V), texto o imagen, entre filas y
+        // entre hojas distintas - portapapeles propio de la app (variable en memoria), no el del sistema. ---
+        let selectedImgCell = null; // { rowId, field } de la última celda de imagen/parche pulsada
+        window.setSelectedImgCell = function(rowId, field) { selectedImgCell = { rowId, field }; };
+        let cellClipboard = null; // { type: 'text'|'image', value }
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (!(e.ctrlKey || e.metaKey) || (key !== 'c' && key !== 'v')) return;
+            if (document.getElementById('view-pedido').classList.contains('hidden')) return;
+            const active = document.activeElement;
+            if (active && active.dataset && active.dataset.cellRow) {
+                const rowId = active.dataset.cellRow, field = active.dataset.cellField, isCustom = active.dataset.cellCustom === '1';
+                if (key === 'c') {
+                    cellClipboard = { type: 'text', value: active.value };
+                } else if (cellClipboard && cellClipboard.type === 'text') {
+                    e.preventDefault();
+                    active.value = cellClipboard.value;
+                    if (isCustom) updateOrderCustomField(rowId, field, cellClipboard.value);
+                    else updateOrderField(rowId, field, cellClipboard.value);
+                }
+                return;
+            }
+            if (!selectedImgCell) return;
+            const sheet = activeSheet();
+            const row = sheet && sheet.rows.find(r => r.id === selectedImgCell.rowId);
+            if (!row) return;
+            const field = selectedImgCell.field;
+            if (key === 'c') {
+                if (row[field] && row[field].startsWith('data:image')) { cellClipboard = { type: 'image', value: row[field] }; e.preventDefault(); }
+            } else if (cellClipboard && cellClipboard.type === 'image') {
+                e.preventDefault();
+                row[field] = cellClipboard.value;
+                savePOrders();
+                const cellEl = document.getElementById('cell-' + field + '-' + row.id);
+                if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+            }
+        });
+
         // --- Foto del producto y del parche (el parche puede ser texto libre O una imagen) ---
         function renderImgCellInner(row, field) {
             field = field || 'img';
@@ -4229,31 +4267,31 @@
             const boxH = Math.max(28, (row.height || ORDER_ROW_DEFAULT_HEIGHT) - 8);
             const boxStyle = `style="height:${boxH}px"`;
             if (src && src.startsWith('data:image')) {
-                return `<div class="relative group w-full mx-auto" ${boxStyle}>
+                return `<div class="relative group w-full mx-auto" onclick="setSelectedImgCell('${row.id}','${field}')" ${boxStyle}>
                     <img src="${src}" class="w-full h-full object-contain mx-auto">
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
-                        <button onclick="openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                        <button onclick="clearOrderRowImage('${row.id}','${field}')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
+                        <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                        <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${field}')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
                     </div>
                 </div>`;
             }
             if (field === 'patch') {
                 if (src) {
                     // Parche antiguo guardado como texto libre (antes de que los parches fueran siempre imagen) - se conserva visible.
-                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" ${boxStyle}>
+                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" onclick="setSelectedImgCell('${row.id}','patch')" ${boxStyle}>
                         <span class="cell-text text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
                         <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
-                            <button onclick="openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                            <button onclick="clearOrderRowImage('${row.id}','patch')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
+                            <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                            <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','patch')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
                         </div>
                     </div>`;
                 }
-                return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" onclick="openLibraryPicker('${row.id}','patch')" ${boxStyle}
+                return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" onclick="setSelectedImgCell('${row.id}','patch'); openLibraryPicker('${row.id}','patch')" ${boxStyle}
                         class="w-full mx-auto border border-dashed border-amber-300 rounded-2xl flex flex-col items-center justify-center text-amber-400 hover:border-amber-500 hover:text-amber-600 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
                         <span class="text-lg leading-none">＋</span>Parche
                     </div>`;
             }
-            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="openLibraryPicker('${row.id}','img')" ${boxStyle}
+            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="setSelectedImgCell('${row.id}','img'); openLibraryPicker('${row.id}','img')" ${boxStyle}
                     class="w-full mx-auto border border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
                     <span class="text-lg leading-none">＋</span>Foto
                 </div>`;
@@ -4276,17 +4314,17 @@
             // Todo lo que el cliente escribe/ve para personalizar el producto (versión, talla, cantidad, nombre,
             // número, precios, columnas personalizadas, dirección) usa la clase .cell-text: negrita y con el
             // tamaño ajustable desde la barra (A-/A+), para que se lea mejor al exportar el PDF para el proveedor.
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="cell-text w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" class="cell-text w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="cell-text w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="cell-text w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
-            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
             const priceCell = `<span id="cell-price-${row.id}" class="cell-text text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
                 if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" class="cell-text w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
+                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
                     </td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
@@ -4302,7 +4340,7 @@
                 if (c.key === 'priceTotal') {
                     if (!isFirstRow) return '';
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
-                    return `<td id="cell-pricetotal" rowspan="${totalRows}" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`;
+                    return `<td id="cell-pricetotal" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`;
                 }
                 if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
