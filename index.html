@@ -151,7 +151,7 @@
             </h3>
             <p id="confirm-notice-text" class="text-zinc-400 text-sm mb-6"></p>
             <div class="flex justify-center gap-4">
-                <button onclick="closeConfirmNoticeModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+                <button id="confirm-notice-cancel-btn" onclick="closeConfirmNoticeModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button id="confirm-notice-btn" class="px-5 py-2 text-xs font-bold bg-amber-400 text-black rounded-xl hover:bg-amber-300 transition-colors shadow-[0_0_15px_rgba(251,191,36,0.4)] cursor-pointer">CONTINUAR</button>
             </div>
         </div>
@@ -1013,26 +1013,32 @@
             downloadJSONFile(buildFullBackup(), `wishlist_backup_${new Date().toISOString().split('T')[0]}.json`);
         }
 
+        // Nunca usa confirm()/alert() nativos: dentro de un iframe con sandbox restringido (como el visor de
+        // Artifacts de Claude) esos diálogos pueden quedar bloqueados sin avisar - confirm() simplemente
+        // devuelve false sin preguntar nada, así que la restauración parecía "no hacer nada" al pulsar Cargar
+        // JSON. openConfirmDelete/openConfirmNotice son el popup propio de la app, funcionan igual en cualquier
+        // contexto (son solo HTML/CSS, no una API del navegador).
         function importBackupJSON(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
-            reader.onload = async (e) => {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    if(confirm('⚠️ ¿Quieres restaurar esta copia de seguridad? Se reemplazarán los datos actuales.')) {
-                        if (!(await tryRestoreFullBackup(imported))) {
-                            db = imported; // copia antigua: solo contenía la wishlist
-                            await saveDB();
-                        }
-                        alert('✅ ¡Datos cargados con éxito!');
-                        location.reload();
-                    }
-                } catch(error) {
-                    alert('❌ Archivo de copia no válido.');
-                }
+            reader.onload = (e) => {
                 document.getElementById('import-input').value = "";
+                let imported;
+                try {
+                    imported = JSON.parse(e.target.result);
+                } catch (error) {
+                    openConfirmNotice('❌ Ese archivo no es una copia de seguridad válida (no se pudo leer como JSON).', () => {}, () => {}, { confirmLabel: 'ENTENDIDO' });
+                    return;
+                }
+                openConfirmDelete('⚠️ ¿Quieres restaurar esta copia de seguridad? Se reemplazarán los datos actuales.', async () => {
+                    if (!(await tryRestoreFullBackup(imported))) {
+                        db = imported; // copia antigua: solo contenía la wishlist
+                        await saveDB();
+                    }
+                    location.reload(); // el propio reload ya es la señal de éxito, no depende de un alert()
+                });
             };
             reader.readAsText(file);
         }
@@ -1644,10 +1650,15 @@
         // descargar el PDF sin dirección, ¿continuar?") - misma idea que openConfirmDelete pero con su propio
         // popup (#confirm-notice-modal, estética ámbar de "aviso", no roja de "eliminar") para no dar a entender
         // que la acción borra algo cuando no es así. onCancel (opcional) se dispara solo si se cierra sin confirmar.
+        // opts opcional: { confirmLabel, cancelLabel } para reusar este mismo modal en decisiones de 2 opciones
+        // con nombre propio (p.ej. "MOVER" / "MANTENER EN AMBOS") en vez del genérico "CONTINUAR"/"CANCELAR".
         let noticeContext = { callback: null, onCancel: null };
-        window.openConfirmNotice = function(message, onConfirm, onCancel) {
+        window.openConfirmNotice = function(message, onConfirm, onCancel, opts) {
+            opts = opts || {};
             noticeContext = { callback: onConfirm, onCancel: onCancel || null };
             document.getElementById('confirm-notice-text').innerText = message;
+            document.getElementById('confirm-notice-btn').textContent = opts.confirmLabel || 'CONTINUAR';
+            document.getElementById('confirm-notice-cancel-btn').textContent = opts.cancelLabel || 'CANCELAR';
             document.getElementById('confirm-notice-modal').classList.remove('hidden');
         };
         window.closeConfirmNoticeModal = function() {
@@ -3893,8 +3904,7 @@
                 pSaveDB();
                 closeSendModal();
 
-                const remove = confirm('Foto añadida a la biblioteca ✔\n\n¿Quieres eliminarla también de la Wishlist?\n\nAceptar = moverla (se borra de la Wishlist)\nCancelar = mantenerla también en la Wishlist');
-                if (remove) {
+                openConfirmNotice('Foto añadida a la biblioteca ✔\n\n¿Quieres eliminarla también de la Wishlist?', () => {
                     const { wishlistColId, wishlistIndex } = sendContext;
                     const arr = wishlistColId != null ? db[wishlistColId] : null;
                     if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === sendContext.src) {
@@ -3902,7 +3912,7 @@
                         saveDB();
                     }
                     closeModal();
-                }
+                }, () => {}, { confirmLabel: 'MOVERLA (BORRAR DE WISHLIST)', cancelLabel: 'MANTENER EN AMBOS' });
             } else {
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
                 db[targetColId].unshift({ src: sendContext.src, timestamp: Date.now(), nameNumber: "", patch: "" });
@@ -4070,8 +4080,7 @@
             const src = sendToPedidoCtx.src;
             addOrderRowWithImage(src, sheetId, extra);
             closeSendToPedidoDetailsModal();
-            const remove = confirm('Producto añadido al pedido ✔\n\n¿Quieres eliminarlo también de la Wishlist?\n\nAceptar = moverlo (se borra de la Wishlist)\nCancelar = mantenerlo también en la Wishlist');
-            if (remove) {
+            openConfirmNotice('Producto añadido al pedido ✔\n\n¿Quieres eliminarlo también de la Wishlist?', () => {
                 const { wishlistColId, wishlistIndex } = sendToPedidoCtx;
                 const arr = wishlistColId != null ? db[wishlistColId] : null;
                 if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === src) {
@@ -4079,7 +4088,7 @@
                     saveDB();
                 }
                 closeModal();
-            }
+            }, () => {}, { confirmLabel: 'MOVERLO (BORRAR DE WISHLIST)', cancelLabel: 'MANTENER EN AMBOS' });
         };
 
         window.addLibraryPhotoToOrder = function(event) {
