@@ -2764,17 +2764,19 @@
                         <span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>
                     </div>`
                 : '';
-            // Parche-imagen y nombre/número personalizado: mismo estilo de "recuadro pequeño en una esquina",
-            // parche a la izquierda (solo la foto) y nombre/número a la derecha (solo el texto) - mismo tamaño.
+            // Parche-imagen: recuadro pequeño en la esquina inferior izquierda, solo la foto.
             const patchImgHTML = isImagePatch
                 ? `<div class="absolute bottom-1 left-1 z-10 w-8 h-10 rounded-lg overflow-hidden pointer-events-none"><img src="${item.patch}" class="w-full h-full object-contain bg-white/90"></div>`
                 : '';
+            // Nombre/número en la esquina inferior derecha: el recuadro se ajusta al contenido (sin ancho fijo,
+            // hasta el 65% de la tarjeta) para que la primera palabra (el nombre) nunca se corte - si hay más
+            // texto (apellido/número), pasa a una 2ª línea en vez de recortarse, dejando crecer la altura.
             const nameNumberBoxHTML = item.nameNumber
-                ? `<div class="absolute bottom-1 right-1 z-10 w-8 h-10 rounded-lg bg-black/85 border border-[#39FF14]/40 flex items-center justify-center p-0.5 pointer-events-none"><span class="text-[8px] text-[#39FF14] font-bold uppercase text-center leading-tight break-words line-clamp-3">${item.nameNumber}</span></div>`
+                ? `<div class="absolute bottom-1 right-1 z-10 max-w-[65%] rounded-lg bg-black/85 border border-[#39FF14]/40 flex items-center justify-center px-1.5 py-1 pointer-events-none"><span class="text-[9px] text-[#39FF14] font-bold uppercase text-center leading-tight break-words">${item.nameNumber}</span></div>`
                 : '';
 
             const relBadge = (Array.isArray(item.related) && item.related.length)
-                ? `<span class="absolute right-1 z-20 bg-black/80 text-sky-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none" style="bottom: ${item.nameNumber ? '2.75rem' : '0.25rem'}">🔗 ${item.related.length}</span>`
+                ? `<span class="absolute right-1 z-20 bg-black/80 text-sky-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none" style="bottom: ${item.nameNumber ? '3.25rem' : '0.25rem'}">🔗 ${item.related.length}</span>`
                 : '';
             const favActive = !!item.fav;
             const favBtn = `<button onclick="event.stopPropagation(); toggleFav('${colId}', ${index}, event)" title="Destacar"
