@@ -32,6 +32,10 @@
         
         .dragging { opacity: 0.3; transform: scale(0.95); transition: transform 0.2s; }
         .drag-over { border-color: #39FF14 !important; box-shadow: inset 0 0 20px rgba(57, 255, 20, 0.6) !important; transform: scale(0.98); }
+        /* Barra de color en el borde izq/dcho de la tarjeta sobrevolada: marca exactamente dónde caerá la foto
+           (antes/después de esa tarjeta) si se suelta ahí mismo, en vez de solo resaltar toda la tarjeta. */
+        .drop-indicator-before { box-shadow: inset 4px 0 0 0 #39FF14 !important; }
+        .drop-indicator-after { box-shadow: inset -4px 0 0 0 #39FF14 !important; }
         .cursor-grab { cursor: grab; }
         .cursor-grabbing { cursor: grabbing !important; }
         
@@ -81,6 +85,9 @@
            (--cell-font-size, en px, puesto como variable inline en #order-table por renderOrderTable). */
         #order-table { --cell-font-size: 14px; }
         .cell-text { font-weight: 700; font-size: var(--cell-font-size, 14px); }
+        /* Celda de imagen/parche "seleccionada" para copiar/pegar (Ctrl+C/Ctrl+V) - las celdas de texto ya
+           muestran su propio anillo azul nativo al enfocarse, esto es solo para las que no son focuseables. */
+        .cell-selected-img { box-shadow: inset 0 0 0 3px #0ea5e9 !important; }
     </style>
 </head>
 <body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
@@ -1003,31 +1010,44 @@
             setTimeout(() => { if (dragSrcEl) dragSrcEl.classList.add('dragging'); }, 0);
         };
 
+        // Además de resaltar la tarjeta sobrevolada, marca en qué mitad está el cursor (izquierda/derecha) para
+        // enseñar exactamente dónde caerá la foto si se suelta ahí - antes solo se veía "esta tarjeta", sin
+        // saber si se insertaría antes o después.
         window.handleDragOver = function(e) {
             e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-            if (e.currentTarget !== dragSrcEl) e.currentTarget.classList.add('drag-over');
+            if (e.currentTarget === dragSrcEl) return false;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const before = (e.clientX - rect.left) < rect.width / 2;
+            e.currentTarget.classList.toggle('drop-indicator-before', before);
+            e.currentTarget.classList.toggle('drop-indicator-after', !before);
+            e.currentTarget.dataset.dropBefore = before ? '1' : '0';
             return false;
         };
 
-        window.handleDragLeave = function(e) { e.currentTarget.classList.remove('drag-over'); };
+        window.handleDragLeave = function(e) { e.currentTarget.classList.remove('drag-over', 'drop-indicator-before', 'drop-indicator-after'); };
 
         window.handleDrop = function(e, targetColId, targetIndex) {
             e.stopPropagation(); e.preventDefault();
-            e.currentTarget.classList.remove('drag-over');
+            const dropBefore = e.currentTarget.dataset.dropBefore !== '0';
+            e.currentTarget.classList.remove('drag-over', 'drop-indicator-before', 'drop-indicator-after');
             if (dragSrcEl) dragSrcEl.classList.remove('dragging');
+            const desiredPos = dropBefore ? targetIndex : targetIndex + 1;
 
-            if (dragSrcCol === targetColId && dragSrcIndex !== targetIndex && dragSrcIndex !== null) {
+            if (dragSrcCol === targetColId && dragSrcIndex !== null) {
                 // Reordenar dentro de la misma (sub)colección
                 const arr = db[targetColId];
+                let insertAt = desiredPos;
+                if (dragSrcIndex < insertAt) insertAt -= 1; // ya se habrá quitado un elemento de antes de esa posición
+                if (insertAt === dragSrcIndex) { dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null; return false; }
                 const itemToMove = arr.splice(dragSrcIndex, 1)[0];
-                arr.splice(targetIndex, 0, itemToMove);
+                arr.splice(insertAt, 0, itemToMove);
                 saveDBQuiet();
                 refreshGridAfterDrop(targetColId);
             } else if (dragSrcCol && dragSrcCol !== targetColId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
                 // Mover a otra (sub)colección
                 const itemToMove = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
-                db[targetColId].splice(targetIndex, 0, itemToMove);
+                db[targetColId].splice(desiredPos, 0, itemToMove);
                 saveDBQuiet();
                 refreshGridAfterDrop(dragSrcCol);
                 refreshGridAfterDrop(targetColId);
@@ -1038,7 +1058,7 @@
 
         window.handleDragEnd = function(e) {
             if (dragSrcEl) dragSrcEl.classList.remove('dragging');
-            document.querySelectorAll('.image-card-draggable').forEach(el => el.classList.remove('drag-over'));
+            document.querySelectorAll('.image-card-draggable').forEach(el => el.classList.remove('drag-over', 'drop-indicator-before', 'drop-indicator-after'));
             document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('sidebar-drag-over'));
             dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
         };
@@ -3520,26 +3540,35 @@
         // Mover una foto de la biblioteca (arrastrando su tarjeta) a otra colección/subcolección, incluyendo
         // sacarla o meterla desde/hacia "sin clasificar" - igual que ya funcionaba en la Wishlist.
         window.pCardDragOver = function(e) {
-            if (libraryDragSrc) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); }
+            if (!libraryDragSrc) return;
+            e.preventDefault(); e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            const before = (e.clientX - rect.left) < rect.width / 2;
+            e.currentTarget.classList.toggle('drop-indicator-before', before);
+            e.currentTarget.classList.toggle('drop-indicator-after', !before);
+            e.currentTarget.dataset.dropBefore = before ? '1' : '0';
         };
-        window.pCardDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400'); };
+        window.pCardDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400', 'drop-indicator-before', 'drop-indicator-after'); };
         window.pCardDrop = function(e, targetColId, targetIndex) {
-            e.currentTarget.classList.remove('ring-2', 'ring-sky-400');
+            const dropBefore = e.currentTarget.dataset.dropBefore !== '0';
+            e.currentTarget.classList.remove('ring-2', 'ring-sky-400', 'drop-indicator-before', 'drop-indicator-after');
             if (!libraryDragSrc || libraryDragSrc.colId == null) return;
             e.preventDefault(); e.stopPropagation();
             const { colId: srcColId, index: srcIndex } = libraryDragSrc;
             libraryDragSrc = null;
             if (!Array.isArray(pDb[srcColId])) return;
+            const desiredPos = dropBefore ? targetIndex : targetIndex + 1;
             if (srcColId === targetColId) {
-                if (srcIndex === targetIndex) return;
+                let insertAt = desiredPos;
+                if (srcIndex < insertAt) insertAt -= 1;
+                if (insertAt === srcIndex) return;
                 const arr = pDb[srcColId];
                 const item = arr.splice(srcIndex, 1)[0];
-                const newTarget = srcIndex < targetIndex ? targetIndex - 1 : targetIndex;
-                arr.splice(newTarget + 1, 0, item);
+                arr.splice(insertAt, 0, item);
             } else {
                 const item = pDb[srcColId].splice(srcIndex, 1)[0];
                 if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
-                pDb[targetColId].splice(targetIndex + 1, 0, item);
+                pDb[targetColId].splice(desiredPos, 0, item);
             }
             pSaveDB();
             pRenderLibraryBody();
@@ -4255,7 +4284,24 @@
         // --- Copiar/pegar cualquier celda de la plantilla (Ctrl+C / Ctrl+V), texto o imagen, entre filas y
         // entre hojas distintas - portapapeles propio de la app (variable en memoria), no el del sistema. ---
         let selectedImgCell = null; // { rowId, field } de la última celda de imagen/parche pulsada
-        window.setSelectedImgCell = function(rowId, field) { selectedImgCell = { rowId, field }; };
+        window.setSelectedImgCell = function(rowId, field) {
+            // Quitar el resaltado de "seleccionada" de la celda anterior y ponerlo en la nueva - las celdas de
+            // texto ya muestran su propio anillo azul al enfocarse (nativo del navegador), pero las de imagen/
+            // parche no son focuseables, así que necesitan su propia marca visual de "esta es la seleccionada".
+            if (selectedImgCell) {
+                const prevEl = document.getElementById('cell-' + selectedImgCell.field + '-' + selectedImgCell.rowId);
+                if (prevEl) prevEl.classList.remove('cell-selected-img');
+            }
+            selectedImgCell = { rowId, field };
+            const el = document.getElementById('cell-' + field + '-' + rowId);
+            if (el) el.classList.add('cell-selected-img');
+        };
+        window.clearSelectedImgCell = function() {
+            if (!selectedImgCell) return;
+            const prevEl = document.getElementById('cell-' + selectedImgCell.field + '-' + selectedImgCell.rowId);
+            if (prevEl) prevEl.classList.remove('cell-selected-img');
+            selectedImgCell = null;
+        };
         let cellClipboard = null; // { type: 'text'|'image', value }
         document.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
@@ -4346,17 +4392,17 @@
             // Todo lo que el cliente escribe/ve para personalizar el producto (versión, talla, cantidad, nombre,
             // número, precios, columnas personalizadas, dirección) usa la clase .cell-text: negrita y con el
             // tamaño ajustable desde la barra (A-/A+), para que se lea mejor al exportar el PDF para el proveedor.
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-20 text-right bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-8 text-left bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
-            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-full text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-20 text-right bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-8 text-left bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
             const priceCell = `<span id="cell-price-${row.id}" class="cell-text text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
                 if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-1 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
+                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
                     </td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
