@@ -142,6 +142,21 @@
         </div>
     </div>
 
+    <!-- Aviso genérico NO destructivo (p.ej. "vas a descargar el PDF sin X, ¿continuar?") - a propósito con otra
+         estética que #delete-confirm-modal, para no dar la impresión de que algo se va a borrar cuando no es así. -->
+    <div id="confirm-notice-modal" class="fixed inset-0 bg-black/90 hidden z-[250] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
+            <h3 class="text-xl font-black tracking-wider text-amber-400 mb-3 uppercase flex flex-col items-center gap-2">
+                <span class="text-3xl">ℹ️</span> Aviso
+            </h3>
+            <p id="confirm-notice-text" class="text-zinc-400 text-sm mb-6"></p>
+            <div class="flex justify-center gap-4">
+                <button onclick="closeConfirmNoticeModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+                <button id="confirm-notice-btn" class="px-5 py-2 text-xs font-bold bg-amber-400 text-black rounded-xl hover:bg-amber-300 transition-colors shadow-[0_0_15px_rgba(251,191,36,0.4)] cursor-pointer">CONTINUAR</button>
+            </div>
+        </div>
+    </div>
+
     <div id="move-multi-modal" class="fixed inset-0 bg-black/95 hidden z-[200] flex items-center justify-center p-4 backdrop-blur-md">
         <div class="bg-[#0a0a0a] border border-blue-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(96,165,250,0.3)] w-full max-w-md max-h-[80vh] overflow-y-auto">
             <h3 class="text-lg font-black tracking-wider text-blue-400 mb-4 uppercase">Mover a...</h3>
@@ -1608,6 +1623,27 @@
             document.getElementById('delete-confirm-modal').classList.remove('hidden');
         };
 
+        // Punto de entrada genérico para un AVISO que no borra ni cambia nada por sí mismo (p.ej. "vas a
+        // descargar el PDF sin dirección, ¿continuar?") - misma idea que openConfirmDelete pero con su propio
+        // popup (#confirm-notice-modal, estética ámbar de "aviso", no roja de "eliminar") para no dar a entender
+        // que la acción borra algo cuando no es así. onCancel (opcional) se dispara solo si se cierra sin confirmar.
+        let noticeContext = { callback: null, onCancel: null };
+        window.openConfirmNotice = function(message, onConfirm, onCancel) {
+            noticeContext = { callback: onConfirm, onCancel: onCancel || null };
+            document.getElementById('confirm-notice-text').innerText = message;
+            document.getElementById('confirm-notice-modal').classList.remove('hidden');
+        };
+        window.closeConfirmNoticeModal = function() {
+            document.getElementById('confirm-notice-modal').classList.add('hidden');
+            if (noticeContext.onCancel) { const cb = noticeContext.onCancel; noticeContext.onCancel = null; cb(); }
+            noticeContext = { callback: null, onCancel: null };
+        };
+        document.getElementById('confirm-notice-btn').onclick = function() {
+            if (typeof noticeContext.callback === 'function') noticeContext.callback();
+            noticeContext.onCancel = null; // ya se confirmó - que closeConfirmNoticeModal() no dispare también el aviso de cancelar
+            closeConfirmNoticeModal();
+        };
+
         // --- SELECCIÓN MÚLTIPLE (mini casilla en cada tarjeta, siempre visible) ---
 
         window.toggleSelection = function(colId, index, element) {
@@ -2693,20 +2729,24 @@
             };
 
             const isImagePatch = item.patch && item.patch.startsWith('data:image');
-            let labelsHTML = '';
-            if (item.nameNumber || (item.patch && !isImagePatch)) {
-                labelsHTML += `<div class="absolute bottom-0 left-0 right-0 bg-black/90 border-t border-[#39FF14]/50 p-1 text-center truncate z-10 flex flex-col gap-0.5 pointer-events-none">`;
-                if (item.nameNumber) labelsHTML += `<span class="text-[9px] text-[#39FF14] uppercase tracking-wider leading-tight">📝 ${item.nameNumber}</span>`;
-                if (item.patch && !isImagePatch) labelsHTML += `<span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>`;
-                labelsHTML += `</div>`;
-            }
-            // El parche-imagen se ve como un recuadro con SOLO la foto (sin emoji ni barra de color de fondo).
+            // Parche de texto libre (formato antiguo, ya no se crean nuevos así): sigue en su franja inferior de
+            // siempre. El nombre/número personalizado YA NO va ahí - ver nameNumberBoxHTML más abajo.
+            const labelsHTML = (item.patch && !isImagePatch)
+                ? `<div class="absolute bottom-0 left-0 right-0 bg-black/90 border-t border-[#39FF14]/50 p-1 text-center truncate z-10 pointer-events-none">
+                        <span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>
+                    </div>`
+                : '';
+            // Parche-imagen y nombre/número personalizado: mismo estilo de "recuadro pequeño en una esquina",
+            // parche a la izquierda (solo la foto) y nombre/número a la derecha (solo el texto) - mismo tamaño.
             const patchImgHTML = isImagePatch
-                ? `<div class="absolute bottom-1 left-1 z-10 w-9 h-11 rounded-lg overflow-hidden pointer-events-none"><img src="${item.patch}" class="w-full h-full object-contain bg-white/90"></div>`
+                ? `<div class="absolute bottom-1 left-1 z-10 w-8 h-10 rounded-lg overflow-hidden pointer-events-none"><img src="${item.patch}" class="w-full h-full object-contain bg-white/90"></div>`
+                : '';
+            const nameNumberBoxHTML = item.nameNumber
+                ? `<div class="absolute bottom-1 right-1 z-10 w-8 h-10 rounded-lg bg-black/85 border border-[#39FF14]/40 flex items-center justify-center p-0.5 pointer-events-none"><span class="text-[8px] text-[#39FF14] font-bold uppercase text-center leading-tight break-words line-clamp-3">${item.nameNumber}</span></div>`
                 : '';
 
             const relBadge = (Array.isArray(item.related) && item.related.length)
-                ? `<span class="absolute bottom-1 right-1 z-20 bg-black/80 text-sky-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none">🔗 ${item.related.length}</span>`
+                ? `<span class="absolute right-1 z-20 bg-black/80 text-sky-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none" style="bottom: ${item.nameNumber ? '2.75rem' : '0.25rem'}">🔗 ${item.related.length}</span>`
                 : '';
             const favActive = !!item.fav;
             const favBtn = `<button onclick="event.stopPropagation(); toggleFav('${colId}', ${index}, event)" title="Destacar"
@@ -2722,6 +2762,7 @@
                 ${relBadge}
                 ${labelsHTML}
                 ${patchImgHTML}
+                ${nameNumberBoxHTML}
                 <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col justify-end p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
                         <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-xl text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
@@ -5157,14 +5198,14 @@
             if (hidden.includes('unitPrice')) missing.push('Precio x Unidad');
             const warnings = [];
             if (missing.length) warnings.push(`sin ${missing.join(', ')}`);
-            if (!hasAddressData(sheet.address)) warnings.push('sin la columna de dirección de envío (todavía no tiene ninguna)');
+            if (!hasAddressData(sheet.address)) warnings.push('sin la columna de dirección de envío (todavía está vacía)');
             return warnings;
         }
         window.printOrder = function(event) {
             const sheet = activeSheet();
             const warnings = buildOrderPrintWarnings(sheet);
             if (warnings.length) {
-                openConfirmDelete(`Vas a descargar el PDF ${warnings.join(' y ')}. ¿Seguro que quieres continuar?`, () => generateOrderPdf(event));
+                openConfirmNotice(`El PDF se descargará ${warnings.join(' y ')}. La hoja no cambia, esto solo afecta a este PDF. ¿Continuar?`, () => generateOrderPdf(event));
             } else {
                 generateOrderPdf(event);
             }
@@ -5559,7 +5600,7 @@
             const run = () => generateOrderPdf(event).finally(() => { if (!wasEditingThis) stopEditingArchivedPedido(); });
             const cancel = () => { if (!wasEditingThis) stopEditingArchivedPedido(); };
             if (warnings.length) {
-                openConfirmDelete(`Vas a descargar el PDF ${warnings.join(' y ')}. ¿Seguro que quieres continuar?`, run, cancel);
+                openConfirmNotice(`El PDF se descargará ${warnings.join(' y ')}. La hoja no cambia, esto solo afecta a este PDF. ¿Continuar?`, run, cancel);
             } else {
                 run();
             }
