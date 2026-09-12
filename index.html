@@ -926,14 +926,8 @@
 
             try {
                 const content = await zip.generateAsync({ type: "blob" });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(content);
                 const fecha = new Date().toISOString().split('T')[0];
-                a.download = `WISHLIST_Fotos_${fecha}.zip`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(a.href);
+                await saveFileUniversal(`WISHLIST_Fotos_${fecha}.zip`, content);
             } catch (err) {
                 alert("Ocurrió un error al empaquetar las fotos en ZIP.");
                 console.error(err);
@@ -977,17 +971,40 @@
             await pSaveDB();
             return true;
         }
-        function downloadJSONFile(obj, filename) {
+        // Guarda un archivo generado por la app (ZIP/JSON/PDF). Si la web corre dentro de un Artifact de Claude,
+        // el navegador normal de descarga NO existe ahí (el iframe está aislado) - hay que pedirlo a través de
+        // la capacidad "downloads" del visor (window.claude.use('downloads')). Fuera de un Artifact (Netlify,
+        // GitHub Pages, un archivo local...) window.claude no existe, así que se usa el método de toda la vida
+        // (<a download> + URL.createObjectURL). Un solo punto de entrada para que ambos caminos vivan aquí y no
+        // haya que duplicar esta lógica en cada sitio que genera un archivo para descargar.
+        async function saveFileUniversal(filename, data) {
+            if (window.claude && typeof window.claude.use === 'function') {
+                try {
+                    const downloads = await window.claude.use('downloads');
+                    if (downloads) {
+                        await downloads.save({ filename, data });
+                        return true;
+                    }
+                } catch (e) {
+                    if (e && e.code === 'declined') return false; // el usuario dijo que no - no es un error, no avisar
+                    console.error('No se pudo guardar con la capacidad "downloads" del Artifact, se intenta el método normal:', e);
+                }
+            }
+            const blob = data instanceof Blob ? data : new Blob([data]);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            return true;
+        }
+        async function downloadJSONFile(obj, filename) {
             try {
                 const blob = new Blob([JSON.stringify(obj)], { type: "application/json" });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
+                await saveFileUniversal(filename, blob);
             } catch (error) {
                 alert("Error al guardar el archivo JSON.");
             }
@@ -5262,7 +5279,7 @@
 
                 const fecha = new Date().toISOString().split('T')[0];
                 const nombreHoja = (sheet.name || 'pedido').replace(/[^a-z0-9]+/gi, '_');
-                pdf.save(`${nombreHoja}_${fecha}.pdf`);
+                await saveFileUniversal(`${nombreHoja}_${fecha}.pdf`, pdf.output('blob'));
             } catch (err) {
                 console.error('Error generando el PDF:', err);
                 alert('No se pudo generar el PDF. Comprueba tu conexión a internet (se necesita para cargar la herramienta la primera vez) e inténtalo de nuevo.');
