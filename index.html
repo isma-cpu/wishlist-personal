@@ -257,8 +257,12 @@
                         <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
                         <button onclick="openTransferRowsModal()" title="Traspasar filas a otra hoja (sin precios)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">🔁 Traspasar</button>
                         <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
-                        <button onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
+                        <button id="save-order-btn" onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
                     </div>
+                </div>
+                <div id="archived-edit-banner" class="hidden items-center justify-between gap-3 px-4 py-2 bg-amber-100 border-b border-amber-300 print:hidden">
+                    <span class="text-xs font-bold text-amber-800 uppercase">✏️ Editando pedido archivado: <span id="archived-edit-name"></span> — los cambios se guardan solos</span>
+                    <button onclick="stopEditingArchivedPedido()" class="text-xs font-bold text-amber-800 hover:text-black uppercase border border-amber-400 rounded-full px-3 py-1 cursor-pointer shrink-0">← Volver a Pedidos</button>
                 </div>
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
                 <div id="order-style-bar" class="flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-200 print:hidden"></div>
@@ -290,26 +294,19 @@
             <button onclick="openInput('add-cliente', null, null, event)" class="text-xs text-sky-400 hover:text-sky-300 uppercase border border-sky-400/40 rounded-full px-2 py-1 cursor-pointer">➕ Cliente</button>
         </div>
 
-        <div class="mb-6">
+        <div class="mb-6 rounded-2xl border-2 border-red-500/40 bg-red-950/10 p-4">
             <button onclick="toggleMorosos()" class="w-full flex items-center gap-2 mb-2 cursor-pointer">
                 <span id="morosos-chevron" class="text-[10px] text-red-400 shrink-0">▾</span>
                 <h3 class="font-black text-red-400 uppercase text-sm tracking-wide shrink-0">⚠️ Morosos</h3>
-                <span id="morosos-summary" class="text-xs text-zinc-500 shrink-0"></span>
+                <span id="morosos-summary" class="text-xs text-zinc-400 shrink-0"></span>
                 <div class="flex-1 border-b border-red-500/20"></div>
             </button>
             <div id="morosos-body"></div>
         </div>
 
-        <div id="pedidos-list"></div>
-    </div>
-
-    <div id="pedido-view-modal" class="hidden fixed inset-0 bg-black/80 z-[95] flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-xl max-w-5xl w-full max-h-[85vh] overflow-auto">
-            <div class="flex items-center justify-between p-4 border-b border-gray-200 sticky top-0 bg-white">
-                <h3 id="pedido-view-title" class="font-black text-black text-lg"></h3>
-                <button onclick="closePedidoView()" class="text-gray-400 hover:text-red-500 text-2xl leading-none cursor-pointer">✕</button>
-            </div>
-            <div id="pedido-view-body" class="p-4 overflow-x-auto"></div>
+        <div class="rounded-2xl border-2 border-amber-400/40 bg-amber-950/10 p-4">
+            <h3 class="font-black text-amber-400 uppercase text-sm tracking-wide mb-3">📑 Pedidos</h3>
+            <div id="pedidos-list"></div>
         </div>
     </div>
 
@@ -4040,7 +4037,19 @@
         // --- Varias "hojas" de pedido (como pestañas de Excel) ---
         const ORDER_ROW_DEFAULT_HEIGHT = 140;
         let pOrders = { sheets: [], activeSheetId: null };
-        function activeSheet() { return pOrders.sheets.find(s => s.id === pOrders.activeSheetId) || pOrders.sheets[0]; }
+        // Mientras se está editando un pedido YA ARCHIVADO (editingArchivedId), activeSheet() "posee" temporalmente
+        // la plantilla de pedido: en vez de la hoja real de Crear Pedido, devuelve el propio pedido archivado (que
+        // ya tiene los mismos campos: rows, colOrder, customColumns, hiddenColumns, splitNameNumber, address...,
+        // guardados ahí desde archiveOrderSheet) - así TODO el código existente (renderOrderTable, updateOrderField,
+        // arrastrar filas/columnas, etc.) funciona sin cambios, tanto para la hoja real como para un archivado.
+        let editingArchivedId = null;
+        function activeSheet() {
+            if (editingArchivedId) {
+                const p = pedidosArchivo.find(x => x.id === editingArchivedId);
+                if (p) return p;
+            }
+            return pOrders.sheets.find(s => s.id === pOrders.activeSheetId) || pOrders.sheets[0];
+        }
         function newSheet(name) {
             return {
                 id: 'sheet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), name: name || ('Pedido ' + (pOrders.sheets.length + 1)),
@@ -4095,7 +4104,20 @@
             renderOrderTable();
             savePOrders();
         }
-        async function savePOrders() { try { await localforage.setItem('pedido_orders_v2', pOrders); } catch (e) {} }
+        async function savePOrders() {
+            if (editingArchivedId) {
+                // Editando un pedido archivado: se guarda en pedidosArchivo (no en pOrders) y se recalcula su
+                // total (las hojas en vivo no guardan un total propio, se suma al vuelo cada vez que hace falta).
+                const p = pedidosArchivo.find(x => x.id === editingArchivedId);
+                if (p) {
+                    p.total = (p.rows || []).reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
+                    try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {}
+                    renderMorosos();
+                }
+                return;
+            }
+            try { await localforage.setItem('pedido_orders_v2', pOrders); } catch (e) {}
+        }
 
         // Menú de opciones de hoja: un único menú fixed compartido (no se puede anidar dentro de la
         // barra con overflow-x-auto, porque eso recorta cualquier desplegable que sobresalga).
@@ -4385,13 +4407,19 @@
         let cellClipboard = null; // { type: 'text'|'image', value }
         document.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
-            if (!(e.ctrlKey || e.metaKey) || (key !== 'c' && key !== 'v')) return;
+            if (!(e.ctrlKey || e.metaKey) || (key !== 'c' && key !== 'v' && key !== 'x')) return;
             if (document.getElementById('view-pedido').classList.contains('hidden')) return;
             const active = document.activeElement;
             if (active && active.dataset && active.dataset.cellRow) {
                 const rowId = active.dataset.cellRow, field = active.dataset.cellField, isCustom = active.dataset.cellCustom === '1';
-                if (key === 'c') {
+                if (key === 'c' || key === 'x') {
                     cellClipboard = { type: 'text', value: active.value };
+                    if (key === 'x') {
+                        e.preventDefault();
+                        active.value = '';
+                        if (isCustom) updateOrderCustomField(rowId, field, '');
+                        else updateOrderField(rowId, field, '');
+                    }
                 } else if (cellClipboard && cellClipboard.type === 'text') {
                     e.preventDefault();
                     active.value = cellClipboard.value;
@@ -4404,20 +4432,24 @@
             const sheet = activeSheet();
             const field = selectedImgCell.field;
             const isImageField = field === 'img' || field === 'patch';
-            const isReadOnlyField = field === 'price' || field === 'priceTotal'; // siempre calculados, no se pueden pegar
+            const isReadOnlyField = field === 'price' || field === 'priceTotal'; // siempre calculados, no se pueden pegar/cortar de verdad
             if (field === 'priceTotal') {
-                if (key === 'c') {
+                if (key === 'c' || key === 'x') {
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
                     cellClipboard = { type: 'text', value: formatMoney(total) };
                     e.preventDefault();
                 }
-                return; // no se pega: es la suma de toda la hoja, no un dato de una fila
+                return; // no se pega ni se corta de verdad: es la suma de toda la hoja, no un dato de una fila
             }
             const row = sheet && sheet.rows.find(r => r.id === selectedImgCell.rowId);
             if (!row) return;
-            if (key === 'c') {
+            if (key === 'c' || key === 'x') {
                 if (isImageField) {
-                    if (row[field] && row[field].startsWith('data:image')) { cellClipboard = { type: 'image', value: row[field] }; e.preventDefault(); }
+                    if (row[field] && row[field].startsWith('data:image')) {
+                        cellClipboard = { type: 'image', value: row[field] };
+                        e.preventDefault();
+                        if (key === 'x') clearOrderRowImage(row.id, field);
+                    }
                 } else if (field === 'price') {
                     cellClipboard = { type: 'text', value: formatMoney(computeRowPrice(row)) };
                     e.preventDefault();
@@ -4463,14 +4495,16 @@
                         </div>
                     </div>`;
                 }
-                return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" onclick="setSelectedImgCell('${row.id}','patch'); openLibraryPicker('${row.id}','patch')" ${boxStyle}
+                // El recuadro entero SOLO selecciona la celda (para poder pegar con Ctrl+V sin que salte el
+                // selector); el botón "＋" pequeño de dentro es el único que abre la biblioteca de fotos.
+                return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" onclick="setSelectedImgCell('${row.id}','patch')" ${boxStyle}
                         class="w-full mx-auto border border-dashed border-amber-300 rounded-2xl flex flex-col items-center justify-center text-amber-400 hover:border-amber-500 hover:text-amber-600 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
-                        <span class="text-lg leading-none">＋</span>Parche
+                        <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch')" title="Elegir de la biblioteca" class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform">＋</button>Parche
                     </div>`;
             }
-            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="setSelectedImgCell('${row.id}','img'); openLibraryPicker('${row.id}','img')" ${boxStyle}
+            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="setSelectedImgCell('${row.id}','img')" ${boxStyle}
                     class="w-full mx-auto border border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
-                    <span class="text-lg leading-none">＋</span>Foto
+                    <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','img')" title="Elegir de la biblioteca" class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform">＋</button>Foto
                 </div>`;
         }
 
@@ -4491,25 +4525,30 @@
             // Todo lo que el cliente escribe/ve para personalizar el producto (versión, talla, cantidad, nombre,
             // número, precios, columnas personalizadas, dirección) usa la clase .cell-text: negrita y con el
             // tamaño ajustable desde la barra (A-/A+), para que se lea mejor al exportar el PDF para el proveedor.
-            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-20 text-right bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-8 text-left bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
-            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
-            const priceCell = `<span id="cell-price-${row.id}" onclick="setSelectedImgCell('${row.id}','price')" class="cell-text text-gray-900 cursor-pointer">${formatMoney(computeRowPrice(row))}</span>`;
+            const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full h-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
+            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text h-full w-20 text-right bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text h-full w-8 text-left bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full h-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
+            const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-full h-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            const rowH = row.height || ORDER_ROW_DEFAULT_HEIGHT;
+            // Los <td> necesitan una altura explícita en el propio elemento (no basta con la del <tr>) para que
+            // los inputs con h-full puedan ocupar toda la celda y así se pueda hacer clic en cualquier punto,
+            // no solo en la fina franja central donde antes vivía el input sin estirar.
+            const cellHStyle = ` style="height:${rowH}px"`;
+            const priceCell = `<span id="cell-price-${row.id}" onclick="setSelectedImgCell('${row.id}','price')" class="cell-text text-gray-900 cursor-pointer w-full h-full flex items-center justify-center">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
-                if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0">
+                if (c.isCustom) return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">
+                        <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full h-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0">
                     </td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
-                if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 align-middle text-center">
-                        <div class="inline-flex items-center gap-1 whitespace-nowrap">${nameCell}${numberCell}</div>
+                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">
+                        <div class="inline-flex items-center gap-1 whitespace-nowrap h-full">${nameCell}${numberCell}</div>
                     </td>`;
-                if (c.key === 'name') return `<td class="border border-gray-300 p-1 align-middle text-center">${nameCellSolo}</td>`;
-                if (c.key === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numberCellSolo}</td>`;
+                if (c.key === 'name') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${nameCellSolo}</td>`;
+                if (c.key === 'number') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${numberCellSolo}</td>`;
                 if (c.key === 'address') {
                     if (!isFirstRow) return '';
                     return `<td id="cell-addr" rowspan="${totalRows}" class="border border-gray-300 p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
@@ -4519,12 +4558,12 @@
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
                     return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
                 }
-                if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
-                if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
-                return `<td class="border border-gray-300 p-1 align-middle text-center">${textCell(c.key)}</td>`;
+                if (c.key === 'price') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
+                if (c.type === 'number') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
+                return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
 
-            const heightStyle = ` style="height:${row.height || ORDER_ROW_DEFAULT_HEIGHT}px"`;
+            const heightStyle = ` style="height:${rowH}px"`;
             return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
                     <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-300 hover:text-gray-500 text-sm cursor-grab select-none" title="Arrastra para reordenar la fila">⠿</span>
                     <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar fila">✕</button>
@@ -5073,7 +5112,7 @@
                 const rows = orders.map(p => {
                     const debe = Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0));
                     const fecha = new Date(p.date).toLocaleDateString('es-ES');
-                    return `<button onclick="viewPedidoDetail('${p.id}')" class="w-full flex items-center justify-between gap-2 text-xs text-zinc-300 hover:text-white py-1.5 border-b border-red-500/10 last:border-0 cursor-pointer text-left">
+                    return `<button onclick="editArchivedPedido('${p.id}')" class="w-full flex items-center justify-between gap-2 text-xs text-zinc-300 hover:text-white py-1.5 border-b border-red-500/10 last:border-0 cursor-pointer text-left">
                             <span class="truncate">${escapeHtml(p.name)} <span class="text-zinc-500">· ${fecha}</span></span>
                             <span class="text-red-400 font-bold shrink-0">${formatMoney(debe)} €</span>
                         </button>`;
@@ -5124,7 +5163,7 @@
                         <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
                         <div id="pedido-debe-${p.id}" class="${debe > 0 ? 'text-red-400' : 'text-emerald-400'} font-bold text-sm">${formatMoney(debe)} €</div>
                     </div>
-                    <button onclick="viewPedidoDetail('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                    <button onclick="editArchivedPedido('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">✏️ Ver / Editar</button>
                     <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
                 </div>`;
             }).join('');
@@ -5142,6 +5181,7 @@
                     debeEl.className = (debe > 0 ? 'text-red-400' : 'text-emerald-400') + ' font-bold text-sm';
                 }
             }
+            if (field === 'paid' || field === 'total' || field === 'cliente') renderMorosos();
         };
         window.deletePedido = function(id) {
             openConfirmDelete('¿Eliminar este pedido archivado? Esta acción no se puede deshacer.', () => {
@@ -5160,39 +5200,32 @@
             savePedidosArchivo(); renderPedidosTab();
         };
 
-        window.viewPedidoDetail = function(id) {
+        // Ver Y EDITAR un pedido ya archivado: reutiliza la plantilla real de "Crear Pedido" (misma tabla,
+        // mismo arrastrar/copiar-pegar/redimensionar...) apuntando temporalmente a este pedido en vez de a una
+        // hoja en vivo (ver activeSheet()/savePOrders() más arriba). Sustituye al antiguo visor de solo lectura.
+        window.editArchivedPedido = function(id) {
             const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
-            const es = p.style === 'es';
-            const headerBg = es ? 'bg-emerald-800' : 'bg-yellow-200';
-            const headerText = es ? 'text-white' : 'text-gray-800';
-            const headerZh = es ? 'hidden' : 'text-gray-500';
-            const cols = getOrderedColumns(p);
-            const theadHtml = `<tr>` + cols.map(c => `<th class="border border-gray-300 ${headerBg} px-2 py-2 text-center">
-                    ${c.isCustom ? `<span class="font-bold ${headerText} text-[11px] uppercase">${escapeHtml(c.es)}</span>` : `
-                        <div class="text-[9px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
-                        <div class="font-bold ${headerText} text-[11px] uppercase">${c.es}</div>`}
-                </th>`).join('') + `</tr>`;
-            const rows = p.rows || [];
-            const tbodyHtml = rows.map((r, i) => {
-                const isFirst = i === 0, totalRows = rows.length;
-                const tds = cols.map(c => {
-                    if (c.isCustom) return `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml((r.custom && r.custom[c.key]) || '')}</td>`;
-                    if (c.key === 'img' || c.key === 'patch') {
-                        const src = r[c.key];
-                        return `<td class="border border-gray-300 p-1 text-center align-middle">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-12 h-14 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
-                    }
-                    if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center align-middle whitespace-nowrap"><span class="font-bold uppercase">${escapeHtml(r.name || '')}</span>${r.number ? ' ' + escapeHtml(r.number) : ''}</td>`;
-                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top bg-white">${renderAddrCellInner({ address: p.address })}</td>`; }
-                    if (c.key === 'priceTotal') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top font-black text-gray-900 bg-yellow-100">${formatMoney(p.total)} €</td>`; }
-                    return `<td class="border border-gray-300 p-1 text-center align-middle">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
-                }).join('');
-                return `<tr>${tds}</tr>`;
-            }).join('');
-            document.getElementById('pedido-view-title').textContent = p.name;
-            document.getElementById('pedido-view-body').innerHTML = `<table class="w-full border-collapse text-xs bg-white text-black"><thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody></table>`;
-            document.getElementById('pedido-view-modal').classList.remove('hidden');
+            editingArchivedId = id;
+            switchTab('pedido');
+            document.getElementById('order-sheets-bar').classList.add('hidden');
+            document.getElementById('order-style-bar').classList.add('hidden');
+            document.getElementById('save-order-btn').classList.add('hidden');
+            const banner = document.getElementById('archived-edit-banner');
+            banner.classList.remove('hidden'); banner.classList.add('flex');
+            document.getElementById('archived-edit-name').textContent = p.name;
+            renderOrderTable();
         };
-        window.closePedidoView = function() { document.getElementById('pedido-view-modal').classList.add('hidden'); };
+        window.stopEditingArchivedPedido = function() {
+            editingArchivedId = null;
+            document.getElementById('order-sheets-bar').classList.remove('hidden');
+            document.getElementById('order-style-bar').classList.remove('hidden');
+            document.getElementById('save-order-btn').classList.remove('hidden');
+            const banner = document.getElementById('archived-edit-banner');
+            banner.classList.add('hidden'); banner.classList.remove('flex');
+            renderOrderSheetsBar(); renderOrderTable();
+            switchTab('pedidos');
+            renderPedidosTab();
+        };
 
         window.onload = async function() {
             await loadDB();
