@@ -242,6 +242,7 @@
                 </div>
             </section>
 
+            <div id="pedido-order-home">
             <section id="pedido-order-section" class="bg-white text-black rounded-2xl shadow-xl overflow-hidden">
                 <div class="flex flex-wrap items-center gap-3 p-4 border-b border-gray-200 bg-gray-50 print:hidden">
                     <h2 class="font-black text-lg tracking-wide text-black">📦 PLANTILLA DE PEDIDO</h2>
@@ -275,6 +276,7 @@
                 </div>
                 <button onclick="addOrderRow()" class="w-full py-3 text-center text-gray-400 hover:text-black hover:bg-gray-50 text-xs uppercase tracking-widest transition-colors cursor-pointer print:hidden border-t border-gray-200">➕ Añadir producto</button>
             </section>
+            </div>
         </main>
     </div>
 
@@ -283,6 +285,9 @@
 
     <!-- Desplegable de opciones de Versión (FAN/PLAYER/RETRO/...), fixed por el mismo motivo que sheet-options-menu -->
     <div id="version-picker-menu" class="hidden fixed bg-white border border-gray-300 rounded-xl shadow-lg z-[300] flex flex-col min-w-[11rem] py-1 overflow-hidden"></div>
+
+    <!-- Menú "⋯" (renombrar/mover/eliminar) de UNA opción del desplegable de Versión, fixed y por encima del propio desplegable -->
+    <div id="version-option-menu" class="hidden fixed bg-white border border-gray-300 rounded-xl shadow-lg z-[310] flex flex-col min-w-[10rem] py-1 overflow-hidden"></div>
 
     <div id="view-pedidos" class="hidden w-full pt-16 p-4 md:p-8 max-w-5xl mx-auto">
         <div class="flex items-center gap-3 mb-2 border-b border-zinc-800 pb-3">
@@ -314,6 +319,10 @@
             </div>
             <div id="pedidos-list"></div>
         </div>
+
+        <!-- Aquí se mueve #pedido-order-section mientras se edita un pedido archivado (editArchivedPedido) -
+             es un pedido YA GUARDADO, no tiene que ver con "Crear Pedido", así que no se cambia de pestaña. -->
+        <div id="archived-edit-slot" class="mt-6"></div>
     </div>
 
     <!-- Visor simple de imagen de la BIBLIOTECA -->
@@ -484,12 +493,14 @@
 
     <!-- Ver (solo lectura) un pedido ya archivado - separado de Editar, que reutiliza la plantilla en vivo -->
     <div id="pedido-view-modal" class="fixed inset-0 bg-black/95 hidden z-[220] items-center justify-center p-4 backdrop-blur-md">
-        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between mb-3">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-[97vw] max-w-[1600px] h-[94vh] flex flex-col">
+            <div class="flex items-center justify-between mb-3 shrink-0">
                 <h3 id="pedido-view-title" class="text-lg font-black tracking-wider text-amber-400 uppercase">👁️ Ver pedido</h3>
                 <button onclick="closePedidoViewModal()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
             </div>
-            <div id="pedido-view-body" class="rounded-xl overflow-hidden"></div>
+            <div class="flex-1 overflow-auto rounded-xl">
+                <div id="pedido-view-body" style="zoom:1.7"></div>
+            </div>
         </div>
     </div>
 
@@ -800,12 +811,26 @@
         // Repinta SOLO la cuadrícula de una (sub)colección concreta (y su contador), en vez de reconstruir TODA
         // la app como hace updateAll() - usado tras arrastrar una foto para reordenar/mover, que si no se nota
         // muy lento con muchas fotos (updateAll repinta cada cuadrícula de cada colección, esté visible o no).
-        function refreshGridAfterDrop(colId) {
+        // range=[lo,hi] opcional: si se da, solo se reconstruyen/reemplazan las tarjetas cuyo índice cambió de
+        // verdad (entre la posición de origen y la de destino de un arrastre), en vez de TODA la cuadrícula -
+        // con una colección grande, tirar y rehacer cientos de tarjetas en cada soltura es lo que se notaba lento.
+        function refreshGridAfterDrop(colId, range) {
             const grid = document.getElementById(`grid-${colId}`);
             if (grid) {
                 const items = db[colId] || [];
-                grid.innerHTML = '';
-                items.forEach((item, index) => grid.appendChild(createImageCard(item, colId, index, false)));
+                if (range) {
+                    const [lo, hi] = range;
+                    for (let i = lo; i <= hi; i++) {
+                        if (i >= items.length) continue;
+                        const newCard = createImageCard(items[i], colId, i, false);
+                        const existing = grid.children[i];
+                        if (existing) grid.replaceChild(newCard, existing); else grid.appendChild(newCard);
+                    }
+                    while (grid.children.length > items.length) grid.removeChild(grid.lastChild);
+                } else {
+                    grid.innerHTML = '';
+                    items.forEach((item, index) => grid.appendChild(createImageCard(item, colId, index, false)));
+                }
             }
             let parentCol = structure.flatMap(g => g.collections).find(c => c.id === colId);
             let isSub = false;
@@ -1091,15 +1116,15 @@
                 const itemToMove = arr.splice(dragSrcIndex, 1)[0];
                 arr.splice(finalIdx, 0, itemToMove);
                 saveDBQuiet();
-                refreshGridAfterDrop(targetColId);
+                refreshGridAfterDrop(targetColId, [Math.min(dragSrcIndex, finalIdx), Math.max(dragSrcIndex, finalIdx)]);
             } else if (dragSrcCol && dragSrcCol !== targetColId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
                 // Mover a otra (sub)colección
                 const itemToMove = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
                 db[targetColId].splice(insertAt, 0, itemToMove);
                 saveDBQuiet();
-                refreshGridAfterDrop(dragSrcCol);
-                refreshGridAfterDrop(targetColId);
+                refreshGridAfterDrop(dragSrcCol, [dragSrcIndex, db[dragSrcCol].length - 1]);
+                refreshGridAfterDrop(targetColId, [insertAt, db[targetColId].length - 1]);
             }
             dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
             return false;
@@ -2665,17 +2690,18 @@
                 openModal(item.src, item.nameNumber, item.patch, e, colId, index);
             };
 
+            const isImagePatch = item.patch && item.patch.startsWith('data:image');
             let labelsHTML = '';
-            if (item.nameNumber || item.patch) {
+            if (item.nameNumber || (item.patch && !isImagePatch)) {
                 labelsHTML += `<div class="absolute bottom-0 left-0 right-0 bg-black/90 border-t border-[#39FF14]/50 p-1 text-center truncate z-10 flex flex-col gap-0.5 pointer-events-none">`;
                 if (item.nameNumber) labelsHTML += `<span class="text-[9px] text-[#39FF14] uppercase tracking-wider leading-tight">📝 ${item.nameNumber}</span>`;
-                if (item.patch) {
-                    labelsHTML += item.patch.startsWith('data:image')
-                        ? `<div class="flex items-center justify-center gap-1"><span class="text-[9px] text-blue-400">🛡️</span><img src="${item.patch}" class="w-6 h-7 object-contain rounded bg-white/10"></div>`
-                        : `<span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>`;
-                }
+                if (item.patch && !isImagePatch) labelsHTML += `<span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>`;
                 labelsHTML += `</div>`;
             }
+            // El parche-imagen se ve como un recuadro con SOLO la foto (sin emoji ni barra de color de fondo).
+            const patchImgHTML = isImagePatch
+                ? `<div class="absolute bottom-1 left-1 z-10 w-9 h-11 rounded-lg overflow-hidden pointer-events-none"><img src="${item.patch}" class="w-full h-full object-contain bg-white/90"></div>`
+                : '';
 
             const relBadge = (Array.isArray(item.related) && item.related.length)
                 ? `<span class="absolute bottom-1 right-1 z-20 bg-black/80 text-sky-400 text-[9px] font-bold px-1.5 py-0.5 rounded-full pointer-events-none">🔗 ${item.related.length}</span>`
@@ -2693,6 +2719,7 @@
                 ${selectBtn}
                 ${relBadge}
                 ${labelsHTML}
+                ${patchImgHTML}
                 <div class="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex flex-col justify-end p-2 transition-opacity z-20 pointer-events-none">
                     <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
                         <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-xl text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
@@ -2727,6 +2754,10 @@
         function escAttr(s) { return escapeHtml(s).replace(/"/g, '&quot;'); }
 
         window.switchTab = function(tab) {
+            // #pedido-order-section vive físicamente dentro de Pedidos mientras se edita un pedido archivado
+            // (ver editArchivedPedido) - si el usuario se va a "Crear Pedido" sin haber pulsado "Volver a
+            // Pedidos", hay que devolverla a su sitio antes, si no esa pestaña se vería sin plantilla ninguna.
+            if (tab === 'pedido' && editingArchivedId) stopEditingArchivedPedido();
             document.getElementById('view-wishlist').classList.toggle('hidden', tab !== 'wishlist');
             document.getElementById('view-pedido').classList.toggle('hidden', tab !== 'pedido');
             document.getElementById('view-pedidos').classList.toggle('hidden', tab !== 'pedidos');
@@ -3050,6 +3081,59 @@
             try { await localforage.setItem('pedido_db_v1', pDb); } catch (e) {}
             pRenderSidebarBadges();
             pRenderLibraryBody();
+        }
+        async function pSaveDBQuiet() { try { await localforage.setItem('pedido_db_v1', pDb); } catch (e) {} }
+
+        // range=[lo,hi] opcional: igual que refreshGridAfterDrop en Wishlist, solo reconstruye las tarjetas cuyo
+        // índice cambió de verdad tras un arrastre, en vez de repintar TODA la biblioteca (pRenderLibraryBody),
+        // que con una colección/subcolección grande era la causa real de que costara ver aparecer la foto soltada.
+        function pRefreshGridAfterDrop(colId, range) {
+            const isSub = !!document.getElementById('p-dropzone-' + colId);
+            const items = pDb[colId] || [];
+            let gridEl = null, offset = 0;
+            if (isSub) {
+                const dz = document.getElementById('p-dropzone-' + colId);
+                gridEl = dz ? dz.parentNode : null;
+                offset = 1; // el propio dropzone "+" es el primer hijo del grid
+            } else if (colId === pCurrentView) {
+                gridEl = document.getElementById('p-lib-grid');
+            }
+            if (gridEl && range) {
+                const [lo, hi] = range;
+                for (let i = lo; i <= hi; i++) {
+                    if (i >= items.length) continue;
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = pCardHTML(items[i], colId, i);
+                    const newCard = tmp.firstElementChild;
+                    const existing = gridEl.children[offset + i];
+                    if (existing) gridEl.replaceChild(newCard, existing); else gridEl.appendChild(newCard);
+                }
+                while (gridEl.children.length > offset + items.length) gridEl.removeChild(gridEl.lastChild);
+            } else if (gridEl) {
+                const cardsHTML = items.map((it, i) => pCardHTML(it, colId, i)).join('');
+                if (isSub) {
+                    const dz = document.getElementById('p-dropzone-' + colId);
+                    gridEl.innerHTML = '';
+                    gridEl.appendChild(dz);
+                    gridEl.insertAdjacentHTML('beforeend', cardsHTML);
+                } else {
+                    gridEl.innerHTML = cardsHTML;
+                }
+            }
+            if (isSub) {
+                const subCountEl = document.getElementById('p-subcount-' + colId);
+                if (subCountEl) subCountEl.textContent = items.length;
+            }
+            const parentCol = isSub
+                ? pStructure.flatMap(g => g.collections).find(c => (c.subCols || []).some(s => s.id === colId))
+                : pFindCollection(colId);
+            if (parentCol && parentCol.id === pCurrentView) {
+                let total = (pDb[parentCol.id] || []).length;
+                (parentCol.subCols || []).forEach(s => { total += (pDb[s.id] || []).length; });
+                const countEl = document.getElementById('p-lib-count');
+                if (countEl) countEl.textContent = total + ' u.';
+            }
+            pRenderSidebarBadges();
         }
 
         function pFindCollection(id) {
@@ -3432,7 +3516,7 @@
                         <div class="flex items-center gap-2 mb-3 pb-2 border-b border-zinc-800">
                             <div class="w-2 h-2 rounded-full ${dotColor} shrink-0"></div>
                             <h3 class="font-bold text-white text-sm uppercase tracking-wide truncate flex-1">${sub.name}</h3>
-                            <span class="text-[10px] text-zinc-500 shrink-0">${sItems.length}</span>
+                            <span id="p-subcount-${sub.id}" class="text-[10px] text-zinc-500 shrink-0">${sItems.length}</span>
                             <button onclick="openInput('p-edit-subcollection', '${col.id}', '${sub.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5 transition-colors" title="Renombrar subcolección">✏️</button>
                             <button onclick="pDeleteSubCollection('${col.id}', '${sub.id}', event)" class="del-x-btn" title="Eliminar subcolección">✕</button>
                         </div>
@@ -3677,13 +3761,16 @@
                 const arr = pDb[srcColId];
                 const item = arr.splice(srcIndex, 1)[0];
                 arr.splice(finalIdx, 0, item);
+                pSaveDBQuiet();
+                pRefreshGridAfterDrop(targetColId, [Math.min(srcIndex, finalIdx), Math.max(srcIndex, finalIdx)]);
             } else {
                 const item = pDb[srcColId].splice(srcIndex, 1)[0];
                 if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
                 pDb[targetColId].splice(insertAt, 0, item);
+                pSaveDBQuiet();
+                pRefreshGridAfterDrop(srcColId, [srcIndex, pDb[srcColId].length - 1]);
+                pRefreshGridAfterDrop(targetColId, [insertAt, pDb[targetColId].length - 1]);
             }
-            pSaveDB();
-            pRenderLibraryBody();
         };
         // Soltar una foto arrastrada sobre la caja "+" (vacía) de una colección/subcolección entera, no sobre una tarjeta concreta.
         window.pSectionDrop = function(e, targetColId) {
@@ -4573,16 +4660,42 @@
             menu.innerHTML = pedidoVersionOptions.map((opt, i) => `
                 <div class="flex items-center gap-0.5 px-1.5 py-1 hover:bg-gray-100 ${opt === current ? 'bg-sky-50' : ''}">
                     <span onclick="selectVersionOption('${escAttr(opt)}')" class="flex-1 text-xs text-gray-700 cursor-pointer truncate px-1">${opt === current ? '✓ ' : ''}${escapeHtml(opt)}</span>
-                    <button onclick="event.stopPropagation(); moveVersionOption(${i}, -1)" title="Mover arriba" class="text-gray-400 hover:text-black text-[10px] w-5 h-5 shrink-0 cursor-pointer ${i === 0 ? 'opacity-20 pointer-events-none' : ''}">▲</button>
-                    <button onclick="event.stopPropagation(); moveVersionOption(${i}, 1)" title="Mover abajo" class="text-gray-400 hover:text-black text-[10px] w-5 h-5 shrink-0 cursor-pointer ${i === pedidoVersionOptions.length - 1 ? 'opacity-20 pointer-events-none' : ''}">▼</button>
-                    <button onclick="event.stopPropagation(); openInput('rename-version-opcion', '${escAttr(opt)}', null, event)" title="Renombrar" class="text-gray-400 hover:text-black text-[10px] w-5 h-5 shrink-0 cursor-pointer">✏️</button>
-                    <button onclick="event.stopPropagation(); deleteVersionOption('${escAttr(opt)}')" title="Eliminar" class="text-red-400 hover:text-red-600 text-[10px] w-5 h-5 shrink-0 cursor-pointer">✕</button>
+                    <button data-version-opt-trigger onclick="toggleVersionOptionMenu(${i}, event)" title="Opciones" class="text-gray-400 hover:text-black text-xs w-5 h-5 shrink-0 cursor-pointer font-black">⋯</button>
                 </div>`).join('') +
                 `<div class="border-t border-gray-200 mt-1 pt-1">
                     <button onclick="event.stopPropagation(); openInput('add-version-opcion', null, null, event)" class="w-full px-2 py-1.5 text-left text-xs text-sky-600 hover:bg-gray-100 cursor-pointer">➕ Añadir opción</button>
                     ${current ? `<button onclick="event.stopPropagation(); selectVersionOption('')" class="w-full px-2 py-1.5 text-left text-xs text-gray-400 hover:bg-gray-100 cursor-pointer">✕ Vaciar</button>` : ''}
                 </div>`;
         }
+        // Menú "⋯" (Renombrar/Mover/Eliminar) de una opción concreta - agrupado en 3 puntos en vez de iconos sueltos,
+        // mismo patrón que renderClientesChips y los "⋯" de bloques/hojas. Fixed y con su propio z-index porque
+        // vive DENTRO de #version-picker-menu, que tiene overflow-hidden (recortaría un desplegable anidado normal).
+        let versionOptionMenuIndex = null;
+        window.toggleVersionOptionMenu = function(i, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            const menu = document.getElementById('version-option-menu');
+            if (versionOptionMenuIndex === i && !menu.classList.contains('hidden')) { closeVersionOptionMenu(); return; }
+            versionOptionMenuIndex = i;
+            const opt = pedidoVersionOptions[i];
+            menu.innerHTML = `
+                <button onclick="event.stopPropagation(); openInput('rename-version-opcion', '${escAttr(opt)}', null, event); closeVersionOptionMenu();" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 cursor-pointer">✏️ Renombrar</button>
+                <button onclick="event.stopPropagation(); moveVersionOption(${i}, -1); closeVersionOptionMenu();" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 cursor-pointer ${i === 0 ? 'opacity-30 pointer-events-none' : ''}">▲ Mover arriba</button>
+                <button onclick="event.stopPropagation(); moveVersionOption(${i}, 1); closeVersionOptionMenu();" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 cursor-pointer ${i === pedidoVersionOptions.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▼ Mover abajo</button>
+                <button onclick="event.stopPropagation(); deleteVersionOption('${escAttr(opt)}'); closeVersionOptionMenu();" class="px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50 cursor-pointer">✕ Eliminar</button>`;
+            const btn = event.currentTarget.getBoundingClientRect();
+            menu.style.left = btn.left + 'px';
+            menu.style.top = (btn.bottom + 4) + 'px';
+            menu.classList.remove('hidden');
+            const mr = menu.getBoundingClientRect();
+            if (mr.bottom > window.innerHeight - 8) menu.style.top = Math.max(8, btn.top - mr.height - 4) + 'px';
+            if (mr.right > window.innerWidth - 8) menu.style.left = Math.max(8, window.innerWidth - mr.width - 8) + 'px';
+        };
+        function closeVersionOptionMenu() {
+            versionOptionMenuIndex = null;
+            const menu = document.getElementById('version-option-menu');
+            if (menu) menu.classList.add('hidden');
+        }
+        document.addEventListener('click', (e) => { if (versionOptionMenuIndex !== null && !e.target.closest('#version-option-menu') && !e.target.closest('[data-version-opt-trigger]')) closeVersionOptionMenu(); });
         window.selectVersionOption = function(value) {
             const rowId = versionPickerRowId;
             const sheet = activeSheet();
@@ -5389,11 +5502,15 @@
 
         // EDITAR un pedido ya archivado: reutiliza la plantilla real de "Crear Pedido" (misma tabla,
         // mismo arrastrar/copiar-pegar/redimensionar...) apuntando temporalmente a este pedido en vez de a una
-        // hoja en vivo (ver activeSheet()/savePOrders() más arriba).
+        // hoja en vivo (ver activeSheet()/savePOrders() más arriba) - pero SIN cambiar de pestaña: es un pedido
+        // YA GUARDADO, no tiene que ver con "Crear Pedido", así que la plantilla (#pedido-order-section) se
+        // MUEVE de sitio en el DOM (no se clona ni se reconstruye) a un hueco dentro de la propia pestaña
+        // Pedidos (#archived-edit-slot), y vuelve a su sitio original (#pedido-order-home) al terminar.
         window.editArchivedPedido = function(id) {
             const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
             editingArchivedId = id;
-            switchTab('pedido');
+            const section = document.getElementById('pedido-order-section');
+            document.getElementById('archived-edit-slot').appendChild(section);
             document.getElementById('order-sheets-bar').classList.add('hidden');
             document.getElementById('order-style-bar').classList.add('hidden');
             document.getElementById('save-order-btn').classList.add('hidden');
@@ -5401,16 +5518,18 @@
             banner.classList.remove('hidden'); banner.classList.add('flex');
             document.getElementById('archived-edit-name').textContent = p.name;
             renderOrderTable();
+            section.scrollIntoView({ behavior: 'smooth', block: 'start' });
         };
         window.stopEditingArchivedPedido = function() {
             editingArchivedId = null;
+            const section = document.getElementById('pedido-order-section');
+            document.getElementById('pedido-order-home').appendChild(section);
             document.getElementById('order-sheets-bar').classList.remove('hidden');
             document.getElementById('order-style-bar').classList.remove('hidden');
             document.getElementById('save-order-btn').classList.remove('hidden');
             const banner = document.getElementById('archived-edit-banner');
             banner.classList.add('hidden'); banner.classList.remove('flex');
             renderOrderSheetsBar(); renderOrderTable();
-            switchTab('pedidos');
             renderPedidosTab();
         };
 
