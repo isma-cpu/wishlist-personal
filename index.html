@@ -767,6 +767,35 @@
 
         function saveStructure() { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); }
         async function saveDB() { await localforage.setItem('ninjagoal_db_v3', db); updateAll(); }
+        async function saveDBQuiet() { try { await localforage.setItem('ninjagoal_db_v3', db); } catch (e) {} }
+        // Repinta SOLO la cuadrícula de una (sub)colección concreta (y su contador), en vez de reconstruir TODA
+        // la app como hace updateAll() - usado tras arrastrar una foto para reordenar/mover, que si no se nota
+        // muy lento con muchas fotos (updateAll repinta cada cuadrícula de cada colección, esté visible o no).
+        function refreshGridAfterDrop(colId) {
+            const grid = document.getElementById(`grid-${colId}`);
+            if (grid) {
+                const items = db[colId] || [];
+                grid.innerHTML = '';
+                items.forEach((item, index) => grid.appendChild(createImageCard(item, colId, index, false)));
+            }
+            let parentCol = structure.flatMap(g => g.collections).find(c => c.id === colId);
+            let isSub = false;
+            if (!parentCol) {
+                parentCol = structure.flatMap(g => g.collections).find(c => (c.subCols || []).some(s => s.id === colId));
+                isSub = true;
+            }
+            if (!parentCol) return;
+            if (isSub) {
+                const subCountEl = document.getElementById(`count-${colId}`);
+                if (subCountEl) subCountEl.innerText = (db[colId] || []).length;
+            }
+            let total = (db[parentCol.id] || []).length;
+            (parentCol.subCols || []).forEach(s => { total += (db[s.id] || []).length; });
+            const countEl = document.getElementById(`count-${parentCol.id}`);
+            if (countEl) countEl.innerText = `${total} u.`;
+            const badge = document.getElementById(`badge-${parentCol.id}`);
+            if (badge) badge.innerText = total;
+        }
 
         // --- DESCARGAR TODAS LAS FOTOS EN UN ARCHIVO ZIP DE FOTOS REALES (JPG/PNG) ---
         async function downloadAllImagesZip() {
@@ -992,13 +1021,16 @@
                 const arr = db[targetColId];
                 const itemToMove = arr.splice(dragSrcIndex, 1)[0];
                 arr.splice(targetIndex, 0, itemToMove);
-                saveDB();
+                saveDBQuiet();
+                refreshGridAfterDrop(targetColId);
             } else if (dragSrcCol && dragSrcCol !== targetColId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
                 // Mover a otra (sub)colección
                 const itemToMove = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
                 db[targetColId].splice(targetIndex, 0, itemToMove);
-                saveDB();
+                saveDBQuiet();
+                refreshGridAfterDrop(dragSrcCol);
+                refreshGridAfterDrop(targetColId);
             }
             dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
             return false;
@@ -4267,22 +4299,22 @@
             const boxH = Math.max(28, (row.height || ORDER_ROW_DEFAULT_HEIGHT) - 8);
             const boxStyle = `style="height:${boxH}px"`;
             if (src && src.startsWith('data:image')) {
-                return `<div class="relative group w-full mx-auto" onclick="setSelectedImgCell('${row.id}','${field}')" ${boxStyle}>
+                return `<div class="relative group w-full mx-auto" onclick="setSelectedImgCell('${row.id}','${field}')" oncontextmenu="event.preventDefault(); clearOrderRowImage('${row.id}','${field}')" ${boxStyle}>
                     <img src="${src}" class="w-full h-full object-contain mx-auto">
+                    <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${field}')" title="Quitar foto (o clic derecho encima)" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                         <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                        <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${field}')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
                     </div>
                 </div>`;
             }
             if (field === 'patch') {
                 if (src) {
                     // Parche antiguo guardado como texto libre (antes de que los parches fueran siempre imagen) - se conserva visible.
-                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" onclick="setSelectedImgCell('${row.id}','patch')" ${boxStyle}>
+                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" onclick="setSelectedImgCell('${row.id}','patch')" oncontextmenu="event.preventDefault(); clearOrderRowImage('${row.id}','patch')" ${boxStyle}>
                         <span class="cell-text text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
+                        <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','patch')" title="Quitar (o clic derecho encima)" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
                         <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                             <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                            <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','patch')" title="Quitar" class="del-x-btn w-6 h-6">✕</button>
                         </div>
                     </div>`;
                 }
