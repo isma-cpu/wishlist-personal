@@ -32,10 +32,6 @@
         
         .dragging { opacity: 0.3; transform: scale(0.95); transition: transform 0.2s; }
         .drag-over { border-color: #39FF14 !important; box-shadow: inset 0 0 20px rgba(57, 255, 20, 0.6) !important; transform: scale(0.98); }
-        /* Barra de color en el borde izq/dcho de la tarjeta sobrevolada: marca exactamente dónde caerá la foto
-           (antes/después de esa tarjeta) si se suelta ahí mismo, en vez de solo resaltar toda la tarjeta. */
-        .drop-indicator-before { box-shadow: inset 4px 0 0 0 #39FF14 !important; }
-        .drop-indicator-after { box-shadow: inset -4px 0 0 0 #39FF14 !important; }
         .cursor-grab { cursor: grab; }
         .cursor-grabbing { cursor: grabbing !important; }
         
@@ -85,9 +81,10 @@
            (--cell-font-size, en px, puesto como variable inline en #order-table por renderOrderTable). */
         #order-table { --cell-font-size: 14px; }
         .cell-text { font-weight: 700; font-size: var(--cell-font-size, 14px); }
-        /* Celda de imagen/parche "seleccionada" para copiar/pegar (Ctrl+C/Ctrl+V) - las celdas de texto ya
-           muestran su propio anillo azul nativo al enfocarse, esto es solo para las que no son focuseables. */
-        .cell-selected-img { box-shadow: inset 0 0 0 3px #0ea5e9 !important; }
+        /* Celda "seleccionada" para copiar/pegar (Ctrl+C/Ctrl+V) - mismo contorno azul para TODAS las celdas de
+           la plantilla: las de imagen/parche/precio (no focuseables, vía .cell-selected-img añadida por JS) y
+           las de texto/número (focuseables de forma nativa, aquí mismo vía :focus, sin necesitar JS aparte). */
+        .cell-selected-img, .cell-text:focus { box-shadow: inset 0 0 0 3px #0ea5e9 !important; outline: none; }
     </style>
 </head>
 <body class="font-sans min-h-screen selection:bg-[#39FF14] selection:text-black">
@@ -292,6 +289,17 @@
             <div id="pedidos-clientes-chips" class="flex gap-2 flex-wrap"></div>
             <button onclick="openInput('add-cliente', null, null, event)" class="text-xs text-sky-400 hover:text-sky-300 uppercase border border-sky-400/40 rounded-full px-2 py-1 cursor-pointer">➕ Cliente</button>
         </div>
+
+        <div class="mb-6">
+            <button onclick="toggleMorosos()" class="w-full flex items-center gap-2 mb-2 cursor-pointer">
+                <span id="morosos-chevron" class="text-[10px] text-red-400 shrink-0">▾</span>
+                <h3 class="font-black text-red-400 uppercase text-sm tracking-wide shrink-0">⚠️ Morosos</h3>
+                <span id="morosos-summary" class="text-xs text-zinc-500 shrink-0"></span>
+                <div class="flex-1 border-b border-red-500/20"></div>
+            </button>
+            <div id="morosos-body"></div>
+        </div>
+
         <div id="pedidos-list"></div>
     </div>
 
@@ -1010,44 +1018,71 @@
             setTimeout(() => { if (dragSrcEl) dragSrcEl.classList.add('dragging'); }, 0);
         };
 
-        // Además de resaltar la tarjeta sobrevolada, marca en qué mitad está el cursor (izquierda/derecha) para
-        // enseñar exactamente dónde caerá la foto si se suelta ahí - antes solo se veía "esta tarjeta", sin
-        // saber si se insertaría antes o después.
+        // Hueco real (no solo un borde resaltado) que se mueve dentro de la cuadrícula para enseñar dónde caerá
+        // la foto - las demás tarjetas se desplazan solas alrededor porque es un elemento más del grid CSS.
+        // getBoundingClientRect() fuerza un recálculo de layout: se cachea por tarjeta y se limita la frecuencia
+        // de trabajo (throttle) para que no vaya lento con muchas fotos en la página.
+        let dropPlaceholder = null;
+        function ensureDropPlaceholder() {
+            if (!dropPlaceholder) {
+                dropPlaceholder = document.createElement('div');
+                dropPlaceholder.className = 'aspect-[3/4] rounded-xl border-2 border-dashed border-[#39FF14] bg-[#39FF14]/10 pointer-events-none';
+            }
+            return dropPlaceholder;
+        }
+        function removeDropPlaceholder() {
+            if (dropPlaceholder && dropPlaceholder.parentNode) dropPlaceholder.parentNode.removeChild(dropPlaceholder);
+        }
+        let lastDragOverEl = null, lastDragOverRect = null, lastDragOverAt = 0;
         window.handleDragOver = function(e) {
             e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-            if (e.currentTarget === dragSrcEl) return false;
-            const rect = e.currentTarget.getBoundingClientRect();
-            const before = (e.clientX - rect.left) < rect.width / 2;
-            e.currentTarget.classList.toggle('drop-indicator-before', before);
-            e.currentTarget.classList.toggle('drop-indicator-after', !before);
-            e.currentTarget.dataset.dropBefore = before ? '1' : '0';
+            const card = e.currentTarget;
+            if (card === dragSrcEl) return false;
+            if (card !== lastDragOverEl) {
+                lastDragOverEl = card;
+                lastDragOverRect = card.getBoundingClientRect();
+                lastDragOverAt = 0; // procesar el primer evento de esta tarjeta sí o sí
+            }
+            const now = performance.now();
+            if (now - lastDragOverAt < 40) return false;
+            lastDragOverAt = now;
+            const before = (e.clientX - lastDragOverRect.left) < lastDragOverRect.width / 2;
+            const ph = ensureDropPlaceholder();
+            if (before) card.parentNode.insertBefore(ph, card);
+            else card.parentNode.insertBefore(ph, card.nextSibling);
             return false;
         };
 
-        window.handleDragLeave = function(e) { e.currentTarget.classList.remove('drag-over', 'drop-indicator-before', 'drop-indicator-after'); };
+        window.handleDragLeave = function(e) {
+            if (e.currentTarget === lastDragOverEl) { lastDragOverEl = null; lastDragOverRect = null; }
+        };
 
         window.handleDrop = function(e, targetColId, targetIndex) {
             e.stopPropagation(); e.preventDefault();
-            const dropBefore = e.currentTarget.dataset.dropBefore !== '0';
-            e.currentTarget.classList.remove('drag-over', 'drop-indicator-before', 'drop-indicator-after');
             if (dragSrcEl) dragSrcEl.classList.remove('dragging');
-            const desiredPos = dropBefore ? targetIndex : targetIndex + 1;
+            const grid = document.getElementById(`grid-${targetColId}`);
+            let insertAt = targetIndex;
+            if (dropPlaceholder && grid && dropPlaceholder.parentNode === grid) {
+                insertAt = Array.from(grid.children).indexOf(dropPlaceholder);
+            }
+            removeDropPlaceholder();
+            lastDragOverEl = null; lastDragOverRect = null;
 
             if (dragSrcCol === targetColId && dragSrcIndex !== null) {
                 // Reordenar dentro de la misma (sub)colección
                 const arr = db[targetColId];
-                let insertAt = desiredPos;
-                if (dragSrcIndex < insertAt) insertAt -= 1; // ya se habrá quitado un elemento de antes de esa posición
-                if (insertAt === dragSrcIndex) { dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null; return false; }
+                let finalIdx = insertAt;
+                if (dragSrcIndex < finalIdx) finalIdx -= 1; // ya se habrá quitado un elemento de antes de esa posición
+                if (finalIdx === dragSrcIndex) { dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null; return false; }
                 const itemToMove = arr.splice(dragSrcIndex, 1)[0];
-                arr.splice(insertAt, 0, itemToMove);
+                arr.splice(finalIdx, 0, itemToMove);
                 saveDBQuiet();
                 refreshGridAfterDrop(targetColId);
             } else if (dragSrcCol && dragSrcCol !== targetColId && dragSrcIndex !== null && Array.isArray(db[dragSrcCol])) {
                 // Mover a otra (sub)colección
                 const itemToMove = db[dragSrcCol].splice(dragSrcIndex, 1)[0];
                 if (!Array.isArray(db[targetColId])) db[targetColId] = [];
-                db[targetColId].splice(desiredPos, 0, itemToMove);
+                db[targetColId].splice(insertAt, 0, itemToMove);
                 saveDBQuiet();
                 refreshGridAfterDrop(dragSrcCol);
                 refreshGridAfterDrop(targetColId);
@@ -1058,7 +1093,9 @@
 
         window.handleDragEnd = function(e) {
             if (dragSrcEl) dragSrcEl.classList.remove('dragging');
-            document.querySelectorAll('.image-card-draggable').forEach(el => el.classList.remove('drag-over', 'drop-indicator-before', 'drop-indicator-after'));
+            removeDropPlaceholder();
+            lastDragOverEl = null; lastDragOverRect = null;
+            document.querySelectorAll('.image-card-draggable').forEach(el => el.classList.remove('drag-over'));
             document.querySelectorAll('.sidebar-link').forEach(el => el.classList.remove('sidebar-drag-over'));
             dragSrcEl = null; dragSrcCol = null; dragSrcIndex = null;
         };
@@ -3535,40 +3572,73 @@
             try { e.dataTransfer.setData('text/plain', 'lib-img'); } catch (x) {}
             e.dataTransfer.effectAllowed = 'copyMove';
         };
-        window.pDragEndCard = function() { libraryDragSrc = null; };
+        window.pDragEndCard = function() {
+            libraryDragSrc = null;
+            removePDropPlaceholder();
+            pLastDragOverEl = null; pLastDragOverRect = null;
+        };
 
         // Mover una foto de la biblioteca (arrastrando su tarjeta) a otra colección/subcolección, incluyendo
-        // sacarla o meterla desde/hacia "sin clasificar" - igual que ya funcionaba en la Wishlist.
+        // sacarla o meterla desde/hacia "sin clasificar" - igual que en la Wishlist: un hueco real se desplaza
+        // por la cuadrícula (no solo un borde resaltado), con el mismo cacheo/límite de frecuencia para no ir lento.
+        let pDropPlaceholder = null;
+        function ensurePDropPlaceholder() {
+            if (!pDropPlaceholder) {
+                pDropPlaceholder = document.createElement('div');
+                pDropPlaceholder.className = 'aspect-[3/4] rounded-xl border-2 border-dashed border-sky-400 bg-sky-400/10 pointer-events-none';
+            }
+            return pDropPlaceholder;
+        }
+        function removePDropPlaceholder() {
+            if (pDropPlaceholder && pDropPlaceholder.parentNode) pDropPlaceholder.parentNode.removeChild(pDropPlaceholder);
+        }
+        let pLastDragOverEl = null, pLastDragOverRect = null, pLastDragOverAt = 0;
         window.pCardDragOver = function(e) {
             if (!libraryDragSrc) return;
             e.preventDefault(); e.stopPropagation();
-            const rect = e.currentTarget.getBoundingClientRect();
-            const before = (e.clientX - rect.left) < rect.width / 2;
-            e.currentTarget.classList.toggle('drop-indicator-before', before);
-            e.currentTarget.classList.toggle('drop-indicator-after', !before);
-            e.currentTarget.dataset.dropBefore = before ? '1' : '0';
+            const card = e.currentTarget;
+            if (card !== pLastDragOverEl) {
+                pLastDragOverEl = card;
+                pLastDragOverRect = card.getBoundingClientRect();
+                pLastDragOverAt = 0;
+            }
+            const now = performance.now();
+            if (now - pLastDragOverAt < 40) return;
+            pLastDragOverAt = now;
+            const before = (e.clientX - pLastDragOverRect.left) < pLastDragOverRect.width / 2;
+            const ph = ensurePDropPlaceholder();
+            if (before) card.parentNode.insertBefore(ph, card);
+            else card.parentNode.insertBefore(ph, card.nextSibling);
         };
-        window.pCardDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400', 'drop-indicator-before', 'drop-indicator-after'); };
+        window.pCardDragLeave = function(e) {
+            e.currentTarget.classList.remove('ring-2', 'ring-sky-400');
+            if (e.currentTarget === pLastDragOverEl) { pLastDragOverEl = null; pLastDragOverRect = null; }
+        };
         window.pCardDrop = function(e, targetColId, targetIndex) {
-            const dropBefore = e.currentTarget.dataset.dropBefore !== '0';
-            e.currentTarget.classList.remove('ring-2', 'ring-sky-400', 'drop-indicator-before', 'drop-indicator-after');
-            if (!libraryDragSrc || libraryDragSrc.colId == null) return;
+            e.currentTarget.classList.remove('ring-2', 'ring-sky-400');
+            if (!libraryDragSrc || libraryDragSrc.colId == null) { removePDropPlaceholder(); return; }
             e.preventDefault(); e.stopPropagation();
             const { colId: srcColId, index: srcIndex } = libraryDragSrc;
             libraryDragSrc = null;
+            let insertAt = targetIndex;
+            const cardParent = e.currentTarget.parentNode;
+            if (pDropPlaceholder && cardParent && pDropPlaceholder.parentNode === cardParent) {
+                insertAt = Array.from(cardParent.children).indexOf(pDropPlaceholder);
+            }
+            removePDropPlaceholder();
+            pLastDragOverEl = null; pLastDragOverRect = null;
             if (!Array.isArray(pDb[srcColId])) return;
-            const desiredPos = dropBefore ? targetIndex : targetIndex + 1;
             if (srcColId === targetColId) {
-                let insertAt = desiredPos;
-                if (srcIndex < insertAt) insertAt -= 1;
-                if (insertAt === srcIndex) return;
+                let finalIdx = insertAt;
+                if (srcIndex < finalIdx) finalIdx -= 1;
+                if (finalIdx === srcIndex) return;
                 const arr = pDb[srcColId];
                 const item = arr.splice(srcIndex, 1)[0];
-                arr.splice(insertAt, 0, item);
+                arr.splice(finalIdx, 0, item);
             } else {
                 const item = pDb[srcColId].splice(srcIndex, 1)[0];
                 if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
-                pDb[targetColId].splice(desiredPos, 0, item);
+                pDb[targetColId].splice(insertAt, 0, item);
             }
             pSaveDB();
             pRenderLibraryBody();
@@ -4281,24 +4351,34 @@
             if (cell) cell.textContent = formatMoney(total) + ' €';
         }
 
-        // --- Copiar/pegar cualquier celda de la plantilla (Ctrl+C / Ctrl+V), texto o imagen, entre filas y
-        // entre hojas distintas - portapapeles propio de la app (variable en memoria), no el del sistema. ---
-        let selectedImgCell = null; // { rowId, field } de la última celda de imagen/parche pulsada
+        // --- Copiar/pegar cualquier celda de la plantilla (Ctrl+C / Ctrl+V): texto, imagen, o el precio/precio
+        // total (de solo lectura, se pueden copiar pero no pegar porque siempre se recalculan solos) - entre
+        // filas y entre hojas distintas. Portapapeles propio de la app (variable en memoria), no el del sistema. ---
+        let selectedImgCell = null; // { rowId, field } de la última celda NO focuseable pulsada (imagen/parche/precio)
+        function cellElementFor(rowId, field) {
+            if (field === 'priceTotal') return document.getElementById('cell-pricetotal');
+            return document.getElementById('cell-' + field + '-' + rowId);
+        }
         window.setSelectedImgCell = function(rowId, field) {
+            // Quitar el foco de un input de texto que estuviera activo - el navegador NO lo hace solo al pulsar
+            // en un elemento no-focuseable como este, así que sin esto Ctrl+C seguiría copiando el input viejo.
+            if (document.activeElement && document.activeElement.blur && document.activeElement.dataset && document.activeElement.dataset.cellRow) {
+                document.activeElement.blur();
+            }
             // Quitar el resaltado de "seleccionada" de la celda anterior y ponerlo en la nueva - las celdas de
             // texto ya muestran su propio anillo azul al enfocarse (nativo del navegador), pero las de imagen/
-            // parche no son focuseables, así que necesitan su propia marca visual de "esta es la seleccionada".
+            // parche/precio no son focuseables, así que necesitan su propia marca visual de "esta es la seleccionada".
             if (selectedImgCell) {
-                const prevEl = document.getElementById('cell-' + selectedImgCell.field + '-' + selectedImgCell.rowId);
+                const prevEl = cellElementFor(selectedImgCell.rowId, selectedImgCell.field);
                 if (prevEl) prevEl.classList.remove('cell-selected-img');
             }
             selectedImgCell = { rowId, field };
-            const el = document.getElementById('cell-' + field + '-' + rowId);
+            const el = cellElementFor(rowId, field);
             if (el) el.classList.add('cell-selected-img');
         };
         window.clearSelectedImgCell = function() {
             if (!selectedImgCell) return;
-            const prevEl = document.getElementById('cell-' + selectedImgCell.field + '-' + selectedImgCell.rowId);
+            const prevEl = cellElementFor(selectedImgCell.rowId, selectedImgCell.field);
             if (prevEl) prevEl.classList.remove('cell-selected-img');
             selectedImgCell = null;
         };
@@ -4322,12 +4402,31 @@
             }
             if (!selectedImgCell) return;
             const sheet = activeSheet();
+            const field = selectedImgCell.field;
+            const isImageField = field === 'img' || field === 'patch';
+            const isReadOnlyField = field === 'price' || field === 'priceTotal'; // siempre calculados, no se pueden pegar
+            if (field === 'priceTotal') {
+                if (key === 'c') {
+                    const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
+                    cellClipboard = { type: 'text', value: formatMoney(total) };
+                    e.preventDefault();
+                }
+                return; // no se pega: es la suma de toda la hoja, no un dato de una fila
+            }
             const row = sheet && sheet.rows.find(r => r.id === selectedImgCell.rowId);
             if (!row) return;
-            const field = selectedImgCell.field;
             if (key === 'c') {
-                if (row[field] && row[field].startsWith('data:image')) { cellClipboard = { type: 'image', value: row[field] }; e.preventDefault(); }
-            } else if (cellClipboard && cellClipboard.type === 'image') {
+                if (isImageField) {
+                    if (row[field] && row[field].startsWith('data:image')) { cellClipboard = { type: 'image', value: row[field] }; e.preventDefault(); }
+                } else if (field === 'price') {
+                    cellClipboard = { type: 'text', value: formatMoney(computeRowPrice(row)) };
+                    e.preventDefault();
+                }
+                return;
+            }
+            // pegar (Ctrl+V) - solo en imagen/parche; precio y precio total son de solo lectura
+            if (isReadOnlyField) return;
+            if (isImageField && cellClipboard && cellClipboard.type === 'image') {
                 e.preventDefault();
                 row[field] = cellClipboard.value;
                 savePOrders();
@@ -4398,7 +4497,7 @@
             const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-8 text-left bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
             const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
             const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-full px-1 py-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
-            const priceCell = `<span id="cell-price-${row.id}" class="cell-text text-gray-900">${formatMoney(computeRowPrice(row))}</span>`;
+            const priceCell = `<span id="cell-price-${row.id}" onclick="setSelectedImgCell('${row.id}','price')" class="cell-text text-gray-900 cursor-pointer">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
                 if (c.isCustom) return `<td class="border border-gray-300 p-1 align-middle text-center">
@@ -4418,7 +4517,7 @@
                 if (c.key === 'priceTotal') {
                     if (!isFirstRow) return '';
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
-                    return `<td id="cell-pricetotal" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`;
+                    return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
                 }
                 if (c.key === 'price') return `<td class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
@@ -4938,9 +5037,61 @@
             saveClientes(); renderClientesChips();
         };
 
+        // "Morosos": clientes que todavía deben dinero de algún pedido archivado, y de cuáles. Se calcula al
+        // vuelo a partir de pedidosArchivo (total - paid > 0), no necesita guardar nada aparte.
+        let morososCollapsed = false;
+        try { morososCollapsed = localStorage.getItem('pedidos_morosos_collapsed') === '1'; } catch (e) {}
+        window.toggleMorosos = function() {
+            morososCollapsed = !morososCollapsed;
+            try { localStorage.setItem('pedidos_morosos_collapsed', morososCollapsed ? '1' : '0'); } catch (e) {}
+            renderMorosos();
+        };
+        function renderMorosos() {
+            const chev = document.getElementById('morosos-chevron');
+            const summary = document.getElementById('morosos-summary');
+            const body = document.getElementById('morosos-body');
+            if (!body) return;
+            if (chev) chev.textContent = morososCollapsed ? '▸' : '▾';
+            const debtors = pedidosArchivo.filter(p => Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0)) > 0.004);
+            const byClient = {};
+            debtors.forEach(p => {
+                const key = p.cliente || '— Sin cliente —';
+                if (!byClient[key]) byClient[key] = [];
+                byClient[key].push(p);
+            });
+            const clientNames = Object.keys(byClient);
+            const grandTotal = debtors.reduce((s, p) => s + Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0)), 0);
+            if (summary) summary.textContent = clientNames.length ? `${clientNames.length} · ${formatMoney(grandTotal)} €` : 'al día ✓';
+            if (morososCollapsed) { body.innerHTML = ''; return; }
+            if (!clientNames.length) {
+                body.innerHTML = `<p class="text-zinc-500 text-sm">Nadie te debe dinero ahora mismo. 🎉</p>`;
+                return;
+            }
+            body.innerHTML = clientNames.map(cliente => {
+                const orders = byClient[cliente];
+                const clientTotal = orders.reduce((s, p) => s + Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0)), 0);
+                const rows = orders.map(p => {
+                    const debe = Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0));
+                    const fecha = new Date(p.date).toLocaleDateString('es-ES');
+                    return `<button onclick="viewPedidoDetail('${p.id}')" class="w-full flex items-center justify-between gap-2 text-xs text-zinc-300 hover:text-white py-1.5 border-b border-red-500/10 last:border-0 cursor-pointer text-left">
+                            <span class="truncate">${escapeHtml(p.name)} <span class="text-zinc-500">· ${fecha}</span></span>
+                            <span class="text-red-400 font-bold shrink-0">${formatMoney(debe)} €</span>
+                        </button>`;
+                }).join('');
+                return `<div class="rounded-2xl p-3 mb-3 border border-red-500/30 bg-red-950/10">
+                    <div class="flex items-center justify-between mb-1">
+                        <h4 class="font-black text-white uppercase text-sm">${escapeHtml(cliente)}</h4>
+                        <span class="text-red-400 font-black text-sm">${formatMoney(clientTotal)} €</span>
+                    </div>
+                    ${rows}
+                </div>`;
+            }).join('');
+        }
+
         function renderPedidosTab() {
             const countEl = document.getElementById('pedidos-count');
             if (countEl) countEl.textContent = pedidosArchivo.length + (pedidosArchivo.length === 1 ? ' pedido' : ' pedidos');
+            renderMorosos();
             const list = document.getElementById('pedidos-list');
             if (!list) return;
             if (!pedidosArchivo.length) {
