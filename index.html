@@ -3969,7 +3969,10 @@
                     <table class="w-full text-center border-collapse">
                         <thead><tr class="bg-zinc-900">${th(verCol.es)}${nameHeaderHtml}${th(patchCol.es)}</tr></thead>
                         <tbody><tr>
-                            <td class="p-1.5"><input id="send-pedido-version" placeholder="FAN, PLAYER..." class="w-full bg-black border border-zinc-700 text-white px-2 py-1.5 text-xs rounded-lg text-center focus:outline-none focus:border-amber-400"></td>
+                            <td class="p-1.5">
+                                <input type="hidden" id="send-pedido-version" value="">
+                                <button type="button" id="send-pedido-version-btn" onclick="openVersionDropdownField('send-pedido-version', 'send-pedido-version-btn', event)" class="w-full bg-black border border-zinc-700 text-white px-2 py-1.5 text-xs rounded-lg text-center hover:border-amber-400 cursor-pointer"><span class="text-zinc-500 normal-case font-normal">Elegir ▾</span></button>
+                            </td>
                             ${nameBodyHtml}
                             <td class="p-1.5">
                                 <div class="flex flex-col items-center gap-1">
@@ -4669,7 +4672,7 @@
         function saveVersionOptions() { try { localStorage.setItem('pedido_version_opciones_v1', JSON.stringify(pedidoVersionOptions)); } catch (e) {} }
         function renderVersionCellInner(row) {
             const val = row.version || '';
-            return `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown('${row.id}', event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span data-empty-hint class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
+            return `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown(versionRowTarget('${row.id}'), event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span data-empty-hint class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
         }
         function refreshVersionCellDOM(rowId) {
             const sheet = activeSheet();
@@ -4677,12 +4680,36 @@
             const td = document.getElementById('cell-version-' + rowId);
             if (td && row) td.innerHTML = renderVersionCellInner(row);
         }
-        let versionPickerRowId = null;
-        window.openVersionDropdown = function(rowId, event) {
+        // Target de fila real de una hoja (tabla de Crear Pedido/pedido archivado).
+        function versionRowTarget(rowId) {
+            return {
+                key: 'row-' + rowId,
+                getValue: () => { const s = activeSheet(); const r = s && s.rows.find(x => x.id === rowId); return r ? (r.version || '') : ''; },
+                setValue: (v) => { const s = activeSheet(); const r = s && s.rows.find(x => x.id === rowId); if (r) { r.version = v; savePOrders(); } refreshVersionCellDOM(rowId); }
+            };
+        }
+        // Target genérico para un campo suelto fuera de una tabla (p.ej. el formulario de "Enviar a Pedido"):
+        // guarda el valor en un <input type="hidden"> y refresca el botón visible que lo muestra.
+        function versionFieldTarget(hiddenInputId, btnId) {
+            return {
+                key: 'field-' + hiddenInputId,
+                getValue: () => { const el = document.getElementById(hiddenInputId); return el ? el.value : ''; },
+                setValue: (v) => {
+                    const el = document.getElementById(hiddenInputId); if (el) el.value = v;
+                    const btn = document.getElementById(btnId);
+                    if (btn) btn.innerHTML = v ? escapeHtml(v) : '<span class="text-zinc-500 normal-case font-normal">Elegir ▾</span>';
+                }
+            };
+        }
+        window.openVersionDropdownField = function(hiddenInputId, btnId, event) {
+            openVersionDropdown(versionFieldTarget(hiddenInputId, btnId), event);
+        };
+        let versionPickerTarget = null;
+        window.openVersionDropdown = function(target, event) {
             if (event) { event.stopPropagation(); event.preventDefault(); }
             const menu = document.getElementById('version-picker-menu');
-            if (versionPickerRowId === rowId && !menu.classList.contains('hidden')) { closeVersionDropdown(); return; }
-            versionPickerRowId = rowId;
+            if (versionPickerTarget && versionPickerTarget.key === target.key && !menu.classList.contains('hidden')) { closeVersionDropdown(); return; }
+            versionPickerTarget = target;
             renderVersionMenuContent();
             const btn = event.currentTarget.getBoundingClientRect();
             menu.style.left = btn.left + 'px';
@@ -4696,17 +4723,15 @@
             }
         };
         function closeVersionDropdown() {
-            versionPickerRowId = null;
+            versionPickerTarget = null;
             const menu = document.getElementById('version-picker-menu');
             if (menu) menu.classList.add('hidden');
         }
-        document.addEventListener('click', (e) => { if (versionPickerRowId && !e.target.closest('#version-picker-menu') && !e.target.closest('[data-version-trigger]')) closeVersionDropdown(); });
+        document.addEventListener('click', (e) => { if (versionPickerTarget && !e.target.closest('#version-picker-menu') && !e.target.closest('[data-version-trigger]')) closeVersionDropdown(); });
         function renderVersionMenuContent() {
             const menu = document.getElementById('version-picker-menu');
-            if (!menu || !versionPickerRowId) return;
-            const sheet = activeSheet();
-            const row = sheet && sheet.rows.find(r => r.id === versionPickerRowId);
-            const current = row ? (row.version || '') : '';
+            if (!menu || !versionPickerTarget) return;
+            const current = versionPickerTarget.getValue() || '';
             menu.innerHTML = pedidoVersionOptions.map((opt, i) => `
                 <div class="flex items-center gap-0.5 px-1.5 py-1 hover:bg-gray-100 ${opt === current ? 'bg-sky-50' : ''}">
                     <span onclick="selectVersionOption('${escAttr(opt)}')" class="flex-1 text-xs text-gray-700 cursor-pointer truncate px-1">${opt === current ? '✓ ' : ''}${escapeHtml(opt)}</span>
@@ -4747,12 +4772,8 @@
         }
         document.addEventListener('click', (e) => { if (versionOptionMenuIndex !== null && !e.target.closest('#version-option-menu') && !e.target.closest('[data-version-opt-trigger]')) closeVersionOptionMenu(); });
         window.selectVersionOption = function(value) {
-            const rowId = versionPickerRowId;
-            const sheet = activeSheet();
-            const row = sheet && sheet.rows.find(r => r.id === rowId);
-            if (row) { row.version = value; savePOrders(); }
+            if (versionPickerTarget) versionPickerTarget.setValue(value);
             closeVersionDropdown();
-            refreshVersionCellDOM(rowId);
         };
         window.moveVersionOption = function(i, dir) {
             const j = i + dir;
@@ -4844,31 +4865,31 @@
             const priceCell = `<span id="cell-price-${row.id}" onclick="setSelectedImgCell('${row.id}','price')" class="cell-text text-gray-900 cursor-pointer w-full h-full flex items-center justify-center">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
-                if (c.isCustom) return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">
+                if (c.isCustom) return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">
                         <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full h-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0">
                     </td>`;
-                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
-                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
-                if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
-                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
-                if (c.key === 'name') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${nameCellSolo}</td>`;
-                if (c.key === 'number') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${numberCellSolo}</td>`;
+                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
+                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
+                if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
+                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
+                if (c.key === 'name') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${nameCellSolo}</td>`;
+                if (c.key === 'number') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${numberCellSolo}</td>`;
                 if (c.key === 'address') {
                     if (!isFirstRow) return '';
-                    return `<td id="cell-addr" data-col-key="address" rowspan="${totalRows}" class="border border-gray-300 p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
+                    return `<td id="cell-addr" data-col-key="address" rowspan="${totalRows}" class="border border-black p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
                 }
                 if (c.key === 'priceTotal') {
                     if (!isFirstRow) return '';
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
-                    return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
+                    return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-black p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
                 }
-                if (c.key === 'price') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${priceCell}</td>`;
-                if (c.type === 'number') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${numCell(c.key)}</td>`;
-                return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${textCell(c.key)}</td>`;
+                if (c.key === 'price') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${priceCell}</td>`;
+                if (c.type === 'number') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${numCell(c.key)}</td>`;
+                return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
 
             const heightStyle = ` style="height:${rowH}px"`;
-            return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-gray-300 p-1 text-center align-middle relative print:hidden">
+            return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-black p-1 text-center align-middle relative print:hidden">
                     <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-300 hover:text-gray-500 text-sm cursor-grab select-none" title="Arrastra para reordenar la fila">⠿</span>
                     <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar fila">✕</button>
                     <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer" title="Arrastra para cambiar la altura de la fila"></span>
@@ -4901,7 +4922,7 @@
             const headerZh = es ? 'hidden' : 'text-gray-500';
 
             const thAll = getOrderedColumns(sheet).map(c => `
-                <th data-col-key="${c.key}" ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-gray-300 ${headerBg} px-2 py-2 text-center align-middle relative cursor-text">
+                <th data-col-key="${c.key}" ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-black ${headerBg} px-2 py-2 text-center align-middle relative cursor-text">
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     <button onclick="event.stopPropagation(); ${c.isCustom ? `deleteOrderColumn('${c.key}')` : `hideOrderColumn('${c.key}')`}" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden absolute top-0.5 right-0.5" title="${c.isCustom ? 'Eliminar columna' : 'Quitar columna'}">✕</button>
                     ${(c.key === 'nameNumber' || c.key === 'name' || c.key === 'number') ? `<button onclick="event.stopPropagation(); toggleSheetSplitNameNumber('${sheet.id}', event)" class="absolute bottom-0.5 left-0.5 text-[9px] opacity-50 hover:opacity-100 print:hidden" title="${sheet.splitNameNumber ? 'Combinar nombre y número en 1 columna' : 'Separar nombre y número en 2 columnas'}">🔀</button>` : ''}
@@ -4911,7 +4932,7 @@
                         <span class="${es ? `font-bold ${headerText} text-sm` : 'text-gray-500 text-[10px] font-normal'} leading-tight uppercase">${c.es}</span>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
-            thead.innerHTML = `<tr>${thAll}<th class="border border-gray-300 ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
+            thead.innerHTML = `<tr>${thAll}<th class="border border-black ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
             tbody.innerHTML = sheet.rows.map((r, i) => renderOrderRowHTML(r, i === 0, sheet.rows.length)).join('');
             renderHiddenColsBar(sheet);
         }
@@ -5248,12 +5269,38 @@
                 const sheet = activeSheet();
                 const addrHasData = hasAddressData(sheet.address);
 
+                // La foto del producto es lo más importante del PDF - nunca debe verse aplanada ni diminuta.
+                // html2canvas no siempre respeta bien "object-fit:contain" en <img>, así que aquí se calcula el
+                // tamaño real que debería tener cada foto según su proporción de verdad (ancho/alto naturales),
+                // agrandando fila y columna si hace falta - medido ANTES de llamar a html2canvas, para poder
+                // pasarle ya el ancho/alto final correcto del lienzo (si no, el contenido de más quedaría cortado).
+                const MIN_IMG_H = 160;
+                const imgCol = document.getElementById('col-img');
+                const currentColW = imgCol ? imgCol.getBoundingClientRect().width : 90;
+                let maxTargetW = currentColW;
+                const rowOverrides = [];
+                table.querySelectorAll('td[id^="cell-img-"] img').forEach(img => {
+                    if (!img.naturalWidth || !img.naturalHeight) return;
+                    const tr = img.closest('tr');
+                    if (!tr || !tr.id) return;
+                    const currentRowH = tr.getBoundingClientRect().height;
+                    const ratio = img.naturalWidth / img.naturalHeight;
+                    const targetBoxH = Math.max(MIN_IMG_H, currentRowH - 16);
+                    const targetW = Math.round(targetBoxH * ratio);
+                    if (targetBoxH + 16 > currentRowH || targetW > currentColW) {
+                        rowOverrides.push({ trId: tr.id, rowH: targetBoxH + 16, boxH: targetBoxH, imgW: targetW, deltaH: Math.max(0, (targetBoxH + 16) - currentRowH) });
+                        maxTargetW = Math.max(maxTargetW, targetW);
+                    }
+                });
+                const extraHeight = rowOverrides.reduce((s, r) => s + r.deltaH, 0);
+                const extraWidth = Math.max(0, maxTargetW - currentColW);
+
                 const canvas = await html2canvas(table, {
                     scale: 2,
                     backgroundColor: '#ffffff',
-                    width: table.scrollWidth,
-                    height: table.scrollHeight,
-                    windowWidth: table.scrollWidth,
+                    width: table.scrollWidth + extraWidth,
+                    height: table.scrollHeight + extraHeight,
+                    windowWidth: table.scrollWidth + extraWidth,
                     onclone: (clonedDoc) => {
                         // Ocultamos en la captura los botones/tiradores que no deben salir en el PDF
                         clonedDoc.querySelectorAll('[class*="print:hidden"]').forEach(el => { el.style.display = 'none'; });
@@ -5263,6 +5310,22 @@
                         // en la app ayudan a saber dónde escribir, pero en el documento que se envía deben verse en blanco.
                         clonedDoc.querySelectorAll('#order-table input[placeholder]').forEach(el => el.removeAttribute('placeholder'));
                         clonedDoc.querySelectorAll('#order-table [data-empty-hint]').forEach(el => { el.textContent = ''; });
+                        // Foto de producto a tamaño real (ver comentario arriba)
+                        if (extraWidth > 0) {
+                            const col = clonedDoc.getElementById('col-img');
+                            if (col) col.style.width = maxTargetW + 'px';
+                        }
+                        rowOverrides.forEach(r => {
+                            const tr = clonedDoc.getElementById(r.trId);
+                            if (!tr) return;
+                            tr.style.height = r.rowH + 'px';
+                            const imgCell = tr.querySelector('td[id^="cell-img-"]');
+                            if (!imgCell) return;
+                            const wrapper = imgCell.firstElementChild;
+                            if (wrapper) wrapper.style.height = r.boxH + 'px';
+                            const img = imgCell.querySelector('img');
+                            if (img) { img.style.width = r.imgW + 'px'; img.style.height = r.boxH + 'px'; img.style.maxWidth = 'none'; }
+                        });
                     }
                 });
 
