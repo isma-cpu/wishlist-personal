@@ -281,6 +281,9 @@
     <!-- Menú desplegable de opciones de una hoja de pedido (renombrar/duplicar/mover/eliminar): fixed para no quedar recortado por el scroll de la barra de pestañas -->
     <div id="sheet-options-menu" class="hidden fixed bg-white border border-gray-300 rounded-xl shadow-lg z-[300] flex flex-col min-w-[10rem] py-1 overflow-hidden"></div>
 
+    <!-- Desplegable de opciones de Versión (FAN/PLAYER/RETRO/...), fixed por el mismo motivo que sheet-options-menu -->
+    <div id="version-picker-menu" class="hidden fixed bg-white border border-gray-300 rounded-xl shadow-lg z-[300] flex flex-col min-w-[11rem] py-1 overflow-hidden"></div>
+
     <div id="view-pedidos" class="hidden w-full pt-16 p-4 md:p-8 max-w-5xl mx-auto">
         <div class="flex items-center gap-3 mb-2 border-b border-zinc-800 pb-3">
             <div class="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></div>
@@ -305,7 +308,10 @@
         </div>
 
         <div class="rounded-2xl border-2 border-amber-400/40 bg-amber-950/10 p-4">
-            <h3 class="font-black text-amber-400 uppercase text-sm tracking-wide mb-3">📑 Pedidos</h3>
+            <div class="flex items-center gap-2 mb-3">
+                <h3 class="font-black text-amber-400 uppercase text-sm tracking-wide">📑 Pedidos</h3>
+                <span id="pedidos-filter-indicator"></span>
+            </div>
             <div id="pedidos-list"></div>
         </div>
     </div>
@@ -473,6 +479,17 @@
                 <button onclick="closeSaveOrderModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button onclick="confirmSaveOrder()" class="px-4 py-2 text-xs font-bold uppercase bg-emerald-500 text-black rounded-full hover:bg-emerald-400 transition-colors cursor-pointer">GUARDAR</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Ver (solo lectura) un pedido ya archivado - separado de Editar, que reutiliza la plantilla en vivo -->
+    <div id="pedido-view-modal" class="fixed inset-0 bg-black/95 hidden z-[220] items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-3">
+                <h3 id="pedido-view-title" class="text-lg font-black tracking-wider text-amber-400 uppercase">👁️ Ver pedido</h3>
+                <button onclick="closePedidoViewModal()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <div id="pedido-view-body" class="rounded-xl overflow-hidden"></div>
         </div>
     </div>
 
@@ -1244,6 +1261,11 @@
             } else if (action === 'rename-cliente') {
                 titleEl.innerHTML = "✏️ RENOMBRAR CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
                 inputEl.value = targetId || "";
+            } else if (action === 'add-version-opcion') {
+                titleEl.innerHTML = "➕ NUEVA OPCIÓN DE VERSIÓN"; inputEl.placeholder = "Ej: FAN, PLAYER, RETRO...";
+            } else if (action === 'rename-version-opcion') {
+                titleEl.innerHTML = "✏️ RENOMBRAR OPCIÓN"; inputEl.placeholder = "Ej: FAN, PLAYER, RETRO...";
+                inputEl.value = targetId || "";
             } else if (action === 'save-address') {
                 titleEl.innerHTML = "💾 GUARDAR DIRECCIÓN COMO..."; inputEl.placeholder = "Ej: PERSONAL, TITO, KIKE...";
             }
@@ -1306,7 +1328,22 @@
                         if (pedidosClientes.includes(newName)) pedidosClientes.splice(idx, 1);
                         else pedidosClientes[idx] = newName;
                         pedidosArchivo.forEach(p => { if (p.cliente === targetId) p.cliente = newName; });
+                        if (pedidosFilterCliente === targetId) pedidosFilterCliente = newName;
                         saveClientes(); savePedidosArchivo(); renderClientesChips(); renderPedidosTab();
+                    }
+                }
+            } else if (action === 'add-version-opcion') {
+                if (val && !pedidoVersionOptions.includes(val)) {
+                    pedidoVersionOptions.push(val);
+                    saveVersionOptions(); renderVersionMenuContent();
+                }
+            } else if (action === 'rename-version-opcion') {
+                if (val && val !== targetId) {
+                    const idx = pedidoVersionOptions.indexOf(targetId);
+                    if (idx !== -1) {
+                        if (pedidoVersionOptions.includes(val)) pedidoVersionOptions.splice(idx, 1);
+                        else pedidoVersionOptions[idx] = val;
+                        saveVersionOptions(); renderVersionMenuContent();
                     }
                 }
             } else if (action === 'add-collection') {
@@ -2632,7 +2669,11 @@
             if (item.nameNumber || item.patch) {
                 labelsHTML += `<div class="absolute bottom-0 left-0 right-0 bg-black/90 border-t border-[#39FF14]/50 p-1 text-center truncate z-10 flex flex-col gap-0.5 pointer-events-none">`;
                 if (item.nameNumber) labelsHTML += `<span class="text-[9px] text-[#39FF14] uppercase tracking-wider leading-tight">📝 ${item.nameNumber}</span>`;
-                if (item.patch) labelsHTML += `<span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch.startsWith('data:image') ? 'Parche' : item.patch}</span>`;
+                if (item.patch) {
+                    labelsHTML += item.patch.startsWith('data:image')
+                        ? `<div class="flex items-center justify-center gap-1"><span class="text-[9px] text-blue-400">🛡️</span><img src="${item.patch}" class="w-6 h-7 object-contain rounded bg-white/10"></div>`
+                        : `<span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>`;
+                }
                 labelsHTML += `</div>`;
             }
 
@@ -2996,6 +3037,10 @@
         async function loadPedido() {
             try { pDb = (await localforage.getItem('pedido_db_v1')) || {}; } catch (e) { pDb = {}; }
             try { pTeamCrests = (await localforage.getItem('pedido_crests_v1')) || {}; } catch (e) { pTeamCrests = {}; }
+            try {
+                const vo = localStorage.getItem('pedido_version_opciones_v1');
+                if (vo) { const arr = JSON.parse(vo); if (Array.isArray(arr) && arr.length) pedidoVersionOptions = arr; }
+            } catch (e) {}
             initPedidoStaticListeners();
             pInit();
             await loadPOrder();
@@ -3809,8 +3854,10 @@
             box.classList.toggle('hidden');
             document.getElementById('send-pedido-preview-chevron').textContent = isHidden ? '▴ Ocultar' : '▾ Ver completa';
         };
-        // Vista previa COMPLETA y de solo lectura de una hoja en vivo (misma idea que viewPedidoDetail, pero sobre la hoja real, no un pedido archivado).
-        function renderFullSheetPreviewTable(sheet) {
+        // Vista previa COMPLETA y de solo lectura de una hoja (en vivo, o un pedido archivado vía viewPedidoDetail).
+        // readOnly=true además quita el botón "✎ Editar" de la dirección, que si no seguiría apuntando a la hoja
+        // EN VIVO (openAddressModal siempre opera sobre activeSheet()), no al pedido archivado que se está mostrando.
+        function renderFullSheetPreviewTable(sheet, readOnly) {
             if (!sheet.rows.length) return '<p class="text-zinc-500 text-xs p-3 bg-white">Esta hoja todavía no tiene ninguna fila.</p>';
             const es = sheet.style === 'es';
             const headerBg = es ? 'bg-emerald-800' : 'bg-yellow-200';
@@ -3832,7 +3879,7 @@
                         return `<td class="border border-gray-300 p-1 text-center">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-8 h-10 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
                     }
                     if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center whitespace-nowrap"><span class="font-bold uppercase">${escapeHtml(r.name || '')}</span>${r.number ? ' ' + escapeHtml(r.number) : ''}</td>`;
-                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top bg-white">${renderAddrCellInner(sheet)}</td>`; }
+                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top bg-white">${renderAddrCellInner(sheet, readOnly)}</td>`; }
                     if (c.key === 'priceTotal') { if (!isFirst) return ''; const total = rows.reduce((s, rr) => s + (parseFloat(rr.price) || 0), 0); return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`; }
                     return `<td class="border border-gray-300 p-1 text-center">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
                 }).join('');
@@ -4453,10 +4500,14 @@
                 } else if (field === 'price') {
                     cellClipboard = { type: 'text', value: formatMoney(computeRowPrice(row)) };
                     e.preventDefault();
+                } else if (field === 'version') {
+                    cellClipboard = { type: 'text', value: row.version || '' };
+                    e.preventDefault();
+                    if (key === 'x') { row.version = ''; savePOrders(); refreshVersionCellDOM(row.id); }
                 }
                 return;
             }
-            // pegar (Ctrl+V) - solo en imagen/parche; precio y precio total son de solo lectura
+            // pegar (Ctrl+V) - no en precio/precio total (son de solo lectura, siempre calculados)
             if (isReadOnlyField) return;
             if (isImageField && cellClipboard && cellClipboard.type === 'image') {
                 e.preventDefault();
@@ -4464,8 +4515,94 @@
                 savePOrders();
                 const cellEl = document.getElementById('cell-' + field + '-' + row.id);
                 if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+            } else if (field === 'version' && cellClipboard && cellClipboard.type === 'text') {
+                e.preventDefault();
+                row.version = cellClipboard.value;
+                savePOrders();
+                refreshVersionCellDOM(row.id);
             }
         });
+
+        // --- Variante "Versión": lista de opciones elegibles (FAN/PLAYER/RETRO...), editable por el usuario
+        // (añadir/renombrar/eliminar/reordenar) en vez de texto libre. Igual que pedidosClientes, el propio
+        // valor guardado en cada fila sigue siendo una cadena de texto normal - la lista solo controla qué
+        // opciones se ofrecen al elegir, así que filas ya existentes con un valor no siguen intactas si se
+        // renombra/elimina esa opción de la lista.
+        let pedidoVersionOptions = ['FAN', 'PLAYER', 'RETRO'];
+        function saveVersionOptions() { try { localStorage.setItem('pedido_version_opciones_v1', JSON.stringify(pedidoVersionOptions)); } catch (e) {} }
+        function renderVersionCellInner(row) {
+            const val = row.version || '';
+            return `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown('${row.id}', event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
+        }
+        function refreshVersionCellDOM(rowId) {
+            const sheet = activeSheet();
+            const row = sheet && sheet.rows.find(r => r.id === rowId);
+            const td = document.getElementById('cell-version-' + rowId);
+            if (td && row) td.innerHTML = renderVersionCellInner(row);
+        }
+        let versionPickerRowId = null;
+        window.openVersionDropdown = function(rowId, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            const menu = document.getElementById('version-picker-menu');
+            if (versionPickerRowId === rowId && !menu.classList.contains('hidden')) { closeVersionDropdown(); return; }
+            versionPickerRowId = rowId;
+            renderVersionMenuContent();
+            const btn = event.currentTarget.getBoundingClientRect();
+            menu.style.left = btn.left + 'px';
+            menu.style.top = (btn.bottom + 4) + 'px';
+            menu.classList.remove('hidden');
+            // Si no cabe debajo del botón (fila cerca del final de la página), abrir hacia arriba en su lugar.
+            const menuRect = menu.getBoundingClientRect();
+            if (menuRect.bottom > window.innerHeight - 8) {
+                const flippedTop = btn.top - menuRect.height - 4;
+                menu.style.top = Math.max(8, flippedTop) + 'px';
+            }
+        };
+        function closeVersionDropdown() {
+            versionPickerRowId = null;
+            const menu = document.getElementById('version-picker-menu');
+            if (menu) menu.classList.add('hidden');
+        }
+        document.addEventListener('click', (e) => { if (versionPickerRowId && !e.target.closest('#version-picker-menu') && !e.target.closest('[data-version-trigger]')) closeVersionDropdown(); });
+        function renderVersionMenuContent() {
+            const menu = document.getElementById('version-picker-menu');
+            if (!menu || !versionPickerRowId) return;
+            const sheet = activeSheet();
+            const row = sheet && sheet.rows.find(r => r.id === versionPickerRowId);
+            const current = row ? (row.version || '') : '';
+            menu.innerHTML = pedidoVersionOptions.map((opt, i) => `
+                <div class="flex items-center gap-0.5 px-1.5 py-1 hover:bg-gray-100 ${opt === current ? 'bg-sky-50' : ''}">
+                    <span onclick="selectVersionOption('${escAttr(opt)}')" class="flex-1 text-xs text-gray-700 cursor-pointer truncate px-1">${opt === current ? '✓ ' : ''}${escapeHtml(opt)}</span>
+                    <button onclick="event.stopPropagation(); moveVersionOption(${i}, -1)" title="Mover arriba" class="text-gray-400 hover:text-black text-[10px] w-5 h-5 shrink-0 cursor-pointer ${i === 0 ? 'opacity-20 pointer-events-none' : ''}">▲</button>
+                    <button onclick="event.stopPropagation(); moveVersionOption(${i}, 1)" title="Mover abajo" class="text-gray-400 hover:text-black text-[10px] w-5 h-5 shrink-0 cursor-pointer ${i === pedidoVersionOptions.length - 1 ? 'opacity-20 pointer-events-none' : ''}">▼</button>
+                    <button onclick="event.stopPropagation(); openInput('rename-version-opcion', '${escAttr(opt)}', null, event)" title="Renombrar" class="text-gray-400 hover:text-black text-[10px] w-5 h-5 shrink-0 cursor-pointer">✏️</button>
+                    <button onclick="event.stopPropagation(); deleteVersionOption('${escAttr(opt)}')" title="Eliminar" class="text-red-400 hover:text-red-600 text-[10px] w-5 h-5 shrink-0 cursor-pointer">✕</button>
+                </div>`).join('') +
+                `<div class="border-t border-gray-200 mt-1 pt-1">
+                    <button onclick="event.stopPropagation(); openInput('add-version-opcion', null, null, event)" class="w-full px-2 py-1.5 text-left text-xs text-sky-600 hover:bg-gray-100 cursor-pointer">➕ Añadir opción</button>
+                    ${current ? `<button onclick="event.stopPropagation(); selectVersionOption('')" class="w-full px-2 py-1.5 text-left text-xs text-gray-400 hover:bg-gray-100 cursor-pointer">✕ Vaciar</button>` : ''}
+                </div>`;
+        }
+        window.selectVersionOption = function(value) {
+            const rowId = versionPickerRowId;
+            const sheet = activeSheet();
+            const row = sheet && sheet.rows.find(r => r.id === rowId);
+            if (row) { row.version = value; savePOrders(); }
+            closeVersionDropdown();
+            refreshVersionCellDOM(rowId);
+        };
+        window.moveVersionOption = function(i, dir) {
+            const j = i + dir;
+            if (j < 0 || j >= pedidoVersionOptions.length) return;
+            const t = pedidoVersionOptions[i]; pedidoVersionOptions[i] = pedidoVersionOptions[j]; pedidoVersionOptions[j] = t;
+            saveVersionOptions(); renderVersionMenuContent();
+        };
+        window.deleteVersionOption = function(opt) {
+            openConfirmDelete('¿Eliminar la opción de versión "' + opt + '"? Las filas que ya la tengan puesta mantendrán su valor guardado, solo deja de ofrecerse en la lista.', () => {
+                pedidoVersionOptions = pedidoVersionOptions.filter(o => o !== opt);
+                saveVersionOptions(); renderVersionMenuContent();
+            });
+        };
 
         // --- Foto del producto y del parche (el parche puede ser texto libre O una imagen) ---
         function renderImgCellInner(row, field) {
@@ -4508,13 +4645,15 @@
                 </div>`;
         }
 
-        function renderAddrCellInner(sheet) {
+        function renderAddrCellInner(sheet, readOnly) {
             const a = sheet.address || {};
-            if (!hasAddressData(a)) return `<button onclick="openAddressModal()" class="text-[10px] uppercase text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
+            if (!hasAddressData(a)) return readOnly
+                ? `<span class="text-[10px] uppercase text-gray-400">Sin dirección</span>`
+                : `<button onclick="openAddressModal()" class="text-[10px] uppercase text-gray-400 border border-dashed border-gray-300 rounded-full px-2 py-1 hover:border-sky-400 hover:text-sky-500 print:hidden">＋ Dirección</button>`;
             const line = (label, val) => val ? `<div><b>${label}:</b> ${escapeHtml(val)}</div>` : '';
             return `<div class="cell-text leading-snug text-gray-800 min-w-[9rem] text-center">
                     ${line('Destinatario', a.dest)}${line('Dirección', a.dir)}${line('C.P.', a.cp)}${line('Ciudad', a.ciudad)}${line('Provincia', a.prov)}${line('País', a.pais)}${line('Tel', a.tel)}
-                    <button onclick="openAddressModal()" class="text-sky-500 hover:text-sky-700 text-[10px] uppercase mt-1 print:hidden font-normal">✎ Editar</button>
+                    ${readOnly ? '' : `<button onclick="openAddressModal()" class="text-sky-500 hover:text-sky-700 text-[10px] uppercase mt-1 print:hidden font-normal">✎ Editar</button>`}
                 </div>`;
         }
 
@@ -4542,6 +4681,7 @@
                 if (c.isCustom) return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">
                         <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full h-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0">
                     </td>`;
+                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
                 if (c.key === 'nameNumber') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">
@@ -5046,24 +5186,36 @@
             renderPedidosTab();
         }
 
+        // Filtrar la lista de Pedidos por cliente: clic en el recuadro (no en "⋯") muestra solo sus pedidos;
+        // clic otra vez en el mismo lo quita. Solo afecta al listado principal, no a Morosos (que ya agrupa por cliente).
+        let pedidosFilterCliente = null;
+        window.filterPedidosByCliente = function(name) {
+            pedidosFilterCliente = (pedidosFilterCliente === name) ? null : name;
+            renderClientesChips(); renderPedidosTab();
+        };
+        window.clearPedidosFilter = function() { pedidosFilterCliente = null; renderClientesChips(); renderPedidosTab(); };
         function renderClientesChips() {
             const el = document.getElementById('pedidos-clientes-chips');
             if (!el) return;
-            el.innerHTML = pedidosClientes.map((c, i) => `
-                <span class="relative text-[10px] uppercase bg-zinc-800 text-zinc-300 rounded-full pl-2 pr-1 py-1 flex items-center gap-1">
+            el.innerHTML = pedidosClientes.map((c, i) => {
+                const active = pedidosFilterCliente === c;
+                return `
+                <span onclick="filterPedidosByCliente('${escAttr(c)}')" class="relative text-[10px] uppercase rounded-full pl-2 pr-1 py-1 flex items-center gap-1 cursor-pointer transition-colors ${active ? 'bg-amber-400 text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}" title="Ver solo los pedidos de ${escAttr(c)}">
                     ${escapeHtml(c)}
-                    <button data-menu-trigger onclick="toggleSimpleMenu('cliente-menu-${i}', event)" class="text-zinc-500 hover:text-white text-xs px-0.5 cursor-pointer font-black" title="Opciones">⋯</button>
+                    <button data-menu-trigger onclick="toggleSimpleMenu('cliente-menu-${i}', event)" class="${active ? 'text-black/60 hover:text-black' : 'text-zinc-500 hover:text-white'} text-xs px-0.5 cursor-pointer font-black" title="Opciones">⋯</button>
                     <div id="cliente-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[10rem] py-1 overflow-hidden normal-case">
                         <button onclick="openInput('rename-cliente', '${escAttr(c)}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Renombrar</button>
                         <button onclick="movePedidoCliente('${escAttr(c)}', -1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
                         <button onclick="movePedidoCliente('${escAttr(c)}', 1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === pedidosClientes.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
                         <button onclick="removePedidoCliente('${escAttr(c)}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 cursor-pointer">✕ Eliminar</button>
                     </div>
-                </span>`).join('');
+                </span>`;
+            }).join('');
         }
         window.removePedidoCliente = function(name) {
             openConfirmDelete('¿Quitar "' + name + '" de la lista de clientes? Los pedidos ya asignados a este cliente mantendrán el nombre guardado.', () => {
                 pedidosClientes = pedidosClientes.filter(c => c !== name);
+                if (pedidosFilterCliente === name) pedidosFilterCliente = null;
                 saveClientes(); renderClientesChips(); renderPedidosTab();
             });
         };
@@ -5127,19 +5279,38 @@
             }).join('');
         }
 
+        // Recuadro de color de "Debe"/"Pagado": rojo con la cantidad si aún debe algo, verde con "✅ PAGADO" si ya está saldado.
+        function debeBoxHTML(p) {
+            const paid = parseFloat(p.paid) || 0;
+            const debe = Math.max(0, (p.total || 0) - paid);
+            if (debe <= 0.004) {
+                return `<span class="inline-flex items-center gap-1 text-[11px] font-black uppercase text-emerald-400 bg-emerald-500/10 border border-emerald-500/40 rounded-full px-2.5 py-1 whitespace-nowrap">✅ PAGADO</span>`;
+            }
+            return `<span class="inline-flex items-center text-[11px] font-black text-red-400 bg-red-500/10 border border-red-500/40 rounded-full px-2.5 py-1 whitespace-nowrap">${formatMoney(debe)} €</span>`;
+        }
         function renderPedidosTab() {
             const countEl = document.getElementById('pedidos-count');
             if (countEl) countEl.textContent = pedidosArchivo.length + (pedidosArchivo.length === 1 ? ' pedido' : ' pedidos');
             renderMorosos();
+            const filterEl = document.getElementById('pedidos-filter-indicator');
+            if (filterEl) {
+                filterEl.innerHTML = pedidosFilterCliente
+                    ? `<span class="inline-flex items-center gap-1 text-[10px] uppercase bg-amber-400 text-black rounded-full pl-2 pr-1 py-0.5">Mostrando: ${escapeHtml(pedidosFilterCliente)} <button onclick="clearPedidosFilter()" class="hover:text-red-700 font-black px-0.5 cursor-pointer" title="Quitar filtro">✕</button></span>`
+                    : '';
+            }
             const list = document.getElementById('pedidos-list');
             if (!list) return;
+            const source = pedidosFilterCliente ? pedidosArchivo.filter(p => p.cliente === pedidosFilterCliente) : pedidosArchivo;
             if (!pedidosArchivo.length) {
                 list.innerHTML = `<p class="text-zinc-500 text-sm">Todavía no hay pedidos guardados. Pulsa "💾 Guardar pedido" en "Crear Pedido" para archivar la hoja actual aquí.</p>`;
                 return;
             }
-            list.innerHTML = pedidosArchivo.map((p, i) => {
-                const paid = parseFloat(p.paid) || 0;
-                const debe = Math.max(0, (p.total || 0) - paid);
+            if (!source.length) {
+                list.innerHTML = `<p class="text-zinc-500 text-sm">Este cliente todavía no tiene ningún pedido guardado.</p>`;
+                return;
+            }
+            list.innerHTML = source.map((p) => {
+                const i = pedidosArchivo.indexOf(p);
                 const fecha = new Date(p.date).toLocaleDateString('es-ES');
                 return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
                     <span class="text-zinc-500 text-lg select-none" title="Arrastra para reordenar">☰</span>
@@ -5161,9 +5332,10 @@
                     </div>
                     <div class="text-center">
                         <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
-                        <div id="pedido-debe-${p.id}" class="${debe > 0 ? 'text-red-400' : 'text-emerald-400'} font-bold text-sm">${formatMoney(debe)} €</div>
+                        <div id="pedido-debe-${p.id}">${debeBoxHTML(p)}</div>
                     </div>
-                    <button onclick="editArchivedPedido('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">✏️ Ver / Editar</button>
+                    <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                    <button onclick="editArchivedPedido('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">✏️ Editar</button>
                     <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
                 </div>`;
             }).join('');
@@ -5173,15 +5345,16 @@
             const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
             p[field] = value;
             savePedidosArchivo();
+            if (field === 'cliente') {
+                // El cliente puede cambiar si un pedido entra o sale del filtro activo - repinta la lista entera.
+                renderPedidosTab();
+                return;
+            }
             if (field === 'paid' || field === 'total') {
                 const debeEl = document.getElementById('pedido-debe-' + id);
-                if (debeEl) {
-                    const debe = Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0));
-                    debeEl.textContent = formatMoney(debe) + ' €';
-                    debeEl.className = (debe > 0 ? 'text-red-400' : 'text-emerald-400') + ' font-bold text-sm';
-                }
+                if (debeEl) debeEl.innerHTML = debeBoxHTML(p);
+                renderMorosos();
             }
-            if (field === 'paid' || field === 'total' || field === 'cliente') renderMorosos();
         };
         window.deletePedido = function(id) {
             openConfirmDelete('¿Eliminar este pedido archivado? Esta acción no se puede deshacer.', () => {
@@ -5200,9 +5373,23 @@
             savePedidosArchivo(); renderPedidosTab();
         };
 
-        // Ver Y EDITAR un pedido ya archivado: reutiliza la plantilla real de "Crear Pedido" (misma tabla,
+        // "Ver" (solo lectura) - separado de "Editar" (reutiliza renderFullSheetPreviewTable, que ya es
+        // genérica sobre cualquier objeto con forma de hoja: rows/style/colOrder/address/customColumns).
+        window.viewPedidoDetail = function(id) {
+            const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
+            document.getElementById('pedido-view-title').textContent = '👁️ ' + p.name;
+            document.getElementById('pedido-view-body').innerHTML = renderFullSheetPreviewTable(p, true);
+            document.getElementById('pedido-view-modal').classList.remove('hidden');
+            document.getElementById('pedido-view-modal').classList.add('flex');
+        };
+        window.closePedidoViewModal = function() {
+            document.getElementById('pedido-view-modal').classList.add('hidden');
+            document.getElementById('pedido-view-modal').classList.remove('flex');
+        };
+
+        // EDITAR un pedido ya archivado: reutiliza la plantilla real de "Crear Pedido" (misma tabla,
         // mismo arrastrar/copiar-pegar/redimensionar...) apuntando temporalmente a este pedido en vez de a una
-        // hoja en vivo (ver activeSheet()/savePOrders() más arriba). Sustituye al antiguo visor de solo lectura.
+        // hoja en vivo (ver activeSheet()/savePOrders() más arriba).
         window.editArchivedPedido = function(id) {
             const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
             editingArchivedId = id;
