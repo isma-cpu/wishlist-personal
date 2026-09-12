@@ -4667,13 +4667,31 @@
         function renderClientesChips() {
             const el = document.getElementById('pedidos-clientes-chips');
             if (!el) return;
-            el.innerHTML = pedidosClientes.map(c => `<span class="group text-[10px] uppercase bg-zinc-800 text-zinc-300 rounded-full pl-2 pr-1 py-1 flex items-center gap-1">${escapeHtml(c)}<button onclick="removePedidoCliente('${escAttr(c)}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Quitar de la lista">✕</button></span>`).join('');
+            el.innerHTML = pedidosClientes.map((c, i) => `
+                <span class="relative text-[10px] uppercase bg-zinc-800 text-zinc-300 rounded-full pl-2 pr-1 py-1 flex items-center gap-1">
+                    ${escapeHtml(c)}
+                    <button data-menu-trigger onclick="toggleSimpleMenu('cliente-menu-${i}', event)" class="text-zinc-500 hover:text-white text-xs px-0.5 cursor-pointer font-black" title="Opciones">⋯</button>
+                    <div id="cliente-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[10rem] py-1 overflow-hidden normal-case">
+                        <button onclick="openInput('rename-cliente', '${escAttr(c)}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Renombrar</button>
+                        <button onclick="movePedidoCliente('${escAttr(c)}', -1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
+                        <button onclick="movePedidoCliente('${escAttr(c)}', 1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === pedidosClientes.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
+                        <button onclick="removePedidoCliente('${escAttr(c)}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 cursor-pointer">✕ Eliminar</button>
+                    </div>
+                </span>`).join('');
         }
         window.removePedidoCliente = function(name) {
             openConfirmDelete('¿Quitar "' + name + '" de la lista de clientes? Los pedidos ya asignados a este cliente mantendrán el nombre guardado.', () => {
                 pedidosClientes = pedidosClientes.filter(c => c !== name);
                 saveClientes(); renderClientesChips(); renderPedidosTab();
             });
+        };
+        window.movePedidoCliente = function(name, dir) {
+            const from = pedidosClientes.indexOf(name);
+            const to = from + dir;
+            if (from === -1 || to < 0 || to >= pedidosClientes.length) return;
+            const [moved] = pedidosClientes.splice(from, 1);
+            pedidosClientes.splice(to, 0, moved);
+            saveClientes(); renderClientesChips();
         };
 
         function renderPedidosTab() {
