@@ -212,6 +212,7 @@
                 <p class="text-xs text-zinc-500 tracking-widest uppercase">Equipos y selecciones</p>
             </div>
 
+            <button onclick="pToggleOnlyTemplateView()" id="p-only-template-btn" class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-xs font-bold uppercase tracking-wide border border-sky-400/40 text-zinc-400 hover:text-sky-400 hover:border-sky-400 transition-all mb-6 cursor-pointer" title="Ver solo la plantilla de pedido, sin la biblioteca">📦 Solo Plantilla de Pedido</button>
             <nav id="pedido-sidebar-nav" class="space-y-8 flex-1"></nav>
             <input type="file" accept="image/*" class="hidden" id="p-crest-upload-input" onchange="handleCrestUpload(event)">
         </aside>
@@ -2665,6 +2666,49 @@
                 ]
             },
             {
+                groupTitle: "BUNDESLIGA", groupId: "bundesliga",
+                collections: [
+                    { id: "bl-bayern", name: "Bayern Múnich" }, { id: "bl-dortmund", name: "Borussia Dortmund" },
+                    { id: "bl-leipzig", name: "RB Leipzig" }, { id: "bl-leverkusen", name: "Bayer Leverkusen" },
+                    { id: "bl-frankfurt", name: "Eintracht Frankfurt" }, { id: "bl-stuttgart", name: "VfB Stuttgart" },
+                    { id: "bl-gladbach", name: "Borussia Mönchengladbach" }, { id: "bl-bremen", name: "Werder Bremen" },
+                    { id: "bl-wolfsburg", name: "VfL Wolfsburgo" }, { id: "bl-freiburg", name: "SC Friburgo" }
+                ]
+            },
+            {
+                groupTitle: "LIGUE 1", groupId: "ligue1",
+                collections: [
+                    { id: "l1-psg", name: "Paris Saint-Germain" }, { id: "l1-marseille", name: "Olympique de Marsella" },
+                    { id: "l1-monaco", name: "AS Mónaco" }, { id: "l1-lyon", name: "Olympique de Lyon" },
+                    { id: "l1-lille", name: "LOSC Lille" }, { id: "l1-nice", name: "OGC Niza" },
+                    { id: "l1-rennes", name: "Stade Rennes" }, { id: "l1-lens", name: "RC Lens" },
+                    { id: "l1-strasbourg", name: "RC Strasbourg" }, { id: "l1-toulouse", name: "Toulouse FC" }
+                ]
+            },
+            {
+                groupTitle: "SERIE A", groupId: "seriea",
+                collections: [
+                    { id: "sa-juventus", name: "Juventus" }, { id: "sa-inter", name: "Inter de Milán" },
+                    { id: "sa-milan", name: "AC Milan" }, { id: "sa-napoli", name: "Nápoles" },
+                    { id: "sa-roma", name: "AS Roma" }, { id: "sa-lazio", name: "Lazio" },
+                    { id: "sa-atalanta", name: "Atalanta" }, { id: "sa-fiorentina", name: "Fiorentina" },
+                    { id: "sa-bologna", name: "Bologna" }, { id: "sa-torino", name: "Torino" }
+                ]
+            },
+            {
+                groupTitle: "OTRAS LIGAS", groupId: "otras-ligas",
+                collections: [
+                    { id: "ol-flamengo", name: "Flamengo" }, { id: "ol-palmeiras", name: "Palmeiras" },
+                    { id: "ol-corinthians", name: "Corinthians" }, { id: "ol-saopaulo", name: "São Paulo" },
+                    { id: "ol-boca", name: "Boca Juniors" }, { id: "ol-river", name: "River Plate" },
+                    { id: "ol-racing", name: "Racing Club" }, { id: "ol-independiente", name: "Independiente" },
+                    { id: "ol-intermiami", name: "Inter Miami" }, { id: "ol-lagalaxy", name: "LA Galaxy" },
+                    { id: "ol-lafc", name: "LAFC" }, { id: "ol-leicester", name: "Leicester City" },
+                    { id: "ol-southampton", name: "Southampton" }, { id: "ol-westbrom", name: "West Bromwich Albion" },
+                    { id: "ol-norwich", name: "Norwich City" }
+                ]
+            },
+            {
                 groupTitle: "SELECCIONES", groupId: "selecciones",
                 collections: [
                     { id: "sel-espana", name: "España" },
@@ -2674,7 +2718,15 @@
                     { id: "sel-alemania", name: "Alemania" },
                     { id: "sel-portugal", name: "Portugal" },
                     { id: "sel-italia", name: "Italia" },
-                    { id: "sel-holanda", name: "Holanda" }
+                    { id: "sel-holanda", name: "Holanda" },
+                    { id: "sel-inglaterra", name: "Inglaterra" },
+                    { id: "sel-belgica", name: "Bélgica" },
+                    { id: "sel-croacia", name: "Croacia" },
+                    { id: "sel-eeuu", name: "Estados Unidos" },
+                    { id: "sel-uruguay", name: "Uruguay" },
+                    { id: "sel-marruecos", name: "Marruecos" },
+                    { id: "sel-corea", name: "Corea del Sur" },
+                    { id: "sel-japon", name: "Japón" }
                 ]
             }
         ];
@@ -2698,6 +2750,12 @@
                 pStructure.push(JSON.parse(JSON.stringify(findDefaultGroup('premier'))));
                 changed = true;
             }
+            ['bundesliga', 'ligue1', 'seriea', 'otras-ligas'].forEach(gid => {
+                if (!pStructure.some(g => g.groupId === gid)) {
+                    pStructure.push(JSON.parse(JSON.stringify(findDefaultGroup(gid))));
+                    changed = true;
+                }
+            });
             const selecciones = pStructure.find(g => g.groupId === 'selecciones');
             if (selecciones) {
                 findDefaultGroup('selecciones').collections.forEach(defCol => {
@@ -2765,20 +2823,60 @@
         // color, siempre el mismo para el mismo nombre) para no dejar el hueco vacío - un solo clic encima lo
         // sustituye por la imagen real de siempre.
         const CREST_FALLBACK_PALETTE = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#22c55e', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6', '#6366f1', '#8b5cf6', '#ec4899'];
-        function teamCrestFallback(name) {
+        // Color representativo real de cada equipo/selección (no genérico) - se usa mientras no se suba el escudo
+        // real. Solo cubre las colecciones que trae la app por defecto; una colección nueva creada por el usuario
+        // cae al color por hash de siempre (CREST_FALLBACK_PALETTE).
+        const TEAM_COLORS = {
+            'll-realmadrid': '#1F3F77', 'll-barcelona': '#004D98', 'll-atletico': '#CB3524', 'll-athletic': '#EE2523',
+            'll-villarreal': '#FFE667', 'll-betis': '#00954C', 'll-celta': '#8AC3EE', 'll-rayo': '#E30613',
+            'll-osasuna': '#D2122E', 'll-realsociedad': '#0067B1', 'll-mallorca': '#E20E17', 'll-girona': '#CC0000',
+            'll-getafe': '#005CA9', 'll-sevilla': '#D00027', 'll-valencia': '#EE8707', 'll-alaves': '#1B4297',
+            'll-espanyol': '#0066CC', 'll-elche': '#026937', 'll-levante': '#004B87', 'll-oviedo': '#0D3B8C',
+            'pl-mancity': '#6CABDD', 'pl-arsenal': '#EF0107', 'pl-liverpool': '#C8102E', 'pl-chelsea': '#034694',
+            'pl-manutd': '#DA291C', 'pl-newcastle': '#3E3E3E', 'pl-astonvilla': '#670E36', 'pl-tottenham': '#132257',
+            'pl-brighton': '#0057B8', 'pl-bournemouth': '#B50E1E', 'pl-fulham': '#FFFFFF', 'pl-crystalpalace': '#1B458F',
+            'pl-everton': '#003399', 'pl-westham': '#7A263A', 'pl-wolves': '#FDB913', 'pl-brentford': '#E30613',
+            'pl-forest': '#DD0000', 'pl-leeds': '#FFCD00', 'pl-burnley': '#6C1D45', 'pl-sunderland': '#EB172B',
+            'bl-bayern': '#DC052D', 'bl-dortmund': '#FDE100', 'bl-leipzig': '#DD0741', 'bl-leverkusen': '#E32221',
+            'bl-frankfurt': '#E1000F', 'bl-stuttgart': '#DA0808', 'bl-gladbach': '#00963F', 'bl-bremen': '#1D9053',
+            'bl-wolfsburg': '#65B32E', 'bl-freiburg': '#3B3B3B',
+            'l1-psg': '#004170', 'l1-marseille': '#2FAEE0', 'l1-monaco': '#E2001A', 'l1-lyon': '#1C2C5B',
+            'l1-lille': '#C21E30', 'l1-nice': '#D2122E', 'l1-rennes': '#E2001A', 'l1-lens': '#FFD100',
+            'l1-strasbourg': '#0072CE', 'l1-toulouse': '#5B2183',
+            'sa-juventus': '#2B2B2B', 'sa-inter': '#0068A8', 'sa-milan': '#FB090B', 'sa-napoli': '#12A0D7',
+            'sa-roma': '#8E1F2F', 'sa-lazio': '#87D8F7', 'sa-atalanta': '#1E71B8', 'sa-fiorentina': '#5B2E91',
+            'sa-bologna': '#8C1D30', 'sa-torino': '#8B1B22',
+            'ol-flamengo': '#D3151E', 'ol-palmeiras': '#046A38', 'ol-corinthians': '#2E2E2E', 'ol-saopaulo': '#E3121B',
+            'ol-boca': '#0046A5', 'ol-river': '#D6001C', 'ol-racing': '#4AC1E0', 'ol-independiente': '#D2122E',
+            'ol-intermiami': '#F7B5CD', 'ol-lagalaxy': '#00245D', 'ol-lafc': '#C39E6D', 'ol-leicester': '#003090',
+            'ol-southampton': '#D71920', 'ol-westbrom': '#122F67', 'ol-norwich': '#00A650',
+            'sel-espana': '#C60B1E', 'sel-brasil': '#FFCC29', 'sel-argentina': '#75AADB', 'sel-francia': '#0055A4',
+            'sel-alemania': '#3B3B3B', 'sel-portugal': '#046A38', 'sel-italia': '#0066CC', 'sel-holanda': '#FF6B00',
+            'sel-inglaterra': '#CE1124', 'sel-belgica': '#ED2939', 'sel-croacia': '#E30613', 'sel-eeuu': '#3C3B6E',
+            'sel-uruguay': '#5AB4E5', 'sel-marruecos': '#C1272D', 'sel-corea': '#CD2E3A', 'sel-japon': '#BC002D'
+        };
+        function contrastTextColor(hex) {
+            const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+            const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+            return lum > 0.6 ? '#111827' : '#ffffff';
+        }
+        function teamCrestFallback(name, id) {
             name = name || '?';
-            let hash = 0;
-            for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-            const color = CREST_FALLBACK_PALETTE[hash % CREST_FALLBACK_PALETTE.length];
             const stopWords = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y']);
             const words = name.trim().split(/\s+/).filter(w => w && !stopWords.has(w.toLowerCase()));
             const initials = words.length >= 2 ? (words[0][0] + words[1][0]).toUpperCase() : (words[0] || name).trim().slice(0, 2).toUpperCase();
+            let color = id && TEAM_COLORS[id];
+            if (!color) {
+                let hash = 0;
+                for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+                color = CREST_FALLBACK_PALETTE[hash % CREST_FALLBACK_PALETTE.length];
+            }
             return { color, initials };
         }
         function renderCrestBadgeInner(col) {
             if (pTeamCrests[col.id]) return `<img src="${pTeamCrests[col.id]}" class="w-full h-full object-cover">`;
-            const { color, initials } = teamCrestFallback(col.name);
-            return `<span class="w-full h-full flex items-center justify-center text-[8px] font-black text-white" style="background:${color}">${escapeHtml(initials)}</span>`;
+            const { color, initials } = teamCrestFallback(col.name, col.id);
+            return `<span class="w-full h-full flex items-center justify-center text-[8px] font-black" style="background:${color};color:${contrastTextColor(color)}">${escapeHtml(initials)}</span>`;
         }
         let pCrestUploadTarget = null;
         window.triggerCrestUpload = function(colId, event) {
@@ -2888,7 +2986,7 @@
                     return `
                         <a href="#" id="p-link-${col.id}"
                            ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${group.groupId}', '${col.id}')"
-                           onclick="pShowView('${col.id}'); return false;"
+                           onclick="pShowViewFromClick('${col.id}'); return false;"
                            class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded-full transition-all group select-none relative">
                             <span class="flex items-center gap-1.5 min-w-0 flex-1 pointer-events-none">
                                 <span draggable="true" ondragstart="pCollectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar">⠿</span>
@@ -2955,8 +3053,16 @@
                 pCurrentView = first ? first.id : null;
             }
             pShowView(pCurrentView);
+            applyPOnlyTemplateView();
         }
 
+        // Se llama al hacer clic en un equipo/colección de la barra lateral: si estaba activo "Solo Plantilla",
+        // lo desactiva (el usuario quiere volver a ver la biblioteca) - pShowView en sí no toca este estado,
+        // porque pInit() también la llama internamente en cada re-render y ahí NO debe desactivarse solo.
+        window.pShowViewFromClick = function(id) {
+            if (pOnlyTemplateView) { pOnlyTemplateView = false; try { localStorage.setItem('pedido_only_template_view', '0'); } catch (e) {} applyPOnlyTemplateView(); }
+            pShowView(id);
+        };
         window.pShowView = function(id) {
             pCurrentView = id;
             document.querySelectorAll('#pedido-sidebar-nav .sidebar-link').forEach(el => {
@@ -2966,6 +3072,27 @@
             if (link) { link.classList.add('bg-zinc-900', 'text-sky-400'); link.classList.remove('text-zinc-400'); }
             try { localStorage.setItem('pedido_current_view', id || ''); } catch (e) {}
             pRenderLibraryBody();
+        };
+
+        // "Solo Plantilla de Pedido": oculta la sección Biblioteca entera para trabajar solo con la tabla, sin
+        // perder ningún dato - un clic en cualquier equipo/colección de la barra lateral vuelve a mostrarla sola.
+        let pOnlyTemplateView = false;
+        try { pOnlyTemplateView = localStorage.getItem('pedido_only_template_view') === '1'; } catch (e) {}
+        function applyPOnlyTemplateView() {
+            const lib = document.getElementById('pedido-library-section');
+            const btn = document.getElementById('p-only-template-btn');
+            if (lib) lib.classList.toggle('hidden', pOnlyTemplateView);
+            if (btn) {
+                btn.classList.toggle('bg-sky-400', pOnlyTemplateView);
+                btn.classList.toggle('text-black', pOnlyTemplateView);
+                btn.classList.toggle('border-sky-400', pOnlyTemplateView);
+                btn.classList.toggle('text-zinc-400', !pOnlyTemplateView);
+            }
+        }
+        window.pToggleOnlyTemplateView = function() {
+            pOnlyTemplateView = !pOnlyTemplateView;
+            try { localStorage.setItem('pedido_only_template_view', pOnlyTemplateView ? '1' : '0'); } catch (e) {}
+            applyPOnlyTemplateView();
         };
 
         window.pAddSubCollection = function(parentColId, event) { openInput('p-add-subcollection', parentColId, null, event); };
@@ -4219,6 +4346,7 @@
                 <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative cursor-text">
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     <button onclick="event.stopPropagation(); ${c.isCustom ? `deleteOrderColumn('${c.key}')` : `hideOrderColumn('${c.key}')`}" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden absolute top-0.5 right-0.5" title="${c.isCustom ? 'Eliminar columna' : 'Quitar columna'}">✕</button>
+                    ${(c.key === 'nameNumber' || c.key === 'name' || c.key === 'number') ? `<button onclick="event.stopPropagation(); toggleSheetSplitNameNumber('${sheet.id}', event)" class="absolute bottom-0.5 left-0.5 text-[9px] opacity-50 hover:opacity-100 print:hidden" title="${sheet.splitNameNumber ? 'Combinar nombre y número en 1 columna' : 'Separar nombre y número en 2 columnas'}">🔀</button>` : ''}
                     ${c.isCustom ? `
                         <span class="font-bold ${headerText} text-sm uppercase">${escapeHtml(c.es)}</span>` : `
                         <div ondblclick="event.stopPropagation(); openInput('rename-order-column-zh', '${c.key}', 'builtin', event)" title="Doble clic para editar el texto en chino" class="text-[10px] ${headerZh} leading-none mb-0.5 cursor-text">${c.zh || ''}</div>
