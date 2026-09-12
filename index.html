@@ -4443,7 +4443,10 @@
             sheet.rows.push(row);
             if (sheetId && sheetId !== pOrders.activeSheetId) pOrders.activeSheetId = sheetId;
             savePOrders();
-            if (!document.getElementById('view-pedido').classList.contains('hidden')) { renderOrderSheetsBar(); renderOrderTable(); }
+            // Se repinta SIEMPRE, no solo si la pestaña "Crear Pedido" está visible ahora mismo - si no, al enviar
+            // un producto desde la Wishlist (la pestaña de Crear Pedido está oculta en ese momento) la tabla se
+            // quedaba con el contenido antiguo hasta recargar la página, aunque el producto sí se había guardado.
+            renderOrderSheetsBar(); renderOrderTable();
         }
         window.deleteOrderRow = function(rowId) {
             openConfirmDelete('¿Eliminar esta fila del pedido?', () => {
@@ -4471,7 +4474,7 @@
             const sheet = activeSheet();
             const target = pOrders.sheets.find(s => s.id === document.getElementById('transfer-rows-target').value);
             if (!target) { closeTransferRowsModal(); return; }
-            openConfirmDelete(`¿Traspasar las ${sheet.rows.length} fila${sheet.rows.length === 1 ? '' : 's'} de "${sheet.name}" a "${target.name}"?`, () => {
+            openConfirmNotice(`¿Traspasar las ${sheet.rows.length} fila${sheet.rows.length === 1 ? '' : 's'} de "${sheet.name}" a "${target.name}"?`, () => {
                 sheet.rows.forEach(r => {
                     const copy = JSON.parse(JSON.stringify(r));
                     copy.id = 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
@@ -5310,6 +5313,16 @@
                         // en la app ayudan a saber dónde escribir, pero en el documento que se envía deben verse en blanco.
                         clonedDoc.querySelectorAll('#order-table input[placeholder]').forEach(el => el.removeAttribute('placeholder'));
                         clonedDoc.querySelectorAll('#order-table [data-empty-hint]').forEach(el => { el.textContent = ''; });
+                        // Líneas de columna mucho más finas en el PDF: cada celda tiene border-left Y border-right
+                        // (para que el navegador las funda en una con border-collapse en pantalla), pero html2canvas
+                        // NO aplica ese fundido - dibuja las 2 en el mismo sitio, duplicando el grosor visual entre
+                        // columnas (medido: 4px reales en el canvas en vez de los 2px que tocarían). Se deja solo
+                        // el border-right como separador (border-left a 0) y se repone el marco exterior aparte.
+                        clonedDoc.querySelectorAll('#order-table td, #order-table th').forEach(el => {
+                            el.style.borderLeftWidth = '0';
+                        });
+                        const clonedTable = clonedDoc.getElementById('order-table');
+                        if (clonedTable) clonedTable.style.border = '1px solid black';
                         // Foto de producto a tamaño real (ver comentario arriba)
                         if (extraWidth > 0) {
                             const col = clonedDoc.getElementById('col-img');
