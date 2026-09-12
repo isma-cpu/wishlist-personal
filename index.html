@@ -193,7 +193,7 @@
             </div>
         </div>
 
-        <nav id="sidebar-nav" class="space-y-8 flex-1"></nav>
+        <nav id="sidebar-nav" class="space-y-3 flex-1"></nav>
     </aside>
 
     <main class="flex-1 p-6 md:p-10 overflow-x-hidden relative" id="main-drop-area">
@@ -217,7 +217,7 @@
             </div>
 
             <button onclick="pToggleOnlyTemplateView()" id="p-only-template-btn" class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-xs font-bold uppercase tracking-wide border border-sky-400/40 text-zinc-400 hover:text-sky-400 hover:border-sky-400 transition-all mb-6 cursor-pointer" title="Ver solo la plantilla de pedido, sin la biblioteca">📦 Plantilla de Pedido</button>
-            <nav id="pedido-sidebar-nav" class="space-y-8 flex-1"></nav>
+            <nav id="pedido-sidebar-nav" class="space-y-3 flex-1"></nav>
             <input type="file" accept="image/*" class="hidden" id="p-crest-upload-input" onchange="handleCrestUpload(event)">
         </aside>
 
@@ -423,17 +423,12 @@
                 <h3 class="text-lg font-black tracking-wider text-amber-400 uppercase">🔁 Traspasar filas</h3>
                 <button onclick="closeTransferRowsModal()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
             </div>
-            <p class="text-xs text-zinc-500 mb-3">Copia las filas que elijas de "<span id="transfer-rows-source" class="text-zinc-300"></span>" a otra hoja, con toda la información EXCEPTO el precio por unidad y el precio (esa hoja puede tener precios distintos).</p>
-            <div class="mb-3">
+            <p class="text-xs text-zinc-500 mb-3">Copia TODAS las filas de "<span id="transfer-rows-source" class="text-zinc-300"></span>" a otra hoja, con toda la información EXCEPTO el precio por unidad y el precio (esa hoja puede tener precios distintos).</p>
+            <div class="mb-4">
                 <label class="text-[10px] text-zinc-500 uppercase block mb-1">Hoja de destino</label>
                 <select id="transfer-rows-target" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400"></select>
             </div>
-            <label class="flex items-center gap-2 text-xs text-zinc-400 mb-2 cursor-pointer">
-                <input type="checkbox" id="transfer-rows-selectall" onchange="toggleTransferRowsSelectAll(this.checked)">
-                Seleccionar todas
-            </label>
-            <div id="transfer-rows-list" class="space-y-1 mb-4 max-h-64 overflow-y-auto border border-zinc-800 rounded-xl p-2"></div>
-            <button onclick="confirmTransferRows()" class="w-full px-4 py-2.5 text-sm font-bold bg-amber-400 text-black rounded-full hover:bg-white transition-colors cursor-pointer">✅ Traspasar filas seleccionadas</button>
+            <button onclick="confirmTransferRows()" class="w-full px-4 py-2.5 text-sm font-bold bg-amber-400 text-black rounded-full hover:bg-white transition-colors cursor-pointer">✅ Traspasar todas las filas</button>
         </div>
     </div>
 
@@ -2298,7 +2293,7 @@
                 });
                 const isCollapsed = collapsedGroups.has(group.groupId);
                 const groupMenu = document.createElement('div');
-                groupMenu.className = "neon-card-green rounded-2xl p-3 mb-4";
+                groupMenu.className = "neon-card-green rounded-2xl p-3";
                 groupMenu.innerHTML = `
                     <h3 class="text-xs font-bold text-[#39FF14] uppercase tracking-widest mb-3 border-b border-[#39FF14]/30 pb-2 flex items-center justify-between gap-2 relative" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
                         <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
@@ -3167,7 +3162,7 @@
                 const groupMenu = document.createElement('div');
                 const neonCls = group.isPatchGroup ? 'neon-card-amber' : 'neon-card-sky';
                 const patchCls = group.isPatchGroup ? 'text-amber-400 border-amber-500/30' : 'text-sky-400 border-sky-400/30';
-                groupMenu.className = neonCls + " rounded-2xl p-3 mb-4";
+                groupMenu.className = neonCls + " rounded-2xl p-3";
                 const menuOptions = group.isPatchGroup ? `
                             <button onclick="openInput('p-add-collection', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">➕ Añadir colección</button>
                             <button onclick="openInput('p-add-folder', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">📁 Nueva carpeta</button>
@@ -3953,8 +3948,8 @@
             const cols = getOrderedColumns(sheet);
             const theadHtml = `<tr>` + cols.map(c => `<th class="border border-gray-300 ${headerBg} px-1.5 py-1 text-center">
                     ${c.isCustom ? `<span class="font-bold ${headerText} text-[9px] uppercase">${escapeHtml(c.es)}</span>` : `
-                        <div class="text-[7px] ${headerZh} leading-none mb-0.5">${c.zh || ''}</div>
-                        <div class="font-bold ${headerText} text-[9px] uppercase">${c.es}</div>`}
+                        <div class="${es ? headerZh + ' text-[7px]' : `font-bold ${headerText} text-[9px]`} leading-none mb-0.5">${c.zh || ''}</div>
+                        <div class="${es ? `font-bold ${headerText} text-[9px]` : 'text-gray-500 text-[7px] font-normal'} uppercase">${c.es}</div>`}
                 </th>`).join('') + `</tr>`;
             const rows = sheet.rows;
             const tbodyHtml = rows.map((r, i) => {
@@ -4382,54 +4377,33 @@
 
         // --- Traspasar filas elegidas de la hoja activa a otra hoja, sin precio×unidad ni precio -----------------
         // (p.ej. "Nuevo Pedido" -> "New Order": la hoja que ve el proveedor tiene precios distintos a los del cliente).
-        let transferRowsSelected = new Set();
+        // Traspasar TODAS las filas de la hoja activa a otra hoja (sin precios, esa hoja puede tener los suyos
+        // propios) - antes pedía elegir filas una a una; simplificado a solo elegir la hoja destino y confirmar.
         window.openTransferRowsModal = function() {
             const sheet = activeSheet();
             const others = pOrders.sheets.filter(s => s.id !== sheet.id);
             if (!others.length) { alert('Necesitas al menos otra hoja para traspasar filas.'); return; }
             document.getElementById('transfer-rows-source').textContent = sheet.name;
             document.getElementById('transfer-rows-target').innerHTML = others.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
-            transferRowsSelected = new Set();
-            document.getElementById('transfer-rows-selectall').checked = false;
-            renderTransferRowsList(sheet);
             document.getElementById('transfer-rows-modal').classList.remove('hidden');
         };
         window.closeTransferRowsModal = function() { document.getElementById('transfer-rows-modal').classList.add('hidden'); };
-        function renderTransferRowsList(sheet) {
-            const el = document.getElementById('transfer-rows-list');
-            el.innerHTML = sheet.rows.map(r => {
-                const label = [r.name, r.number].filter(Boolean).join(' ') || (r.version || 'Fila sin nombre');
-                const thumb = r.img && r.img.startsWith('data:image') ? `<img src="${r.img}" class="w-8 h-8 object-contain rounded bg-white">` : `<div class="w-8 h-8 rounded bg-zinc-800"></div>`;
-                return `<label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-900 cursor-pointer text-xs text-zinc-300">
-                        <input type="checkbox" onchange="toggleTransferRowSelected('${r.id}', this.checked)" ${transferRowsSelected.has(r.id) ? 'checked' : ''}>
-                        ${thumb}
-                        <span class="truncate">${escapeHtml(label)}</span>
-                    </label>`;
-            }).join('') || '<p class="text-zinc-600 text-xs p-2">Esta hoja no tiene filas.</p>';
-        }
-        window.toggleTransferRowSelected = function(rowId, checked) {
-            if (checked) transferRowsSelected.add(rowId); else transferRowsSelected.delete(rowId);
-        };
-        window.toggleTransferRowsSelectAll = function(checked) {
-            const sheet = activeSheet();
-            transferRowsSelected = new Set(checked ? sheet.rows.map(r => r.id) : []);
-            renderTransferRowsList(sheet);
-        };
         window.confirmTransferRows = function() {
             const sheet = activeSheet();
             const target = pOrders.sheets.find(s => s.id === document.getElementById('transfer-rows-target').value);
-            if (!target || !transferRowsSelected.size) { closeTransferRowsModal(); return; }
-            sheet.rows.forEach(r => {
-                if (!transferRowsSelected.has(r.id)) return;
-                const copy = JSON.parse(JSON.stringify(r));
-                copy.id = 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-                copy.unitPrice = '';
-                copy.price = 0;
-                target.rows.push(copy);
+            if (!target) { closeTransferRowsModal(); return; }
+            openConfirmDelete(`¿Traspasar las ${sheet.rows.length} fila${sheet.rows.length === 1 ? '' : 's'} de "${sheet.name}" a "${target.name}"?`, () => {
+                sheet.rows.forEach(r => {
+                    const copy = JSON.parse(JSON.stringify(r));
+                    copy.id = 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+                    copy.unitPrice = '';
+                    copy.price = 0;
+                    target.rows.push(copy);
+                });
+                savePOrders();
+                closeTransferRowsModal();
+                switchOrderSheet(target.id);
             });
-            savePOrders();
-            closeTransferRowsModal();
-            switchOrderSheet(target.id);
         };
 
         // --- Reordenar filas de la plantilla arrastrando el tirador ⠿ ---
@@ -4779,8 +4753,11 @@
             // tamaño ajustable desde la barra (A-/A+), para que se lea mejor al exportar el PDF para el proveedor.
             const textCell = (field, ph) => `<input type="text" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
             const numCell = (field, ph) => `<input type="number" value="${escAttr(row[field])}" placeholder="${ph || ''}" oninput="updateOrderField('${row.id}','${field}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${field}" class="cell-text w-full h-full min-w-[3rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0" id="cell-${field}-${row.id}">`;
-            const nameCell = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text h-full w-20 text-right bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
-            const numberCell = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text h-full w-8 text-left bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl text-gray-900 print:border-0" id="cell-number-${row.id}">`;
+            // Nombre y Número COMBINADOS: un único input de texto libre (todo en "row.name", "row.number" queda
+            // sin usar en este modo) para que se pueda escribir todo seguido sin tener que cambiar de celda -
+            // antes eran 2 inputs pegados (nombre a la derecha + número a la izquierda) y había que hacer clic
+            // en el sitio exacto para acabar en uno u otro.
+            const nameNumberCellCombined = `<input type="text" value="${escAttr(row.name)}" placeholder="Ej: MESSI 10" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full h-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
             const nameCellSolo = `<input type="text" value="${escAttr(row.name)}" placeholder="NOMBRE" oninput="this.value=this.value.toUpperCase(); updateOrderField('${row.id}','name',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="name" class="cell-text w-full h-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 uppercase print:border-0" id="cell-name-${row.id}">`;
             const numberCellSolo = `<input type="text" value="${escAttr(row.number)}" placeholder="Nº" oninput="updateOrderField('${row.id}','number',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="number" class="cell-text w-full h-full text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0" id="cell-number-${row.id}">`;
             const rowH = row.height || ORDER_ROW_DEFAULT_HEIGHT;
@@ -4797,9 +4774,7 @@
                 if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
-                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">
-                        <div class="inline-flex items-center gap-1 whitespace-nowrap h-full">${nameCell}${numberCell}</div>
-                    </td>`;
+                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
                 if (c.key === 'name') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${nameCellSolo}</td>`;
                 if (c.key === 'number') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${numberCellSolo}</td>`;
                 if (c.key === 'address') {
@@ -4856,8 +4831,8 @@
                     ${(c.key === 'nameNumber' || c.key === 'name' || c.key === 'number') ? `<button onclick="event.stopPropagation(); toggleSheetSplitNameNumber('${sheet.id}', event)" class="absolute bottom-0.5 left-0.5 text-[9px] opacity-50 hover:opacity-100 print:hidden" title="${sheet.splitNameNumber ? 'Combinar nombre y número en 1 columna' : 'Separar nombre y número en 2 columnas'}">🔀</button>` : ''}
                     ${c.isCustom ? `
                         <span class="font-bold ${headerText} text-sm uppercase">${escapeHtml(c.es)}</span>` : `
-                        <div ondblclick="event.stopPropagation(); openInput('rename-order-column-zh', '${c.key}', 'builtin', event)" title="Doble clic para editar el texto en chino" class="text-[10px] ${headerZh} leading-none mb-0.5 cursor-text">${c.zh || ''}</div>
-                        <span class="font-bold ${headerText} text-sm leading-tight uppercase">${c.es}</span>`}
+                        <div ondblclick="event.stopPropagation(); openInput('rename-order-column-zh', '${c.key}', 'builtin', event)" title="Doble clic para editar el texto en chino" class="${es ? headerZh + ' text-[10px]' : `font-bold ${headerText} text-sm`} leading-none mb-0.5 cursor-text">${c.zh || ''}</div>
+                        <span class="${es ? `font-bold ${headerText} text-sm` : 'text-gray-500 text-[10px] font-normal'} leading-tight uppercase">${c.es}</span>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
             thead.innerHTML = `<tr>${thAll}<th class="border border-gray-300 ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
