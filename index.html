@@ -283,7 +283,7 @@
                 <div id="order-sheets-bar" class="flex items-end gap-1 px-3 pt-3 bg-gray-100 border-b border-gray-200 overflow-x-auto print:hidden"></div>
                 <div id="order-style-bar" class="flex items-center gap-2 px-3 py-2 bg-gray-100 border-b border-gray-200 print:hidden"></div>
                 <div class="overflow-x-auto print:overflow-visible">
-                    <table id="order-table" class="w-full border-collapse text-xs" style="table-layout: fixed;">
+                    <table id="order-table" class="w-full border-collapse border border-black text-xs" style="table-layout: fixed;">
                         <colgroup id="order-colgroup"></colgroup>
                         <thead id="order-thead"></thead>
                         <tbody id="order-tbody"></tbody>
@@ -4868,31 +4868,31 @@
             const priceCell = `<span id="cell-price-${row.id}" onclick="setSelectedImgCell('${row.id}','price')" class="cell-text text-gray-900 cursor-pointer w-full h-full flex items-center justify-center">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
-                if (c.isCustom) return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">
+                if (c.isCustom) return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">
                         <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full h-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0">
                     </td>`;
-                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
-                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
-                if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
-                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
-                if (c.key === 'name') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${nameCellSolo}</td>`;
-                if (c.key === 'number') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${numberCellSolo}</td>`;
+                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
+                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border-b border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
+                if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border-b border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
+                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
+                if (c.key === 'name') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${nameCellSolo}</td>`;
+                if (c.key === 'number') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${numberCellSolo}</td>`;
                 if (c.key === 'address') {
                     if (!isFirstRow) return '';
-                    return `<td id="cell-addr" data-col-key="address" rowspan="${totalRows}" class="border border-black p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
+                    return `<td id="cell-addr" data-col-key="address" rowspan="${totalRows}" class="border-b border-black p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
                 }
                 if (c.key === 'priceTotal') {
                     if (!isFirstRow) return '';
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
-                    return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-black p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
+                    return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border-b border-black p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
                 }
-                if (c.key === 'price') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${priceCell}</td>`;
-                if (c.type === 'number') return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${numCell(c.key)}</td>`;
-                return `<td${cellHStyle} class="border-x border-x-black border-t border-t-black border-b-[3px] border-b-black p-1 align-middle text-center">${textCell(c.key)}</td>`;
+                if (c.key === 'price') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${priceCell}</td>`;
+                if (c.type === 'number') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${numCell(c.key)}</td>`;
+                return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
 
             const heightStyle = ` style="height:${rowH}px"`;
-            return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border border-black p-1 text-center align-middle relative print:hidden">
+            return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border-b border-black p-1 text-center align-middle relative print:hidden">
                     <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-300 hover:text-gray-500 text-sm cursor-grab select-none" title="Arrastra para reordenar la fila">⠿</span>
                     <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar fila">✕</button>
                     <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer" title="Arrastra para cambiar la altura de la fila"></span>
@@ -4925,7 +4925,7 @@
             const headerZh = es ? 'hidden' : 'text-gray-500';
 
             const thAll = getOrderedColumns(sheet).map(c => `
-                <th data-col-key="${c.key}" ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-black ${headerBg} px-2 py-2 text-center align-middle relative cursor-text">
+                <th data-col-key="${c.key}" ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border-b border-black ${headerBg} px-2 py-2 text-center align-middle relative cursor-text">
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     <button onclick="event.stopPropagation(); ${c.isCustom ? `deleteOrderColumn('${c.key}')` : `hideOrderColumn('${c.key}')`}" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden absolute top-0.5 right-0.5" title="${c.isCustom ? 'Eliminar columna' : 'Quitar columna'}">✕</button>
                     ${(c.key === 'nameNumber' || c.key === 'name' || c.key === 'number') ? `<button onclick="event.stopPropagation(); toggleSheetSplitNameNumber('${sheet.id}', event)" class="absolute bottom-0.5 left-0.5 text-[9px] opacity-50 hover:opacity-100 print:hidden" title="${sheet.splitNameNumber ? 'Combinar nombre y número en 1 columna' : 'Separar nombre y número en 2 columnas'}">🔀</button>` : ''}
@@ -4935,7 +4935,7 @@
                         <span class="${es ? `font-bold ${headerText} text-sm` : 'text-gray-500 text-[10px] font-normal'} leading-tight uppercase">${c.es}</span>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
-            thead.innerHTML = `<tr>${thAll}<th class="border border-black ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
+            thead.innerHTML = `<tr>${thAll}<th class="border-b border-black ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
             tbody.innerHTML = sheet.rows.map((r, i) => renderOrderRowHTML(r, i === 0, sheet.rows.length)).join('');
             renderHiddenColsBar(sheet);
         }
@@ -5297,13 +5297,19 @@
                 });
                 const extraHeight = rowOverrides.reduce((s, r) => s + r.deltaH, 0);
                 const extraWidth = Math.max(0, maxTargetW - currentColW);
+                // La columna de acciones (⠿ arrastrar / ✕ eliminar), al final de cada fila, es "print:hidden" -
+                // se oculta en la captura pero su ancho seguía contando en table.scrollWidth (medido con esa
+                // columna todavía visible), dejando un hueco en blanco a la derecha del todo en el PDF. Se mide
+                // y se resta aparte.
+                const actionsTh = table.querySelector('#order-thead th:last-child');
+                const actionsW = actionsTh ? actionsTh.getBoundingClientRect().width : 0;
 
                 const canvas = await html2canvas(table, {
                     scale: 2,
                     backgroundColor: '#ffffff',
-                    width: table.scrollWidth + extraWidth,
+                    width: table.scrollWidth + extraWidth - actionsW,
                     height: table.scrollHeight + extraHeight,
-                    windowWidth: table.scrollWidth + extraWidth,
+                    windowWidth: table.scrollWidth + extraWidth - actionsW,
                     onclone: (clonedDoc) => {
                         // Ocultamos en la captura los botones/tiradores que no deben salir en el PDF
                         clonedDoc.querySelectorAll('[class*="print:hidden"]').forEach(el => { el.style.display = 'none'; });
@@ -5313,16 +5319,17 @@
                         // en la app ayudan a saber dónde escribir, pero en el documento que se envía deben verse en blanco.
                         clonedDoc.querySelectorAll('#order-table input[placeholder]').forEach(el => el.removeAttribute('placeholder'));
                         clonedDoc.querySelectorAll('#order-table [data-empty-hint]').forEach(el => { el.textContent = ''; });
-                        // Líneas de columna mucho más finas en el PDF: cada celda tiene border-left Y border-right
-                        // (para que el navegador las funda en una con border-collapse en pantalla), pero html2canvas
-                        // NO aplica ese fundido - dibuja las 2 en el mismo sitio, duplicando el grosor visual entre
-                        // columnas (medido: 4px reales en el canvas en vez de los 2px que tocarían). Se deja solo
-                        // el border-right como separador (border-left a 0) y se repone el marco exterior aparte.
-                        clonedDoc.querySelectorAll('#order-table td, #order-table th').forEach(el => {
-                            el.style.borderLeftWidth = '0';
+                        // Los <input> de texto/número no siempre salen centrados verticalmente en la captura -
+                        // html2canvas no reproduce bien el centrado nativo del navegador dentro de un <input>,
+                        // así que en el clon se sustituyen por un <div> con el mismo texto, centrado de verdad
+                        // con flex (mismas clases, así hereda tamaño/color/mayúsculas sin tener que repetirlas).
+                        clonedDoc.querySelectorAll('#order-tbody input').forEach(input => {
+                            const div = clonedDoc.createElement('div');
+                            div.textContent = input.value;
+                            div.className = input.className;
+                            div.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;';
+                            if (input.parentNode) input.parentNode.replaceChild(div, input);
                         });
-                        const clonedTable = clonedDoc.getElementById('order-table');
-                        if (clonedTable) clonedTable.style.border = '1px solid black';
                         // Foto de producto a tamaño real (ver comentario arriba)
                         if (extraWidth > 0) {
                             const col = clonedDoc.getElementById('col-img');
