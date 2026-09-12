@@ -250,6 +250,7 @@
                         </div>
                         <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
                         <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
+                        <button onclick="openTransferRowsModal()" title="Traspasar filas a otra hoja (sin precios)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">🔁 Traspasar</button>
                         <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
                         <button onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
                     </div>
@@ -384,6 +385,27 @@
             <div class="flex justify-end gap-3">
                 <button onclick="closeSheetPicker()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Traspasar filas de la hoja activa a otra hoja, sin las columnas de precio (proveedor vs. cliente) -->
+    <div id="transfer-rows-modal" class="fixed inset-0 bg-black/95 hidden z-[220] flex items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-md max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-black tracking-wider text-amber-400 uppercase">🔁 Traspasar filas</h3>
+                <button onclick="closeTransferRowsModal()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <p class="text-xs text-zinc-500 mb-3">Copia las filas que elijas de "<span id="transfer-rows-source" class="text-zinc-300"></span>" a otra hoja, con toda la información EXCEPTO el precio por unidad y el precio (esa hoja puede tener precios distintos).</p>
+            <div class="mb-3">
+                <label class="text-[10px] text-zinc-500 uppercase block mb-1">Hoja de destino</label>
+                <select id="transfer-rows-target" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400"></select>
+            </div>
+            <label class="flex items-center gap-2 text-xs text-zinc-400 mb-2 cursor-pointer">
+                <input type="checkbox" id="transfer-rows-selectall" onchange="toggleTransferRowsSelectAll(this.checked)">
+                Seleccionar todas
+            </label>
+            <div id="transfer-rows-list" class="space-y-1 mb-4 max-h-64 overflow-y-auto border border-zinc-800 rounded-xl p-2"></div>
+            <button onclick="confirmTransferRows()" class="w-full px-4 py-2.5 text-sm font-bold bg-amber-400 text-black rounded-full hover:bg-white transition-colors cursor-pointer">✅ Traspasar filas seleccionadas</button>
         </div>
     </div>
 
@@ -618,6 +640,26 @@
         
         let editContext = { action: null, targetId: null, extraId: null };
         let deleteContext = { mode: null, colId: null, index: null };
+
+        // --- Mini-desplegable genérico reutilizable (menús de "⋯": bloques, clientes...) ---
+        // Un solo elemento abierto a la vez; se cierra solo al hacer clic fuera o al abrir otro.
+        let openSimpleMenuEl = null;
+        window.toggleSimpleMenu = function(id, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (openSimpleMenuEl && openSimpleMenuEl !== el) openSimpleMenuEl.classList.add('hidden');
+            const willOpen = el.classList.contains('hidden');
+            el.classList.toggle('hidden', !willOpen);
+            openSimpleMenuEl = willOpen ? el : null;
+        };
+        window.closeSimpleMenu = function() {
+            if (openSimpleMenuEl) openSimpleMenuEl.classList.add('hidden');
+            openSimpleMenuEl = null;
+        };
+        document.addEventListener('click', (e) => {
+            if (openSimpleMenuEl && !e.target.closest('.simple-dropdown-menu') && !e.target.closest('[data-menu-trigger]')) closeSimpleMenu();
+        });
 
         let dragSrcEl = null; let dragSrcCol = null; let dragSrcIndex = null;
 
@@ -1026,6 +1068,25 @@
             } else if (action === 'patch') {
                 titleEl.innerHTML = "🛡️ PARCHE"; inputEl.placeholder = "Ej: Champions League 2015";
                 inputEl.value = db[targetId][extraId].patch || "";
+            } else if (action === 'add-group') {
+                titleEl.innerHTML = "➕ NUEVO BLOQUE"; inputEl.placeholder = "Nombre del bloque...";
+            } else if (action === 'edit-group') {
+                titleEl.innerHTML = "✏️ RENOMBRAR BLOQUE";
+                const group = structure.find(g => g.groupId === targetId);
+                inputEl.value = group ? group.groupTitle : "";
+            } else if (action === 'p-add-group') {
+                titleEl.innerHTML = "➕ NUEVO BLOQUE"; inputEl.placeholder = "Nombre del bloque...";
+            } else if (action === 'p-edit-group') {
+                titleEl.innerHTML = "✏️ RENOMBRAR BLOQUE";
+                const group = pStructure.find(g => g.groupId === targetId);
+                inputEl.value = group ? group.groupTitle : "";
+            } else if (action === 'p-add-folder') {
+                titleEl.innerHTML = "📁 NUEVA CARPETA"; inputEl.placeholder = "Nombre de la carpeta...";
+            } else if (action === 'p-edit-folder') {
+                titleEl.innerHTML = "✏️ RENOMBRAR CARPETA";
+                const group = pStructure.find(g => g.groupId === targetId);
+                const folder = group && group.folders && group.folders.find(f => f.id === extraId);
+                inputEl.value = folder ? folder.name : "";
             } else if (action === 'add-collection') {
                 titleEl.innerHTML = "➕ NUEVA COLECCIÓN"; inputEl.placeholder = "Nombre de la colección...";
             } else if (action === 'edit-collection') {
@@ -1093,6 +1154,9 @@
                 inputEl.value = col ? (col.zh || "") : "";
             } else if (action === 'add-cliente') {
                 titleEl.innerHTML = "➕ NUEVO CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
+            } else if (action === 'rename-cliente') {
+                titleEl.innerHTML = "✏️ RENOMBRAR CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
+                inputEl.value = targetId || "";
             } else if (action === 'save-address') {
                 titleEl.innerHTML = "💾 GUARDAR DIRECCIÓN COMO..."; inputEl.placeholder = "Ej: PERSONAL, TITO, KIKE...";
             }
@@ -1118,6 +1182,46 @@
                 db[targetId][extraId].nameNumber = val; saveDB();
             } else if (action === 'patch') {
                 db[targetId][extraId].patch = val; saveDB();
+            } else if (action === 'add-group') {
+                if (val) { structure.push({ groupTitle: val, groupId: 'group-' + Date.now(), collections: [] }); saveStructure(); init(); }
+            } else if (action === 'edit-group') {
+                if (val) {
+                    const group = structure.find(g => g.groupId === targetId);
+                    if (group) { group.groupTitle = val; saveStructure(); init(); }
+                }
+            } else if (action === 'p-add-group') {
+                if (val) { pStructure.push({ groupTitle: val, groupId: 'p-group-' + Date.now(), collections: [] }); pSaveStructure(); pInit(); }
+            } else if (action === 'p-edit-group') {
+                if (val) {
+                    const group = pStructure.find(g => g.groupId === targetId);
+                    if (group) { group.groupTitle = val; pSaveStructure(); pInit(); }
+                }
+            } else if (action === 'p-add-folder') {
+                if (val) {
+                    const group = pStructure.find(g => g.groupId === targetId);
+                    if (group) {
+                        if (!Array.isArray(group.folders)) group.folders = [];
+                        group.folders.push({ id: 'p-folder-' + Date.now(), name: val });
+                        pSaveStructure(); pInit();
+                    }
+                }
+            } else if (action === 'p-edit-folder') {
+                if (val) {
+                    const group = pStructure.find(g => g.groupId === targetId);
+                    const folder = group && group.folders && group.folders.find(f => f.id === extraId);
+                    if (folder) { folder.name = val; pSaveStructure(); pInit(); }
+                }
+            } else if (action === 'rename-cliente') {
+                if (val && val !== targetId) {
+                    const newName = val.toUpperCase();
+                    const idx = pedidosClientes.indexOf(targetId);
+                    if (idx !== -1) {
+                        if (pedidosClientes.includes(newName)) pedidosClientes.splice(idx, 1);
+                        else pedidosClientes[idx] = newName;
+                        pedidosArchivo.forEach(p => { if (p.cliente === targetId) p.cliente = newName; });
+                        saveClientes(); savePedidosArchivo(); renderClientesChips(); renderPedidosTab();
+                    }
+                }
             } else if (action === 'add-collection') {
                 if(val) {
                     const group = structure.find(g => g.groupId === targetId);
@@ -1951,6 +2055,29 @@
             structure.splice(to, 0, moved);
             saveStructure(); init();
         };
+        window.moveGroupUpDown = function(groupId, dir) {
+            const from = structure.findIndex(g => g.groupId === groupId);
+            const to = from + dir;
+            if (from === -1 || to < 0 || to >= structure.length) return;
+            const [moved] = structure.splice(from, 1);
+            structure.splice(to, 0, moved);
+            saveStructure(); init();
+        };
+        window.deleteGroup = function(groupId, event) {
+            if (event) event.stopPropagation();
+            const group = structure.find(g => g.groupId === groupId);
+            if (!group) return;
+            let nPhotos = 0;
+            group.collections.forEach(c => { nPhotos += (db[c.id] || []).length; (c.subCols || []).forEach(s => { nPhotos += (db[s.id] || []).length; }); });
+            const nCols = group.collections.length;
+            const msg = `¿Eliminar el bloque «${group.groupTitle}»` + (nCols > 0 ? ` y sus ${nCols} colección${nCols === 1 ? '' : 'es'}${nPhotos > 0 ? ` (${nPhotos} foto${nPhotos === 1 ? '' : 's'})` : ''}? Esta acción no se puede deshacer.` : '?');
+            openConfirmDelete(msg, () => {
+                group.collections.forEach(c => { delete db[c.id]; (c.subCols || []).forEach(s => { delete db[s.id]; }); });
+                structure = structure.filter(g => g.groupId !== groupId);
+                if (group.collections.some(c => c.id === currentView)) currentView = 'home';
+                saveStructure(); saveDB(); init();
+            });
+        };
 
         let folderDragSrc = null;
         window.folderDragStart = function(e, groupId, folderId) { folderDragSrc = { groupId, folderId }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
@@ -2024,15 +2151,24 @@
                 const groupMenu = document.createElement('div');
                 groupMenu.className = "neon-card-green rounded-2xl p-3 mb-4";
                 groupMenu.innerHTML = `
-                    <h3 class="text-xs font-bold text-[#39FF14] uppercase tracking-widest mb-3 border-b border-[#39FF14]/30 pb-2 flex items-center justify-between gap-2" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
+                    <h3 class="text-xs font-bold text-[#39FF14] uppercase tracking-widest mb-3 border-b border-[#39FF14]/30 pb-2 flex items-center justify-between gap-2 relative" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
                         <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
                             <span id="groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.emoji ? group.emoji + ' ' : ''}${group.groupTitle}</span>
                         </button>
                         <span class="flex items-center gap-1 shrink-0">
-                            <button onclick="openInput('set-group-emoji', '${group.groupId}', null, event)" class="text-[#39FF14]/60 hover:text-[#39FF14] text-xs p-0.5 transition-colors" title="Elegir emoji del bloque">😀</button>
                             <span draggable="true" ondragstart="groupDragStart(event, '${group.groupId}')" class="text-[#39FF14]/60 hover:text-[#39FF14] cursor-grab text-sm leading-none p-0.5 transition-colors" title="Arrastra para reordenar el bloque">⠿</span>
+                            <button data-menu-trigger onclick="toggleSimpleMenu('groupmenu-${group.groupId}', event)" class="text-[#39FF14]/60 hover:text-[#39FF14] text-sm leading-none p-0.5 transition-colors font-black" title="Opciones del bloque">⋯</button>
                         </span>
+                        <div id="groupmenu-${group.groupId}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] py-1 overflow-hidden normal-case font-normal tracking-normal">
+                            <button onclick="openInput('add-collection', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">➕ Añadir colección</button>
+                            <button onclick="openInput('add-folder', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">📁 Nueva carpeta</button>
+                            <button onclick="openInput('edit-group', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Renombrar bloque</button>
+                            <button onclick="openInput('set-group-emoji', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">😀 Emoji del bloque</button>
+                            <button onclick="moveGroupUpDown('${group.groupId}', -1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${gi === 0 ? 'opacity-30 pointer-events-none' : ''}">▲ Mover arriba</button>
+                            <button onclick="moveGroupUpDown('${group.groupId}', 1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${gi === structure.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▼ Mover abajo</button>
+                            <button onclick="deleteGroup('${group.groupId}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 cursor-pointer">✕ Eliminar bloque</button>
+                        </div>
                     </h3>`;
                 const ul = document.createElement('ul'); ul.className = "space-y-1" + (isCollapsed ? " hidden" : ""); ul.id = "grouplist-" + group.groupId;
                 ul.setAttribute('ondragover', 'groupListDragOver(event)');
@@ -2136,13 +2272,14 @@
                     mainContent.appendChild(colSection);
                 });
 
-                const addLi = document.createElement('li'); addLi.className = "pt-2 flex flex-col gap-1";
-                addLi.innerHTML = `
-                    <button onclick="openInput('add-collection', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-[#39FF14] transition-colors flex items-center gap-1 uppercase tracking-wider">➕ Añadir Colección</button>
-                    <button onclick="openInput('add-folder', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-[#39FF14] transition-colors flex items-center gap-1 uppercase tracking-wider">📁 Nueva carpeta</button>`;
-                ul.appendChild(addLi);
                 groupMenu.appendChild(ul); sidebarNav.appendChild(groupMenu);
             });
+
+            const addGroupBtn = document.createElement('button');
+            addGroupBtn.onclick = () => openInput('add-group', null, null, null);
+            addGroupBtn.className = "w-full text-left px-3 py-2 text-xs text-zinc-500 hover:text-[#39FF14] hover:border-[#39FF14]/50 transition-colors uppercase tracking-wider border border-dashed border-zinc-800 rounded-full mb-4";
+            addGroupBtn.textContent = "➕ Nuevo bloque";
+            sidebarNav.appendChild(addGroupBtn);
 
             structure.forEach(group => { group.collections.forEach(col => {
                 setupDropzone(col.id);
@@ -2603,6 +2740,20 @@
             if (chev) chev.textContent = pCollapsedGroups.has(groupId) ? '▸' : '▾';
         };
 
+        // Carpetas dentro de un bloque de la biblioteca de Crear Pedido (mismo concepto que en Wishlist).
+        let pCollapsedFolders = new Set();
+        try { pCollapsedFolders = new Set(JSON.parse(localStorage.getItem('pedido_collapsed_folders') || '[]')); } catch (e) {}
+        function pSaveCollapsedFolders() { try { localStorage.setItem('pedido_collapsed_folders', JSON.stringify([...pCollapsedFolders])); } catch (e) {} }
+        window.pToggleFolderCollapsed = function(folderId, event) {
+            if (event) { event.stopPropagation(); event.preventDefault(); }
+            if (pCollapsedFolders.has(folderId)) pCollapsedFolders.delete(folderId); else pCollapsedFolders.add(folderId);
+            pSaveCollapsedFolders();
+            const ul = document.getElementById('p-folderlist-' + folderId);
+            const chev = document.getElementById('p-folderchev-' + folderId);
+            if (ul) ul.classList.toggle('hidden', pCollapsedFolders.has(folderId));
+            if (chev) chev.textContent = pCollapsedFolders.has(folderId) ? '▸' : '▾';
+        };
+
         let pDb = {};
         let pCurrentView = null;
         try { pCurrentView = localStorage.getItem('pedido_current_view') || null; } catch (e) {}
@@ -2704,20 +2855,37 @@
                 const neonCls = group.isPatchGroup ? 'neon-card-amber' : 'neon-card-sky';
                 const patchCls = group.isPatchGroup ? 'text-amber-400 border-amber-500/30' : 'text-sky-400 border-sky-400/30';
                 groupMenu.className = neonCls + " rounded-2xl p-3 mb-4";
+                const menuOptions = group.isPatchGroup ? `
+                            <button onclick="openInput('p-add-collection', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">➕ Añadir colección</button>
+                            <button onclick="openInput('p-add-folder', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">📁 Nueva carpeta</button>
+                            <button onclick="openInput('p-edit-group', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Renombrar bloque</button>` : `
+                            <button onclick="openInput('p-add-collection', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">➕ Añadir colección</button>
+                            <button onclick="openInput('p-add-folder', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">📁 Nueva carpeta</button>
+                            <button onclick="openInput('p-edit-group', '${group.groupId}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Renombrar bloque</button>
+                            <button onclick="pMoveGroupUpDown('${group.groupId}', -1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${gi === 0 ? 'opacity-30 pointer-events-none' : ''}">▲ Mover arriba</button>
+                            <button onclick="pMoveGroupUpDown('${group.groupId}', 1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${gi === pStructure.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▼ Mover abajo</button>
+                            <button onclick="pDeleteGroup('${group.groupId}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 cursor-pointer">✕ Eliminar bloque</button>`;
                 groupMenu.innerHTML = `
-                    <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-2 flex items-center justify-between gap-2" ondragover="pGroupDragOver(event)" ondrop="pGroupDrop(event, '${group.groupId}')">
+                    <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-2 flex items-center justify-between gap-2 relative" ondragover="pGroupDragOver(event)" ondrop="pGroupDrop(event, '${group.groupId}')">
                         <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
                             <span id="p-groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.isPatchGroup ? '🛡️ ' : ''}${group.groupTitle}</span>
                         </button>
-                        ${group.isPatchGroup ? `<span class="text-[9px] uppercase opacity-60 shrink-0" title="Este bloque está fijado arriba">📌 fijo</span>` : `<span draggable="true" ondragstart="pGroupDragStart(event, '${group.groupId}')" class="opacity-60 hover:opacity-100 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>`}
+                        <span class="flex items-center gap-1 shrink-0">
+                            ${group.isPatchGroup ? `<span class="text-[9px] uppercase opacity-60 shrink-0" title="Este bloque está fijado arriba">📌 fijo</span>` : `<span draggable="true" ondragstart="pGroupDragStart(event, '${group.groupId}')" class="opacity-60 hover:opacity-100 cursor-grab text-sm leading-none p-0.5 transition-colors shrink-0" title="Arrastra para reordenar el bloque">⠿</span>`}
+                            <button data-menu-trigger onclick="toggleSimpleMenu('p-groupmenu-${group.groupId}', event)" class="opacity-60 hover:opacity-100 text-sm leading-none p-0.5 transition-colors font-black shrink-0" title="Opciones del bloque">⋯</button>
+                        </span>
+                        <div id="p-groupmenu-${group.groupId}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] py-1 overflow-hidden normal-case font-normal tracking-normal">
+                            ${menuOptions}
+                        </div>
                     </h3>`;
                 const ul = document.createElement('ul'); ul.className = "space-y-1" + (isCollapsed ? " hidden" : ""); ul.id = "p-grouplist-" + group.groupId;
+                ul.setAttribute('ondragover', 'pGroupListDragOver(event)');
+                ul.setAttribute('ondrop', `pGroupListDrop(event, '${group.groupId}')`);
 
-                group.collections.forEach(col => {
+                const buildPColLinkHTML = (col) => {
                     const total = (pDb[col.id] || []).length + (col.subCols || []).reduce((s, x) => s + (pDb[x.id] || []).length, 0);
-                    const li = document.createElement('li');
-                    li.innerHTML = `
+                    return `
                         <a href="#" id="p-link-${col.id}"
                            ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${group.groupId}', '${col.id}')"
                            onclick="pShowView('${col.id}'); return false;"
@@ -2738,14 +2906,49 @@
                                 <span id="p-badge-${col.id}" class="text-[10px] px-1.5 py-0.5 rounded-full ${total > 0 ? 'bg-sky-400/10 text-sky-400' : 'bg-zinc-900 text-zinc-600'} ml-1 pointer-events-none">${total}</span>
                             </div>
                         </a>`;
+                };
+
+                const pFolders = Array.isArray(group.folders) ? group.folders : [];
+                pFolders.forEach(folder => {
+                    const isFolderCollapsed = pCollapsedFolders.has(folder.id);
+                    const children = group.collections.filter(c => c.folderId === folder.id);
+                    const childrenHTML = children.map(c => `<li>${buildPColLinkHTML(c)}</li>`).join('');
+                    const folderLi = document.createElement('li');
+                    folderLi.innerHTML = `
+                        <div ondragover="pFolderDragOver(event)" ondragleave="pFolderDragLeave(event)" ondrop="pFolderDrop(event, '${group.groupId}', '${folder.id}')"
+                             class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-full hover:bg-zinc-900 transition-all group select-none">
+                            <button onclick="pToggleFolderCollapsed('${folder.id}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 text-sm font-bold text-zinc-300 hover:text-sky-400 transition-colors text-left">
+                                <span id="p-folderchev-${folder.id}" class="text-[10px] shrink-0">${isFolderCollapsed ? '▸' : '▾'}</span>
+                                <span class="shrink-0">📁</span>
+                                <span class="truncate">${folder.name}</span>
+                            </button>
+                            <div class="hidden group-hover:flex items-center gap-1 shrink-0">
+                                <span draggable="true" ondragstart="pFolderDragStart(event, '${group.groupId}', '${folder.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab" title="Arrastra para reordenar la carpeta">⠿</span>
+                                <button onclick="openInput('p-edit-folder', '${group.groupId}', '${folder.id}', event)" class="text-zinc-600 hover:text-blue-400 text-xs p-0.5" title="Renombrar carpeta">✏️</button>
+                                <button onclick="pDeleteFolder('${group.groupId}', '${folder.id}', event)" class="del-x-btn" title="Eliminar carpeta (las colecciones no se borran)">✕</button>
+                            </div>
+                        </div>
+                        <ul id="p-folderlist-${folder.id}" class="ml-5 mt-1 space-y-1 border-l border-zinc-800 pl-2 ${isFolderCollapsed ? 'hidden' : ''}">
+                            ${childrenHTML}
+                        </ul>`;
+                    ul.appendChild(folderLi);
+                });
+
+                const topLevelCols = group.collections.filter(c => !c.folderId || !pFolders.some(f => f.id === c.folderId));
+                topLevelCols.forEach(col => {
+                    const li = document.createElement('li');
+                    li.innerHTML = buildPColLinkHTML(col);
                     ul.appendChild(li);
                 });
 
-                const addLi = document.createElement('li'); addLi.className = "pt-2";
-                addLi.innerHTML = `<button onclick="openInput('p-add-collection', '${group.groupId}', null, event)" class="w-full text-left px-2 py-1 text-xs text-zinc-500 hover:text-sky-400 transition-colors flex items-center gap-1 uppercase tracking-wider">➕ Añadir Colección</button>`;
-                ul.appendChild(addLi);
                 groupMenu.appendChild(ul); nav.appendChild(groupMenu);
             });
+
+            const addPGroupBtn = document.createElement('button');
+            addPGroupBtn.onclick = () => openInput('p-add-group', null, null, null);
+            addPGroupBtn.className = "w-full text-left px-3 py-2 text-xs text-zinc-500 hover:text-sky-400 hover:border-sky-400/50 transition-colors uppercase tracking-wider border border-dashed border-zinc-800 rounded-full mb-4";
+            addPGroupBtn.textContent = "➕ Nuevo bloque";
+            nav.appendChild(addPGroupBtn);
 
             if (!pFindCollection(pCurrentView)) {
                 const first = pStructure[0] && pStructure[0].collections[0];
@@ -2833,6 +3036,84 @@
             pStructure.sort((a, b) => (a.isPatchGroup ? 0 : 1) - (b.isPatchGroup ? 0 : 1));
             pSaveStructure(); pInit();
         };
+        window.pMoveGroupUpDown = function(groupId, dir) {
+            const group = pStructure.find(g => g.groupId === groupId);
+            if (!group || group.isPatchGroup) return;
+            const from = pStructure.findIndex(g => g.groupId === groupId);
+            const to = from + dir;
+            if (from === -1 || to < 0 || to >= pStructure.length) return;
+            const [moved] = pStructure.splice(from, 1);
+            pStructure.splice(to, 0, moved);
+            pStructure.sort((a, b) => (a.isPatchGroup ? 0 : 1) - (b.isPatchGroup ? 0 : 1));
+            pSaveStructure(); pInit();
+        };
+        window.pDeleteGroup = function(groupId, event) {
+            if (event) event.stopPropagation();
+            const group = pStructure.find(g => g.groupId === groupId);
+            if (!group || group.isPatchGroup) return;
+            let nPhotos = 0;
+            group.collections.forEach(c => { nPhotos += (pDb[c.id] || []).length; (c.subCols || []).forEach(s => { nPhotos += (pDb[s.id] || []).length; }); });
+            const nCols = group.collections.length;
+            const msg = `¿Eliminar el bloque «${group.groupTitle}»` + (nCols > 0 ? ` y sus ${nCols} colección${nCols === 1 ? '' : 'es'}${nPhotos > 0 ? ` (${nPhotos} foto${nPhotos === 1 ? '' : 's'})` : ''}? Esta acción no se puede deshacer.` : '?');
+            openConfirmDelete(msg, () => {
+                group.collections.forEach(c => { delete pDb[c.id]; (c.subCols || []).forEach(s => { delete pDb[s.id]; }); });
+                pStructure = pStructure.filter(g => g.groupId !== groupId);
+                if (group.collections.some(c => c.id === pCurrentView)) pCurrentView = null;
+                pSaveStructure(); pSaveDB(); pInit();
+            });
+        };
+
+        let pFolderDragSrc = null;
+        window.pFolderDragStart = function(e, groupId, folderId) { pFolderDragSrc = { groupId, folderId }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
+        window.pFolderDragOver = function(e) { if (pFolderDragSrc || pCollectionDragSrc) { e.preventDefault(); e.currentTarget.classList.add('sidebar-drag-over'); } };
+        window.pFolderDragLeave = function(e) { e.currentTarget.classList.remove('sidebar-drag-over'); };
+        window.pFolderDrop = function(e, groupId, targetFolderId) {
+            e.preventDefault(); e.stopPropagation();
+            e.currentTarget.classList.remove('sidebar-drag-over');
+            const group = pStructure.find(g => g.groupId === groupId);
+            if (!group) return;
+            if (pCollectionDragSrc) {
+                const srcIdx = group.collections.findIndex(c => c.id === pCollectionDragSrc.colId);
+                pCollectionDragSrc = null;
+                if (srcIdx === -1) return;
+                const [moved] = group.collections.splice(srcIdx, 1);
+                moved.folderId = targetFolderId;
+                group.collections.push(moved);
+                pSaveStructure(); pInit();
+                return;
+            }
+            if (pFolderDragSrc && pFolderDragSrc.folderId !== targetFolderId) {
+                const from = group.folders.findIndex(f => f.id === pFolderDragSrc.folderId);
+                const to = group.folders.findIndex(f => f.id === targetFolderId);
+                pFolderDragSrc = null;
+                if (from === -1 || to === -1) return;
+                const [moved] = group.folders.splice(from, 1);
+                group.folders.splice(to, 0, moved);
+                pSaveStructure(); pInit();
+            }
+        };
+        window.pGroupListDragOver = function(e) { if (pCollectionDragSrc) e.preventDefault(); };
+        window.pGroupListDrop = function(e, groupId) {
+            if (!pCollectionDragSrc || e.target !== e.currentTarget) return;
+            e.preventDefault();
+            const group = pStructure.find(g => g.groupId === groupId);
+            const srcIdx = group && group.collections.findIndex(c => c.id === pCollectionDragSrc.colId);
+            pCollectionDragSrc = null;
+            if (!group || srcIdx === -1) return;
+            group.collections[srcIdx].folderId = null;
+            pSaveStructure(); pInit();
+        };
+        window.pDeleteFolder = function(groupId, folderId, event) {
+            if (event) event.stopPropagation();
+            const group = pStructure.find(g => g.groupId === groupId);
+            if (!group) return;
+            openConfirmDelete('¿Eliminar esta carpeta? Las colecciones que contiene NO se borran, solo salen de la carpeta.', () => {
+                group.collections.forEach(c => { if (c.folderId === folderId) c.folderId = null; });
+                group.folders = group.folders.filter(f => f.id !== folderId);
+                pSaveStructure(); pInit();
+            });
+        };
+
         let pCollectionDragSrc = null;
         window.pCollectionDragStart = function(e, groupId, colId) { pCollectionDragSrc = { groupId, colId }; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
 
@@ -2848,6 +3129,7 @@
             const isPatch = pIsPatchCollection(colId);
             return `<div class="relative group aspect-[3/4] bg-zinc-900 rounded-xl overflow-hidden border ${isPatch ? 'border-amber-500/40 hover:border-amber-400' : 'border-zinc-800 hover:border-sky-400'} transition-all cursor-pointer"
                     draggable="true" ondragstart="pDragStart(event, '${colId}', ${index})" ondragend="pDragEndCard()"
+                    ondragover="pCardDragOver(event)" ondragleave="pCardDragLeave(event)" ondrop="pCardDrop(event, '${colId}', ${index})"
                     onclick="pOpenModal('${colId}', ${index})">
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none">
                 ${isPatch ? `<button onclick="event.stopPropagation(); sendPatchToOrder('${colId}', ${index})" title="Enviar a un producto del pedido" class="absolute bottom-0 inset-x-0 z-10 py-1 bg-amber-500/90 text-black text-[9px] font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">📎 Enviar a pedido</button>` : ''}
@@ -2923,11 +3205,12 @@
                 input.onchange = () => pHandleFiles(input.files, subId); input.click();
             });
             ['dragenter', 'dragover'].forEach(n => box.addEventListener(n, e => {
-                if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); box.classList.add('section-drop-active'); }
+                if (dtHasDroppableImage(e.dataTransfer) || libraryDragSrc) { e.preventDefault(); box.classList.add('section-drop-active'); }
             }));
             ['dragleave', 'drop'].forEach(n => box.addEventListener(n, () => box.classList.remove('section-drop-active')));
             box.addEventListener('drop', e => {
                 box.classList.remove('section-drop-active');
+                if (pSectionDrop(e, subId)) return;
                 if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); e.stopPropagation(); pAddDroppedImages(e.dataTransfer, subId); }
             });
         }
@@ -2940,10 +3223,11 @@
             });
             const area = document.getElementById('pedido-main-drop-area');
             ['dragenter', 'dragover'].forEach(n => area.addEventListener(n, e => {
-                if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); area.classList.add('section-drop-active'); }
+                if (dtHasDroppableImage(e.dataTransfer) || libraryDragSrc) { e.preventDefault(); area.classList.add('section-drop-active'); }
             }));
             ['dragleave', 'drop'].forEach(n => area.addEventListener(n, () => area.classList.remove('section-drop-active')));
             area.addEventListener('drop', e => {
+                if (pCurrentView && pSectionDrop(e, pCurrentView)) return;
                 if (dtHasDroppableImage(e.dataTransfer) && pCurrentView) { e.preventDefault(); pAddDroppedImages(e.dataTransfer, pCurrentView); }
             });
         }
@@ -3068,11 +3352,53 @@
         let libraryDragSrc = null;
         window.pDragStart = function(e, colId, index) {
             const item = pDb[colId] && pDb[colId][index]; if (!item) return;
-            libraryDragSrc = { src: item.src };
+            libraryDragSrc = { src: item.src, colId, index };
             try { e.dataTransfer.setData('text/plain', 'lib-img'); } catch (x) {}
-            e.dataTransfer.effectAllowed = 'copy';
+            e.dataTransfer.effectAllowed = 'copyMove';
         };
         window.pDragEndCard = function() { libraryDragSrc = null; };
+
+        // Mover una foto de la biblioteca (arrastrando su tarjeta) a otra colección/subcolección, incluyendo
+        // sacarla o meterla desde/hacia "sin clasificar" - igual que ya funcionaba en la Wishlist.
+        window.pCardDragOver = function(e) {
+            if (libraryDragSrc) { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); }
+        };
+        window.pCardDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400'); };
+        window.pCardDrop = function(e, targetColId, targetIndex) {
+            e.currentTarget.classList.remove('ring-2', 'ring-sky-400');
+            if (!libraryDragSrc || libraryDragSrc.colId == null) return;
+            e.preventDefault(); e.stopPropagation();
+            const { colId: srcColId, index: srcIndex } = libraryDragSrc;
+            libraryDragSrc = null;
+            if (!Array.isArray(pDb[srcColId])) return;
+            if (srcColId === targetColId) {
+                if (srcIndex === targetIndex) return;
+                const arr = pDb[srcColId];
+                const item = arr.splice(srcIndex, 1)[0];
+                const newTarget = srcIndex < targetIndex ? targetIndex - 1 : targetIndex;
+                arr.splice(newTarget + 1, 0, item);
+            } else {
+                const item = pDb[srcColId].splice(srcIndex, 1)[0];
+                if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
+                pDb[targetColId].splice(targetIndex + 1, 0, item);
+            }
+            pSaveDB();
+            pRenderLibraryBody();
+        };
+        // Soltar una foto arrastrada sobre la caja "+" (vacía) de una colección/subcolección entera, no sobre una tarjeta concreta.
+        window.pSectionDrop = function(e, targetColId) {
+            if (!libraryDragSrc || libraryDragSrc.colId == null || libraryDragSrc.colId === targetColId) return false;
+            e.preventDefault(); e.stopPropagation();
+            const { colId: srcColId, index: srcIndex } = libraryDragSrc;
+            libraryDragSrc = null;
+            if (!Array.isArray(pDb[srcColId])) return true;
+            const item = pDb[srcColId].splice(srcIndex, 1)[0];
+            if (!Array.isArray(pDb[targetColId])) pDb[targetColId] = [];
+            pDb[targetColId].unshift(item);
+            pSaveDB();
+            pRenderLibraryBody();
+            return true;
+        };
 
         // --- Enviar foto Wishlist <-> Pedido ---
         let sendContext = { direction: null, src: null };
@@ -3263,7 +3589,7 @@
             pickerMode = 'send-to-pedido-patch';
             pickerImages = [];
             const body = document.getElementById('lib-picker-body');
-            const html = renderLibraryPickerGrid();
+            const html = renderLibraryPickerGrid(true);
             body.innerHTML = html || '<p class="text-zinc-500 text-sm">Todavía no tienes fotos de parches. Añádelas en "Crear Pedido", carpeta 🛡️ Parches.</p>';
             document.getElementById('lib-picker-modal').classList.remove('hidden');
         };
@@ -3640,6 +3966,58 @@
             });
         };
 
+        // --- Traspasar filas elegidas de la hoja activa a otra hoja, sin precio×unidad ni precio -----------------
+        // (p.ej. "Nuevo Pedido" -> "New Order": la hoja que ve el proveedor tiene precios distintos a los del cliente).
+        let transferRowsSelected = new Set();
+        window.openTransferRowsModal = function() {
+            const sheet = activeSheet();
+            const others = pOrders.sheets.filter(s => s.id !== sheet.id);
+            if (!others.length) { alert('Necesitas al menos otra hoja para traspasar filas.'); return; }
+            document.getElementById('transfer-rows-source').textContent = sheet.name;
+            document.getElementById('transfer-rows-target').innerHTML = others.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+            transferRowsSelected = new Set();
+            document.getElementById('transfer-rows-selectall').checked = false;
+            renderTransferRowsList(sheet);
+            document.getElementById('transfer-rows-modal').classList.remove('hidden');
+        };
+        window.closeTransferRowsModal = function() { document.getElementById('transfer-rows-modal').classList.add('hidden'); };
+        function renderTransferRowsList(sheet) {
+            const el = document.getElementById('transfer-rows-list');
+            el.innerHTML = sheet.rows.map(r => {
+                const label = [r.name, r.number].filter(Boolean).join(' ') || (r.version || 'Fila sin nombre');
+                const thumb = r.img && r.img.startsWith('data:image') ? `<img src="${r.img}" class="w-8 h-8 object-contain rounded bg-white">` : `<div class="w-8 h-8 rounded bg-zinc-800"></div>`;
+                return `<label class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-900 cursor-pointer text-xs text-zinc-300">
+                        <input type="checkbox" onchange="toggleTransferRowSelected('${r.id}', this.checked)" ${transferRowsSelected.has(r.id) ? 'checked' : ''}>
+                        ${thumb}
+                        <span class="truncate">${escapeHtml(label)}</span>
+                    </label>`;
+            }).join('') || '<p class="text-zinc-600 text-xs p-2">Esta hoja no tiene filas.</p>';
+        }
+        window.toggleTransferRowSelected = function(rowId, checked) {
+            if (checked) transferRowsSelected.add(rowId); else transferRowsSelected.delete(rowId);
+        };
+        window.toggleTransferRowsSelectAll = function(checked) {
+            const sheet = activeSheet();
+            transferRowsSelected = new Set(checked ? sheet.rows.map(r => r.id) : []);
+            renderTransferRowsList(sheet);
+        };
+        window.confirmTransferRows = function() {
+            const sheet = activeSheet();
+            const target = pOrders.sheets.find(s => s.id === document.getElementById('transfer-rows-target').value);
+            if (!target || !transferRowsSelected.size) { closeTransferRowsModal(); return; }
+            sheet.rows.forEach(r => {
+                if (!transferRowsSelected.has(r.id)) return;
+                const copy = JSON.parse(JSON.stringify(r));
+                copy.id = 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+                copy.unitPrice = '';
+                copy.price = 0;
+                target.rows.push(copy);
+            });
+            savePOrders();
+            closeTransferRowsModal();
+            switchOrderSheet(target.id);
+        };
+
         // --- Reordenar filas de la plantilla arrastrando el tirador ⠿ ---
         let rowDragId = null;
         window.rowDragStart = function(e, rowId) { rowDragId = rowId; e.dataTransfer.effectAllowed = 'move'; e.stopPropagation(); };
@@ -3840,16 +4218,11 @@
             const thAll = getOrderedColumns(sheet).map(c => `
                 <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative cursor-text">
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
+                    <button onclick="event.stopPropagation(); ${c.isCustom ? `deleteOrderColumn('${c.key}')` : `hideOrderColumn('${c.key}')`}" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden absolute top-0.5 right-0.5" title="${c.isCustom ? 'Eliminar columna' : 'Quitar columna'}">✕</button>
                     ${c.isCustom ? `
-                        <div class="flex items-center justify-center gap-1">
-                            <span class="font-bold ${headerText} text-sm uppercase">${escapeHtml(c.es)}</span>
-                            <button onclick="event.stopPropagation(); deleteOrderColumn('${c.key}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden" title="Eliminar columna">✕</button>
-                        </div>` : `
+                        <span class="font-bold ${headerText} text-sm uppercase">${escapeHtml(c.es)}</span>` : `
                         <div ondblclick="event.stopPropagation(); openInput('rename-order-column-zh', '${c.key}', 'builtin', event)" title="Doble clic para editar el texto en chino" class="text-[10px] ${headerZh} leading-none mb-0.5 cursor-text">${c.zh || ''}</div>
-                        <div class="flex items-center justify-center gap-1">
-                            <span class="font-bold ${headerText} text-sm leading-tight uppercase">${c.es}</span>
-                            <button onclick="event.stopPropagation(); hideOrderColumn('${c.key}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden" title="Quitar columna">✕</button>
-                        </div>`}
+                        <span class="font-bold ${headerText} text-sm leading-tight uppercase">${c.es}</span>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
             thead.innerHTML = `<tr>${thAll}<th class="border border-gray-300 ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
@@ -3997,9 +4370,10 @@
         let pickerTargetField = 'img';
         let pickerMode = 'order-row'; // 'order-row' | 'wishlist-patch'
         let wishlistPatchTarget = { colId: null, index: null };
-        function renderLibraryPickerGrid() {
+        function renderLibraryPickerGrid(onlyPatches) {
             let html = '';
-            pStructure.forEach(g => g.collections.forEach(col => {
+            const groupsToShow = onlyPatches ? pStructure.filter(g => g.isPatchGroup) : pStructure;
+            groupsToShow.forEach(g => g.collections.forEach(col => {
                 const groups = [{ name: col.name, items: pDb[col.id] || [] }, ...((col.subCols || []).map(s => ({ name: col.name + ' · ' + s.name, items: pDb[s.id] || [] })))].filter(x => x.items.length);
                 groups.forEach(gr => {
                     html += `<div><h4 class="text-xs uppercase tracking-widest text-zinc-500 mb-2">${escapeHtml(gr.name)}</h4><div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr))">`;
@@ -4017,9 +4391,12 @@
             pickerTargetRow = rowId;
             pickerTargetField = field || 'img';
             pickerImages = [];
+            const isPatchField = pickerTargetField === 'patch';
             const body = document.getElementById('lib-picker-body');
-            const html = renderLibraryPickerGrid();
-            body.innerHTML = html || '<p class="text-zinc-500 text-sm">La biblioteca está vacía. Añade fotos primero en el panel de la izquierda (pestaña Crear Pedido).</p>';
+            const html = renderLibraryPickerGrid(isPatchField);
+            body.innerHTML = html || (isPatchField
+                ? '<p class="text-zinc-500 text-sm">Todavía no tienes fotos de parches. Añádelas en "Crear Pedido", carpeta 🛡️ Parches.</p>'
+                : '<p class="text-zinc-500 text-sm">La biblioteca está vacía. Añade fotos primero en el panel de la izquierda (pestaña Crear Pedido).</p>');
             document.getElementById('lib-picker-modal').classList.remove('hidden');
         };
         window.openWishlistPatchPicker = function(colId, index, event) {
@@ -4028,7 +4405,7 @@
             wishlistPatchTarget = { colId, index };
             pickerImages = [];
             const body = document.getElementById('lib-picker-body');
-            const html = renderLibraryPickerGrid();
+            const html = renderLibraryPickerGrid(true);
             body.innerHTML = (html || '<p class="text-zinc-500 text-sm">Todavía no tienes fotos de parches. Añádelas en la pestaña "Crear Pedido", en la carpeta 🛡️ Parches.</p>')
                 + `<div class="pt-3 mt-3 border-t border-zinc-800 text-center"><button onclick="fallbackTextPatch()" class="text-xs text-zinc-500 hover:text-blue-400 underline cursor-pointer">✏️ O escribir el nombre del parche en texto</button></div>`;
             document.getElementById('lib-picker-modal').classList.remove('hidden');
