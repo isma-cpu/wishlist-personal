@@ -1547,6 +1547,10 @@
 
         window.closeDeleteModal = function() {
             document.getElementById('delete-confirm-modal').classList.add('hidden');
+            // Si se cierra con "CANCELAR" (o la ✕) y alguien pidió avisarse de eso (openConfirmDelete con 3er
+            // argumento), se dispara aquí - en el camino de CONFIRMAR se limpia antes de llegar a esta función,
+            // así que nunca se dispara dos veces por error.
+            if (deleteContext.onCancel) { const cb = deleteContext.onCancel; deleteContext.onCancel = null; cb(); }
             deleteContext = { mode: null, colId: null, index: null };
         };
 
@@ -1588,6 +1592,7 @@
                 }
             } else if (deleteContext.mode === 'callback') {
                 if (typeof deleteContext.callback === 'function') deleteContext.callback();
+                deleteContext.onCancel = null; // ya se confirmó - que closeDeleteModal() de abajo no dispare también el aviso de cancelar
             }
             closeDeleteModal();
         };
@@ -1595,8 +1600,10 @@
         // Punto de entrada genérico para CUALQUIER acción de eliminar/quitar de la web (Wishlist o Crear Pedido):
         // muestra el mismo popup con la estética de la app (nunca el confirm() nativo del navegador, que además
         // puede quedar bloqueado por el propio navegador tras varios avisos seguidos) y ejecuta el callback si acepta.
-        window.openConfirmDelete = function(message, onConfirm) {
-            deleteContext = { mode: 'callback', callback: onConfirm };
+        // onCancel (opcional) se dispara solo si el usuario cierra sin confirmar (botón Cancelar/✕) - útil cuando
+        // hay que deshacer un cambio temporal hecho antes de mostrar el aviso (ver printArchivedPedido).
+        window.openConfirmDelete = function(message, onConfirm, onCancel) {
+            deleteContext = { mode: 'callback', callback: onConfirm, onCancel: onCancel || null };
             document.getElementById('delete-confirm-text').innerText = message;
             document.getElementById('delete-confirm-modal').classList.remove('hidden');
         };
@@ -4593,7 +4600,7 @@
         function saveVersionOptions() { try { localStorage.setItem('pedido_version_opciones_v1', JSON.stringify(pedidoVersionOptions)); } catch (e) {} }
         function renderVersionCellInner(row) {
             const val = row.version || '';
-            return `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown('${row.id}', event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
+            return `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown('${row.id}', event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span data-empty-hint class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
         }
         function refreshVersionCellDOM(rowId) {
             const sheet = activeSheet();
@@ -4768,27 +4775,27 @@
             const priceCell = `<span id="cell-price-${row.id}" onclick="setSelectedImgCell('${row.id}','price')" class="cell-text text-gray-900 cursor-pointer w-full h-full flex items-center justify-center">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
-                if (c.isCustom) return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">
+                if (c.isCustom) return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">
                         <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full h-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0">
                     </td>`;
-                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
-                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
-                if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border border-gray-300 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
-                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
-                if (c.key === 'name') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${nameCellSolo}</td>`;
-                if (c.key === 'number') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${numberCellSolo}</td>`;
+                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
+                if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
+                if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
+                if (c.key === 'nameNumber') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
+                if (c.key === 'name') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${nameCellSolo}</td>`;
+                if (c.key === 'number') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${numberCellSolo}</td>`;
                 if (c.key === 'address') {
                     if (!isFirstRow) return '';
-                    return `<td id="cell-addr" rowspan="${totalRows}" class="border border-gray-300 p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
+                    return `<td id="cell-addr" data-col-key="address" rowspan="${totalRows}" class="border border-gray-300 p-2 align-top text-center bg-white">${renderAddrCellInner(sheet)}</td>`;
                 }
                 if (c.key === 'priceTotal') {
                     if (!isFirstRow) return '';
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
                     return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border border-gray-300 p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
                 }
-                if (c.key === 'price') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${priceCell}</td>`;
-                if (c.type === 'number') return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${numCell(c.key)}</td>`;
-                return `<td${cellHStyle} class="border border-gray-300 p-1 align-middle text-center">${textCell(c.key)}</td>`;
+                if (c.key === 'price') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${priceCell}</td>`;
+                if (c.type === 'number') return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${numCell(c.key)}</td>`;
+                return `<td${cellHStyle} class="border-x border-x-gray-200 border-t border-t-gray-200 border-b-2 border-b-gray-400 p-1 align-middle text-center">${textCell(c.key)}</td>`;
             }).join('');
 
             const heightStyle = ` style="height:${rowH}px"`;
@@ -4825,7 +4832,7 @@
             const headerZh = es ? 'hidden' : 'text-gray-500';
 
             const thAll = getOrderedColumns(sheet).map(c => `
-                <th ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-gray-300 ${headerBg} px-2 py-2 text-center align-bottom relative cursor-text">
+                <th data-col-key="${c.key}" ondragover="colDragOverTh(event)" ondrop="colDropTh(event, '${c.key}')" ondblclick="openInput('rename-order-column', '${c.key}', '${c.isCustom ? 'custom' : 'builtin'}', event)" title="Doble clic para renombrar" class="group border border-gray-300 ${headerBg} px-2 py-2 text-center align-middle relative cursor-text">
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     <button onclick="event.stopPropagation(); ${c.isCustom ? `deleteOrderColumn('${c.key}')` : `hideOrderColumn('${c.key}')`}" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden absolute top-0.5 right-0.5" title="${c.isCustom ? 'Eliminar columna' : 'Quitar columna'}">✕</button>
                     ${(c.key === 'nameNumber' || c.key === 'name' || c.key === 'number') ? `<button onclick="event.stopPropagation(); toggleSheetSplitNameNumber('${sheet.id}', event)" class="absolute bottom-0.5 left-0.5 text-[9px] opacity-50 hover:opacity-100 print:hidden" title="${sheet.splitNameNumber ? 'Combinar nombre y número en 1 columna' : 'Separar nombre y número en 2 columnas'}">🔀</button>` : ''}
@@ -5140,13 +5147,37 @@
             if (!window.jspdf) await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
         }
 
-        window.printOrder = async function(event) {
+        // Antes de descargar, avisar si faltan variantes importantes (para no mandar por error algo incompleto
+        // al proveedor/cliente) - no bloquea nada, solo pide confirmar.
+        function buildOrderPrintWarnings(sheet) {
+            const hidden = sheet.hiddenColumns || [];
+            const missing = [];
+            if (hidden.includes('qty')) missing.push('Cantidad');
+            if (hidden.includes('size')) missing.push('Talla');
+            if (hidden.includes('unitPrice')) missing.push('Precio x Unidad');
+            const warnings = [];
+            if (missing.length) warnings.push(`sin ${missing.join(', ')}`);
+            if (!hasAddressData(sheet.address)) warnings.push('sin la columna de dirección de envío (todavía no tiene ninguna)');
+            return warnings;
+        }
+        window.printOrder = function(event) {
+            const sheet = activeSheet();
+            const warnings = buildOrderPrintWarnings(sheet);
+            if (warnings.length) {
+                openConfirmDelete(`Vas a descargar el PDF ${warnings.join(' y ')}. ¿Seguro que quieres continuar?`, () => generateOrderPdf(event));
+            } else {
+                generateOrderPdf(event);
+            }
+        };
+        async function generateOrderPdf(event) {
             const btn = event && event.target && event.target.closest ? event.target.closest('button') : null;
             const btnOriginal = btn ? btn.innerHTML : null;
             if (btn) btn.innerHTML = '⏳ Generando PDF...';
             try {
                 await ensurePdfLibs();
                 const table = document.getElementById('order-table');
+                const sheet = activeSheet();
+                const addrHasData = hasAddressData(sheet.address);
 
                 const canvas = await html2canvas(table, {
                     scale: 2,
@@ -5157,6 +5188,12 @@
                     onclone: (clonedDoc) => {
                         // Ocultamos en la captura los botones/tiradores que no deben salir en el PDF
                         clonedDoc.querySelectorAll('[class*="print:hidden"]').forEach(el => { el.style.display = 'none'; });
+                        // Sin dirección todavía: se descarga sin esa columna en vez de dejarla en blanco con el "+"
+                        if (!addrHasData) clonedDoc.querySelectorAll('[data-col-key="address"]').forEach(el => { el.style.display = 'none'; });
+                        // Textos de ejemplo (placeholder de los inputs, "Elegir ▾" de Versión vacía) fuera del PDF -
+                        // en la app ayudan a saber dónde escribir, pero en el documento que se envía deben verse en blanco.
+                        clonedDoc.querySelectorAll('#order-table input[placeholder]').forEach(el => el.removeAttribute('placeholder'));
+                        clonedDoc.querySelectorAll('#order-table [data-empty-hint]').forEach(el => { el.textContent = ''; });
                     }
                 });
 
@@ -5183,15 +5220,15 @@
                 }
 
                 const fecha = new Date().toISOString().split('T')[0];
-                const nombreHoja = (activeSheet().name || 'pedido').replace(/[^a-z0-9]+/gi, '_');
-                pdf.save(`pedido_${nombreHoja}_${fecha}.pdf`);
+                const nombreHoja = (sheet.name || 'pedido').replace(/[^a-z0-9]+/gi, '_');
+                pdf.save(`${nombreHoja}_${fecha}.pdf`);
             } catch (err) {
                 console.error('Error generando el PDF:', err);
                 alert('No se pudo generar el PDF. Comprueba tu conexión a internet (se necesita para cargar la herramienta la primera vez) e inténtalo de nuevo.');
             } finally {
                 if (btn) btn.innerHTML = btnOriginal;
             }
-        };
+        }
 
         // Guardar pedido: pide directamente cliente y cuánto ha pagado (mostrando el total para poder sacar el porcentaje), y manda una foto fija de la hoja actual a "Pedidos".
         window.openSaveOrderModal = function(event) {
@@ -5424,6 +5461,7 @@
                     </div>
                     <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
                     <button onclick="editArchivedPedido('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">✏️ Editar</button>
+                    <button onclick="printArchivedPedido('${p.id}', event)" title="Descargar PDF" class="w-8 h-8 flex items-center justify-center border border-emerald-500/50 text-emerald-400 rounded-full hover:bg-emerald-500 hover:text-black transition-colors cursor-pointer">🖨️</button>
                     <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
                 </div>`;
             }).join('');
@@ -5506,6 +5544,25 @@
             banner.classList.add('hidden'); banner.classList.remove('flex');
             renderOrderSheetsBar(); renderOrderTable();
             renderPedidosTab();
+        };
+
+        // Descargar el PDF de un pedido archivado directamente desde su tarjeta en la pestaña Pedidos, sin tener
+        // que entrar antes en "✏️ Editar" a propósito. Reutiliza editArchivedPedido/stopEditingArchivedPedido tal
+        // cual (mueve la plantilla a la vista, genera el PDF, la devuelve a su sitio) - si el usuario YA estaba
+        // editando este mismo pedido, no lo saca del modo edición al terminar (ni lo metió él).
+        window.printArchivedPedido = function(id, event) {
+            if (event) event.stopPropagation();
+            const wasEditingThis = editingArchivedId === id;
+            if (!wasEditingThis) editArchivedPedido(id);
+            const sheet = activeSheet();
+            const warnings = buildOrderPrintWarnings(sheet);
+            const run = () => generateOrderPdf(event).finally(() => { if (!wasEditingThis) stopEditingArchivedPedido(); });
+            const cancel = () => { if (!wasEditingThis) stopEditingArchivedPedido(); };
+            if (warnings.length) {
+                openConfirmDelete(`Vas a descargar el PDF ${warnings.join(' y ')}. ¿Seguro que quieres continuar?`, run, cancel);
+            } else {
+                run();
+            }
         };
 
         window.onload = async function() {
