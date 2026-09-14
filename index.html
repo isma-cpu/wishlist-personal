@@ -330,7 +330,7 @@
                 <span id="morosos-summary" class="text-xs text-zinc-400 shrink-0"></span>
                 <div class="flex-1 border-b border-red-500/20"></div>
             </button>
-            <div id="morosos-body"></div>
+            <div id="morosos-body" class="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4"></div>
         </div>
 
         <div class="rounded-2xl border-2 border-amber-400/40 bg-amber-950/10 p-4">
@@ -5723,12 +5723,11 @@
         };
 
         // "Morosos": clientes que todavía deben dinero de algún pedido archivado, y de cuáles. Se calcula al
-        // vuelo a partir de pedidosArchivo (total - paid > 0), no necesita guardar nada aparte.
-        let morososCollapsed = false;
-        try { morososCollapsed = localStorage.getItem('pedidos_morosos_collapsed') === '1'; } catch (e) {}
+        // vuelo a partir de pedidosArchivo (total - paid > 0), no necesita guardar nada aparte. Siempre empieza
+        // plegado - solo se despliega al pulsar en el título (sin recordar el estado entre recargas de página).
+        let morososCollapsed = true;
         window.toggleMorosos = function() {
             morososCollapsed = !morososCollapsed;
-            try { localStorage.setItem('pedidos_morosos_collapsed', morososCollapsed ? '1' : '0'); } catch (e) {}
             renderMorosos();
         };
         function renderMorosos() {
@@ -5763,12 +5762,13 @@
                             <span class="text-red-400 font-bold shrink-0">${formatMoney(debe)} €</span>
                         </button>`;
                 }).join('');
-                return `<div class="rounded-2xl p-3 mb-3 border border-red-500/30 bg-red-950/10">
-                    <div class="flex items-center justify-between mb-1">
-                        <h4 class="font-black text-white uppercase text-sm">${escapeHtml(cliente)}</h4>
-                        <span class="text-red-400 font-black text-sm">${formatMoney(clientTotal)} €</span>
+                return `<div class="rounded-2xl p-4 border border-red-500/30 bg-red-950/10 flex flex-col gap-2.5">
+                    <h4 class="font-black text-white uppercase text-lg truncate">${escapeHtml(cliente)}</h4>
+                    <div class="flex flex-col">${rows}</div>
+                    <div class="text-center bg-black/20 border border-red-500/20 rounded-xl py-2 px-1 mt-auto">
+                        <div class="text-[9px] text-zinc-500 uppercase">Te debe en total</div>
+                        <div class="text-red-400 font-black text-lg">${formatMoney(clientTotal)} €</div>
                     </div>
-                    ${rows}
                 </div>`;
             }).join('');
         }
