@@ -518,7 +518,7 @@
             <div class="space-y-4">
                 <div>
                     <label class="text-[10px] text-zinc-500 uppercase block mb-1">Foto del pedido preparado</label>
-                    <div id="ship-paquete-preview" class="mb-1"></div>
+                    <div id="ship-paquete-preview" onclick="setShipPasteTarget('paquete')" ondragover="shipDragOver(event)" ondragleave="shipDragLeave(event)" ondrop="handleShipPhotoDrop(event, 'paquete')" class="mb-1 cursor-pointer"></div>
                     <div class="flex gap-2">
                         <button onclick="pickShipPhoto('paquete')" class="flex-1 px-3 py-2 text-xs font-bold uppercase text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer">📷 Elegir foto</button>
                         <button onclick="clearShipPhoto('paquete')" class="del-x-btn shrink-0" title="Quitar foto">✕</button>
@@ -526,7 +526,7 @@
                 </div>
                 <div>
                     <label class="text-[10px] text-zinc-500 uppercase block mb-1">Foto de la etiqueta</label>
-                    <div id="ship-etiqueta-preview" class="mb-1"></div>
+                    <div id="ship-etiqueta-preview" onclick="setShipPasteTarget('etiqueta')" ondragover="shipDragOver(event)" ondragleave="shipDragLeave(event)" ondrop="handleShipPhotoDrop(event, 'etiqueta')" class="mb-1 cursor-pointer"></div>
                     <div class="flex gap-2">
                         <button onclick="pickShipPhoto('etiqueta')" class="flex-1 px-3 py-2 text-xs font-bold uppercase text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer">📷 Elegir foto</button>
                         <button onclick="clearShipPhoto('etiqueta')" class="del-x-btn shrink-0" title="Quitar foto">✕</button>
@@ -534,11 +534,13 @@
                 </div>
                 <div>
                     <label class="text-[10px] text-zinc-500 uppercase block mb-1">Número de seguimiento</label>
-                    <input id="ship-tracking" placeholder="Ej: 1Z999AA10123456784" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400">
+                    <input id="ship-tracking" placeholder="Ej: 1Z999AA10123456784" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400 mb-2">
+                    <label class="text-[10px] text-zinc-500 uppercase block mb-1">Enlace de seguimiento (opcional)</label>
+                    <input id="ship-tracking-url" type="url" placeholder="https://..." class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400">
                 </div>
                 <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
                     <input type="checkbox" id="ship-enviado-check" class="w-4 h-4 accent-sky-500 cursor-pointer">
-                    ✅ Marcar pedido como ENVIADO
+                    <span id="ship-enviado-label">✅ Marcar pedido como ENVIADO</span>
                 </label>
             </div>
             <div class="flex justify-end gap-3 mt-5">
@@ -1105,6 +1107,27 @@
                     if (cbItems[k].kind === 'file' && cbItems[k].type.startsWith('image/')) files.push(cbItems[k].getAsFile());
                 }
                 if (files.length) { e.preventDefault(); addRelatedFromFiles(files); }
+                return;
+            }
+
+            // Si el popup de "Marcar como enviado" está abierto, pegar en la foto activa (paquete o etiqueta,
+            // la última que se haya clicado/elegido - ver shipModalPasteTarget).
+            const shipModalOpen = !document.getElementById('pedido-ship-modal').classList.contains('hidden');
+            if (shipModalOpen) {
+                const cbItems = (e.clipboardData || e.originalEvent.clipboardData).items;
+                const files = [];
+                for (let k in cbItems) {
+                    if (cbItems[k].kind === 'file' && cbItems[k].type.startsWith('image/')) files.push(cbItems[k].getAsFile());
+                }
+                if (files.length) {
+                    e.preventDefault();
+                    fileToResizedDataURL(files[0]).then(src => {
+                        shipModalPhotos[shipModalPasteTarget] = src;
+                        renderShipPhotoPreview('paquete');
+                        renderShipPhotoPreview('etiqueta');
+                        updateShipEnviadoState();
+                    }).catch(() => {});
+                }
                 return;
             }
 
@@ -5591,7 +5614,8 @@
                 enviado: false,
                 fotoPaquete: '',
                 fotoEtiqueta: '',
-                tracking: ''
+                tracking: '',
+                trackingUrl: ''
             };
             pedidosArchivo.unshift(entry);
             savePedidosArchivo();
@@ -5774,6 +5798,9 @@
             list.innerHTML = source.map((p) => {
                 const i = pedidosArchivo.indexOf(p);
                 const nItems = p.rows.length;
+                // Si hay foto del pedido preparado, se considera enviado automáticamente aunque p.enviado no
+                // se haya guardado explícitamente así (ver confirmShipModal, que ya lo fuerza al guardar).
+                const enviado = !!(p.enviado || p.fotoPaquete);
                 return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 flex flex-col gap-2.5 cursor-move">
                     ${p.fotoPaquete ? `<img src="${p.fotoPaquete}" onclick="openShipModal('${p.id}', event)" title="Foto del pedido preparado - clic para ver/cambiar" class="w-full aspect-video object-cover rounded-xl cursor-pointer">` : ''}
                     <div class="flex items-start gap-2">
@@ -5790,7 +5817,8 @@
                             <div id="pedido-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] py-1 overflow-hidden normal-case">
                                 <button onclick="editArchivedPedido('${p.id}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Editar</button>
                                 <button onclick="printArchivedPedido('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">🖨️ Descargar PDF</button>
-                                <button onclick="openShipModal('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${p.enviado ? 'text-emerald-400' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">📦 ${p.enviado ? 'Ver/editar envío' : 'Marcar como enviado'}</button>
+                                <button onclick="openShipModal('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${enviado ? 'text-emerald-400' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">📦 ${enviado ? 'Ver/editar envío' : 'Marcar como enviado'}</button>
+                                ${p.trackingUrl ? `<button onclick="window.open('${escAttr(p.trackingUrl)}','_blank'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-sky-400 hover:bg-zinc-800 cursor-pointer">🔗 Ver seguimiento</button>` : ''}
                             </div>
                         </div>
                     </div>
@@ -5806,7 +5834,15 @@
                         </select>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-2 text-center bg-black/20 rounded-xl py-2 px-1">
+                    <div class="flex items-center gap-2">
+                        <button onclick="viewPedidoDetail('${p.id}')" class="flex-1 text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                        <button onclick="openShipModal('${p.id}', event)" title="${enviado && p.tracking ? 'Seguimiento: ' + escAttr(p.tracking) : (enviado ? 'Marcado como enviado' : 'Marcar como enviado')}" class="flex-1 text-center text-xs font-bold uppercase rounded-full px-2 py-1.5 border transition-colors cursor-pointer whitespace-nowrap ${enviado ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'}">
+                            ${enviado ? '📦 Enviado' : '⏳ Pendiente'}
+                        </button>
+                        <button onclick="deletePedido('${p.id}')" class="del-x-btn shrink-0" title="Eliminar">✕</button>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 text-center bg-black/20 border border-amber-400/20 rounded-xl py-2 px-1 mt-auto">
                         <div>
                             <div class="text-[9px] text-zinc-500 uppercase">Total</div>
                             <div class="text-white font-bold text-sm">${formatMoney(p.total)} €</div>
@@ -5819,14 +5855,6 @@
                             <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
                             <div id="pedido-debe-${p.id}">${debeBoxHTML(p)}</div>
                         </div>
-                    </div>
-
-                    <div class="flex items-center gap-2 mt-auto">
-                        <button onclick="viewPedidoDetail('${p.id}')" class="flex-1 text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
-                        <button onclick="openShipModal('${p.id}', event)" title="${p.enviado && p.tracking ? 'Seguimiento: ' + escAttr(p.tracking) : (p.enviado ? 'Marcado como enviado' : 'Marcar como enviado')}" class="flex-1 text-center text-xs font-bold uppercase rounded-full px-2 py-1.5 border transition-colors cursor-pointer whitespace-nowrap ${p.enviado ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'}">
-                            ${p.enviado ? '📦 Enviado' : '⏳ Pendiente'}
-                        </button>
-                        <button onclick="deletePedido('${p.id}')" class="del-x-btn shrink-0" title="Eliminar">✕</button>
                     </div>
                 </div>`;
             }).join('');
@@ -5855,17 +5883,22 @@
         };
 
         // "Marcar como enviado": foto del paquete preparado + foto de la etiqueta + nº de seguimiento, por pedido.
+        // Si hay foto del pedido preparado, el pedido se considera enviado automáticamente (ver updateShipEnviadoState).
         let shipModalTarget = null;
         let shipModalPhotos = { paquete: '', etiqueta: '' };
+        let shipModalPasteTarget = 'paquete';
         window.openShipModal = function(id, event) {
             if (event) event.stopPropagation();
             const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
             shipModalTarget = id;
             shipModalPhotos = { paquete: p.fotoPaquete || '', etiqueta: p.fotoEtiqueta || '' };
+            shipModalPasteTarget = 'paquete';
             document.getElementById('ship-tracking').value = p.tracking || '';
+            document.getElementById('ship-tracking-url').value = p.trackingUrl || '';
             document.getElementById('ship-enviado-check').checked = !!p.enviado;
             renderShipPhotoPreview('paquete');
             renderShipPhotoPreview('etiqueta');
+            updateShipEnviadoState();
             document.getElementById('pedido-ship-modal').classList.remove('hidden');
             document.getElementById('pedido-ship-modal').classList.add('flex');
         };
@@ -5874,15 +5907,39 @@
             document.getElementById('pedido-ship-modal').classList.remove('flex');
             shipModalTarget = null;
         };
+        // Cuál de las 2 fotos recibe una imagen pegada con Ctrl+V (el arrastrar/soltar no lo necesita: cada
+        // recuadro ya sabe a cuál pertenece). Clicar un recuadro, o elegir un archivo para él, lo marca como activo.
+        window.setShipPasteTarget = function(which) {
+            shipModalPasteTarget = which;
+            renderShipPhotoPreview('paquete');
+            renderShipPhotoPreview('etiqueta');
+        };
         function renderShipPhotoPreview(which) {
             const el = document.getElementById('ship-' + which + '-preview');
             if (!el) return;
             const src = shipModalPhotos[which];
+            const active = shipModalPasteTarget === which;
             el.innerHTML = src
-                ? `<img src="${src}" class="w-full h-28 object-contain bg-zinc-900 rounded-xl border border-zinc-700">`
-                : `<div class="w-full h-14 flex items-center justify-center text-zinc-600 text-xs bg-zinc-900 rounded-xl border border-dashed border-zinc-700">Sin foto</div>`;
+                ? `<img src="${src}" class="w-full h-28 object-contain bg-zinc-900 rounded-xl border ${active ? 'border-sky-400' : 'border-zinc-700'}">`
+                : `<div class="w-full h-14 flex items-center justify-center text-center px-2 text-zinc-600 text-[10px] bg-zinc-900 rounded-xl border border-dashed ${active ? 'border-sky-400 text-sky-400' : 'border-zinc-700'}">Arrastra, pega (Ctrl+V) o elige una foto</div>`;
+        }
+        // Si hay foto del pedido preparado, el checkbox se marca solo y se bloquea (no tiene sentido decir "no
+        // enviado" con la foto ya hecha); sin foto, el usuario decide a mano como siempre.
+        function updateShipEnviadoState() {
+            const checkbox = document.getElementById('ship-enviado-check');
+            const label = document.getElementById('ship-enviado-label');
+            const hasFoto = !!shipModalPhotos.paquete;
+            if (hasFoto) {
+                checkbox.checked = true;
+                checkbox.disabled = true;
+                if (label) label.textContent = '✅ Marcado automáticamente como ENVIADO (hay foto del pedido preparado)';
+            } else {
+                checkbox.disabled = false;
+                if (label) label.textContent = '✅ Marcar pedido como ENVIADO';
+            }
         }
         window.pickShipPhoto = function(which) {
+            shipModalPasteTarget = which;
             const input = document.createElement('input');
             input.type = 'file'; input.accept = 'image/*';
             input.onchange = async () => {
@@ -5890,7 +5947,9 @@
                 if (!file) return;
                 try {
                     shipModalPhotos[which] = await fileToResizedDataURL(file);
-                    renderShipPhotoPreview(which);
+                    renderShipPhotoPreview('paquete');
+                    renderShipPhotoPreview('etiqueta');
+                    updateShipEnviadoState();
                 } catch (e) {}
             };
             input.click();
@@ -5898,13 +5957,46 @@
         window.clearShipPhoto = function(which) {
             shipModalPhotos[which] = '';
             renderShipPhotoPreview(which);
+            updateShipEnviadoState();
+        };
+        window.shipDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); } };
+        window.shipDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400'); };
+        window.handleShipPhotoDrop = function(e, which) {
+            e.preventDefault(); e.stopPropagation();
+            e.currentTarget.classList.remove('ring-2', 'ring-sky-400');
+            shipModalPasteTarget = which;
+            if (e.dataTransfer.files && e.dataTransfer.files.length) {
+                fileToResizedDataURL(e.dataTransfer.files[0]).then(src => {
+                    shipModalPhotos[which] = src;
+                    renderShipPhotoPreview('paquete');
+                    renderShipPhotoPreview('etiqueta');
+                    updateShipEnviadoState();
+                }).catch(() => {});
+                return;
+            }
+            const urls = extractImageUrls(e.dataTransfer);
+            if (urls.length) {
+                (async () => {
+                    const f = await urlToImageFile(urls[0]);
+                    if (f) {
+                        const src = await fileToResizedDataURL(f);
+                        shipModalPhotos[which] = src;
+                        renderShipPhotoPreview('paquete');
+                        renderShipPhotoPreview('etiqueta');
+                        updateShipEnviadoState();
+                    } else {
+                        alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Prueba a elegirla desde tu ordenador.');
+                    }
+                })();
+            }
         };
         window.confirmShipModal = function() {
             const p = pedidosArchivo.find(x => x.id === shipModalTarget); if (!p) return;
             p.fotoPaquete = shipModalPhotos.paquete || '';
             p.fotoEtiqueta = shipModalPhotos.etiqueta || '';
             p.tracking = document.getElementById('ship-tracking').value.trim();
-            p.enviado = document.getElementById('ship-enviado-check').checked;
+            p.trackingUrl = document.getElementById('ship-tracking-url').value.trim();
+            p.enviado = document.getElementById('ship-enviado-check').checked || !!p.fotoPaquete;
             savePedidosArchivo();
             renderPedidosTab();
             closeShipModal();
