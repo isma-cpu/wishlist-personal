@@ -1950,7 +1950,7 @@
             if (item.nameNumber) textHtml.push(`<div class="text-[#39FF14] mb-1">📝 ${item.nameNumber}</div>`);
             if (item.patch) {
                 if (item.patch.startsWith('data:image')) {
-                    textHtml.push(`<div class="text-blue-400 flex items-center justify-center gap-1">🛡️ <img src="${item.patch}" class="w-6 h-7 object-contain inline-block align-middle">${item.patchName ? ` <span class="text-xs">${escapeHtml(item.patchName)}</span>` : ''}</div>`);
+                    textHtml.push(`<div class="text-blue-400 flex items-center justify-center gap-1">🛡️ <img src="${item.patch}" class="w-6 h-7 object-contain inline-block align-middle">${item.patchName ? ` <span class="text-xs">${escapeHtml(item.patchName)}</span>` : ''} <button onclick="openInput('patch-name', '${colId}', ${index}, event)" class="text-amber-400 hover:text-amber-300 text-xs cursor-pointer" title="Poner/editar nombre del parche (opcional)">🏷️${item.patchName ? '' : ' Poner nombre'}</button></div>`);
                 } else {
                     textHtml.push(`<div class="text-blue-400">🛡️ ${item.patch}</div>`);
                 }
@@ -5640,26 +5640,35 @@
             saveClientes(); renderClientesChips();
         };
 
-        // Proveedores: mismo patrón exacto que Clientes (crear/renombrar/reordenar/eliminar detrás del "⋯"),
-        // pero sin filtro de clic (aquí solo se gestionan; el proveedor de cada pedido se elige en su "⋯" propio).
+        // Proveedores: mismo patrón exacto que Clientes, incluido el filtro de clic (ver solo los pedidos de ese proveedor).
+        let pedidosFilterProveedor = null;
+        window.filterPedidosByProveedor = function(name) {
+            pedidosFilterProveedor = (pedidosFilterProveedor === name) ? null : name;
+            renderProveedoresChips(); renderPedidosTab();
+        };
+        window.clearProveedoresFilter = function() { pedidosFilterProveedor = null; renderProveedoresChips(); renderPedidosTab(); };
         function renderProveedoresChips() {
             const el = document.getElementById('pedidos-proveedores-chips');
             if (!el) return;
-            el.innerHTML = pedidosProveedores.map((c, i) => `
-                <span class="relative text-[10px] uppercase rounded-full pl-2 pr-1 py-1 flex items-center gap-1 bg-zinc-800 text-zinc-300">
+            el.innerHTML = pedidosProveedores.map((c, i) => {
+                const active = pedidosFilterProveedor === c;
+                return `
+                <span onclick="filterPedidosByProveedor('${escAttr(c)}')" class="relative text-[10px] uppercase rounded-full pl-2 pr-1 py-1 flex items-center gap-1 cursor-pointer transition-colors ${active ? 'bg-sky-400 text-black' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'}" title="Ver solo los pedidos de ${escAttr(c)}">
                     ${escapeHtml(c)}
-                    <button data-menu-trigger onclick="toggleSimpleMenu('proveedor-menu-${i}', event)" class="text-zinc-500 hover:text-white text-xs px-0.5 cursor-pointer font-black" title="Opciones">⋯</button>
+                    <button data-menu-trigger onclick="toggleSimpleMenu('proveedor-menu-${i}', event)" class="${active ? 'text-black/60 hover:text-black' : 'text-zinc-500 hover:text-white'} text-xs px-0.5 cursor-pointer font-black" title="Opciones">⋯</button>
                     <div id="proveedor-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[10rem] py-1 overflow-hidden normal-case">
                         <button onclick="openInput('rename-proveedor', '${escAttr(c)}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Renombrar</button>
                         <button onclick="movePedidoProveedor('${escAttr(c)}', -1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
                         <button onclick="movePedidoProveedor('${escAttr(c)}', 1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === pedidosProveedores.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
                         <button onclick="removePedidoProveedor('${escAttr(c)}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 cursor-pointer">✕ Eliminar</button>
                     </div>
-                </span>`).join('');
+                </span>`;
+            }).join('');
         }
         window.removePedidoProveedor = function(name) {
             openConfirmDelete('¿Quitar "' + name + '" de la lista de proveedores? Los pedidos ya asignados a este proveedor mantendrán el nombre guardado.', () => {
                 pedidosProveedores = pedidosProveedores.filter(c => c !== name);
+                if (pedidosFilterProveedor === name) pedidosFilterProveedor = null;
                 saveProveedores(); renderProveedoresChips(); renderPedidosTab();
             });
         };
@@ -5744,19 +5753,22 @@
             renderMorosos();
             const filterEl = document.getElementById('pedidos-filter-indicator');
             if (filterEl) {
-                filterEl.innerHTML = pedidosFilterCliente
-                    ? `<span class="inline-flex items-center gap-1 text-[10px] uppercase bg-amber-400 text-black rounded-full pl-2 pr-1 py-0.5">Mostrando: ${escapeHtml(pedidosFilterCliente)} <button onclick="clearPedidosFilter()" class="hover:text-red-700 font-black px-0.5 cursor-pointer" title="Quitar filtro">✕</button></span>`
-                    : '';
+                const badges = [];
+                if (pedidosFilterCliente) badges.push(`<span class="inline-flex items-center gap-1 text-[10px] uppercase bg-amber-400 text-black rounded-full pl-2 pr-1 py-0.5">Cliente: ${escapeHtml(pedidosFilterCliente)} <button onclick="clearPedidosFilter()" class="hover:text-red-700 font-black px-0.5 cursor-pointer" title="Quitar filtro">✕</button></span>`);
+                if (pedidosFilterProveedor) badges.push(`<span class="inline-flex items-center gap-1 text-[10px] uppercase bg-sky-400 text-black rounded-full pl-2 pr-1 py-0.5">Proveedor: ${escapeHtml(pedidosFilterProveedor)} <button onclick="clearProveedoresFilter()" class="hover:text-red-700 font-black px-0.5 cursor-pointer" title="Quitar filtro">✕</button></span>`);
+                filterEl.innerHTML = badges.join(' ');
             }
             const list = document.getElementById('pedidos-list');
             if (!list) return;
-            const source = pedidosFilterCliente ? pedidosArchivo.filter(p => p.cliente === pedidosFilterCliente) : pedidosArchivo;
+            let source = pedidosArchivo;
+            if (pedidosFilterCliente) source = source.filter(p => p.cliente === pedidosFilterCliente);
+            if (pedidosFilterProveedor) source = source.filter(p => p.proveedor === pedidosFilterProveedor);
             if (!pedidosArchivo.length) {
                 list.innerHTML = `<p class="text-zinc-500 text-sm">Todavía no hay pedidos guardados. Pulsa "💾 Guardar pedido" en "Crear Pedido" para archivar la hoja actual aquí.</p>`;
                 return;
             }
             if (!source.length) {
-                list.innerHTML = `<p class="text-zinc-500 text-sm">Este cliente todavía no tiene ningún pedido guardado.</p>`;
+                list.innerHTML = `<p class="text-zinc-500 text-sm">Ningún pedido coincide con este filtro.</p>`;
                 return;
             }
             list.innerHTML = source.map((p) => {
@@ -5766,15 +5778,21 @@
                     <span class="text-zinc-500 text-lg select-none" title="Arrastra para reordenar">☰</span>
                     <div class="flex-1 min-w-[10rem]">
                         <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-amber-400 rounded-full px-1 w-full">
-                        <div class="flex items-center gap-1 mt-0.5">
-                            <input type="date" value="${dateToInputValue(p.date)}" onchange="updatePedidoField('${p.id}','date', new Date(this.value + 'T12:00:00').toISOString())" class="text-[10px] text-zinc-500 uppercase bg-transparent border-0 p-0 cursor-pointer hover:text-amber-400 [color-scheme:dark]" title="Fecha del pedido (por defecto, la del día que se guardó)">
+                        <div class="flex items-center gap-1.5 mt-0.5">
+                            <input type="date" value="${dateToInputValue(p.date)}" onchange="updatePedidoField('${p.id}','date', new Date(this.value + 'T12:00:00').toISOString())" class="text-xs text-zinc-400 uppercase bg-transparent border-0 p-0 cursor-pointer hover:text-amber-400 [color-scheme:dark]" title="Fecha del pedido (por defecto, la del día que se guardó)">
                             <span class="text-[10px] text-zinc-600">· ${nItems} art${nItems === 1 ? 'ículo' : 'ículos'}</span>
                         </div>
                     </div>
-                    <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30">
-                        <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
-                        ${pedidosClientes.map(c => `<option value="${escAttr(c)}" ${p.cliente === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-                    </select>
+                    <div class="flex flex-col gap-1">
+                        <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30" title="Cliente">
+                            <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
+                            ${pedidosClientes.map(c => `<option value="${escAttr(c)}" ${p.cliente === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+                        </select>
+                        <select onchange="updatePedidoField('${p.id}','proveedor',this.value)" class="bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-sky-400/30" title="Proveedor">
+                            <option value="" ${!p.proveedor ? 'selected' : ''}>— Sin proveedor —</option>
+                            ${pedidosProveedores.map(c => `<option value="${escAttr(c)}" ${p.proveedor === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+                        </select>
+                    </div>
                     <div class="text-center">
                         <div class="text-[9px] text-zinc-500 uppercase">Total</div>
                         <div class="text-white font-bold text-sm">${formatMoney(p.total)} €</div>
@@ -5787,19 +5805,14 @@
                         <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
                         <div id="pedido-debe-${p.id}">${debeBoxHTML(p)}</div>
                     </div>
+                    ${p.enviado ? `<span class="text-[10px] uppercase font-bold text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 rounded-full px-2 py-1 whitespace-nowrap" title="${p.tracking ? 'Seguimiento: ' + escAttr(p.tracking) : 'Marcado como enviado'}">📦 Enviado</span>` : ''}
                     <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
-                    <button onclick="editArchivedPedido('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">✏️ Editar</button>
-                    <button onclick="printArchivedPedido('${p.id}', event)" title="Descargar PDF" class="w-8 h-8 flex items-center justify-center border border-emerald-500/50 text-emerald-400 rounded-full hover:bg-emerald-500 hover:text-black transition-colors cursor-pointer">🖨️</button>
-                    <button onclick="openShipModal('${p.id}', event)" title="${p.enviado ? 'Marcado como ENVIADO - ver/editar' : 'Marcar como enviado'}" class="w-8 h-8 flex items-center justify-center border rounded-full transition-colors cursor-pointer ${p.enviado ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500 hover:text-black' : 'border-zinc-600 text-zinc-400 hover:bg-sky-500 hover:text-black hover:border-sky-500'}">📦</button>
-                    <div class="relative">
+                    <div class="relative ml-auto">
                         <button data-menu-trigger onclick="toggleSimpleMenu('pedido-menu-${i}', event)" title="Más opciones" class="w-8 h-8 flex items-center justify-center border border-zinc-600 text-zinc-400 rounded-full hover:bg-zinc-700 hover:text-white transition-colors cursor-pointer font-black">⋯</button>
-                        <div id="pedido-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] p-3 gap-1 overflow-hidden normal-case">
-                            <label class="text-[10px] text-zinc-500 uppercase">Proveedor</label>
-                            <select onchange="updatePedidoField('${p.id}','proveedor',this.value); closeSimpleMenu();" class="bg-zinc-800 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-zinc-700">
-                                <option value="" ${!p.proveedor ? 'selected' : ''}>— Sin proveedor —</option>
-                                ${pedidosProveedores.map(c => `<option value="${escAttr(c)}" ${p.proveedor === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-                            </select>
-                            ${p.tracking ? `<div class="text-[10px] text-zinc-500 mt-1 truncate" title="${escAttr(p.tracking)}">🔖 ${escapeHtml(p.tracking)}</div>` : ''}
+                        <div id="pedido-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] py-1 overflow-hidden normal-case">
+                            <button onclick="editArchivedPedido('${p.id}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Editar</button>
+                            <button onclick="printArchivedPedido('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">🖨️ Descargar PDF</button>
+                            <button onclick="openShipModal('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${p.enviado ? 'text-emerald-400' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">📦 ${p.enviado ? 'Ver/editar envío' : 'Marcar como enviado'}</button>
                         </div>
                     </div>
                     <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
