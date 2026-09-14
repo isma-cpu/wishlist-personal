@@ -532,11 +532,18 @@
                         <button onclick="clearShipPhoto('etiqueta')" class="del-x-btn shrink-0" title="Quitar foto">✕</button>
                     </div>
                 </div>
-                <div>
-                    <label class="text-[10px] text-zinc-500 uppercase block mb-1">Número de seguimiento</label>
-                    <input id="ship-tracking" placeholder="Ej: 1Z999AA10123456784" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400 mb-2">
-                    <label class="text-[10px] text-zinc-500 uppercase block mb-1">Enlace de seguimiento (opcional)</label>
-                    <input id="ship-tracking-url" type="url" placeholder="https://..." class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-[10px] text-zinc-500 uppercase block mb-1">Número de seguimiento</label>
+                        <input id="ship-tracking" placeholder="Ej: 1Z999AA10123456784" class="w-full min-w-0 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-zinc-500 uppercase block mb-1">Enlace de seguimiento</label>
+                        <div class="flex gap-1">
+                            <input id="ship-tracking-url" type="url" placeholder="https://..." class="flex-1 min-w-0 bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400">
+                            <button onclick="openShipTrackingUrl()" title="Abrir enlace de seguimiento" class="shrink-0 w-9 h-9 flex items-center justify-center rounded-full border border-sky-400/50 text-sky-400 hover:bg-sky-500 hover:text-black transition-colors cursor-pointer">🔗</button>
+                        </div>
+                    </div>
                 </div>
                 <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
                     <input type="checkbox" id="ship-enviado-check" class="w-4 h-4 accent-sky-500 cursor-pointer">
@@ -547,6 +554,16 @@
                 <button onclick="closeShipModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button onclick="confirmShipModal()" class="px-4 py-2 text-xs font-bold uppercase bg-sky-500 text-black rounded-full hover:bg-sky-400 transition-colors cursor-pointer">GUARDAR</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Visor grande con zoom para una foto suelta (p.ej. la portada de un pedido) - mismo mecanismo de zoom que
+         el visor de la biblioteca, pero sin atarlo a ninguna colección/índice. -->
+    <div id="photo-viewer-modal" class="fixed inset-0 bg-black/95 hidden z-[260] items-center justify-center p-4 backdrop-blur-sm" onclick="closePhotoViewer()">
+        <button class="fixed top-6 right-6 text-sky-400 hover:text-white text-4xl font-bold cursor-pointer z-[280]" onclick="closePhotoViewer()">&times;</button>
+        <div class="relative shrink-0 overflow-hidden rounded-2xl" onclick="event.stopPropagation()">
+            <img id="photo-viewer-img" class="max-h-[85vh] max-w-[90vw] object-contain border border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.2)] rounded-2xl select-none transition-transform duration-100" style="transform-origin: center center;" draggable="false">
+            <button id="photo-viewer-zoom-btn" onclick="togglePhotoViewerZoom(event)" title="Zoom" class="absolute top-2 left-2 z-30 w-9 h-9 rounded-full bg-black/70 border border-sky-400/70 text-sky-400 flex items-center justify-center hover:bg-sky-400 hover:text-black transition-all">🔍</button>
         </div>
     </div>
 
@@ -5802,7 +5819,7 @@
                 // se haya guardado explícitamente así (ver confirmShipModal, que ya lo fuerza al guardar).
                 const enviado = !!(p.enviado || p.fotoPaquete);
                 return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 flex flex-col gap-2.5 cursor-move">
-                    ${p.fotoPaquete ? `<img src="${p.fotoPaquete}" onclick="openShipModal('${p.id}', event)" title="Foto del pedido preparado - clic para ver/cambiar" class="w-full aspect-video object-cover rounded-xl cursor-pointer">` : ''}
+                    ${p.fotoPaquete ? `<img src="${p.fotoPaquete}" onclick="openPhotoViewer(this.src, event)" title="Foto del pedido preparado - clic para ampliar" class="w-full aspect-video object-cover rounded-xl cursor-zoom-in">` : ''}
                     <div class="flex items-start gap-2">
                         <span class="text-zinc-500 text-lg select-none mt-0.5 shrink-0" title="Arrastra para reordenar">☰</span>
                         <div class="flex-1 min-w-0">
@@ -6001,6 +6018,74 @@
             renderPedidosTab();
             closeShipModal();
         };
+        window.openShipTrackingUrl = function() {
+            const url = document.getElementById('ship-tracking-url').value.trim();
+            if (!url) return;
+            window.open(url, '_blank');
+        };
+
+        // Visor grande con zoom para una foto suelta (la portada del pedido en la tarjeta) - mismo patrón que
+        // pToggleZoom/pWireZoom del visor de la biblioteca (rueda 1x-6x, arrastrar para paso, doble-clic reset),
+        // pero generalizado a un simple `src` en vez de depender de pDb/colId/index.
+        window.openPhotoViewer = function(src, event) {
+            if (event) event.stopPropagation();
+            if (!src) return;
+            document.getElementById('photo-viewer-img').src = src;
+            photoViewerResetZoom();
+            document.getElementById('photo-viewer-modal').classList.remove('hidden');
+            document.getElementById('photo-viewer-modal').classList.add('flex');
+        };
+        window.closePhotoViewer = function() {
+            document.getElementById('photo-viewer-modal').classList.add('hidden');
+            document.getElementById('photo-viewer-modal').classList.remove('flex');
+            photoViewerResetZoom();
+        };
+        let photoViewerZoom = { scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, moved: false };
+        function photoViewerApplyZoom() {
+            const img = document.getElementById('photo-viewer-img'); if (!img) return;
+            img.style.transitionDuration = photoViewerZoom.dragging ? '0s' : '';
+            img.style.transform = `translate(${photoViewerZoom.x}px, ${photoViewerZoom.y}px) scale(${photoViewerZoom.scale})`;
+            img.style.cursor = photoViewerZoom.scale > 1 ? (photoViewerZoom.dragging ? 'grabbing' : 'grab') : 'zoom-in';
+            const zb = document.getElementById('photo-viewer-zoom-btn');
+            if (zb) { zb.classList.toggle('bg-sky-400', photoViewerZoom.scale > 1); zb.classList.toggle('text-black', photoViewerZoom.scale > 1); }
+        }
+        function photoViewerResetZoom() { photoViewerZoom = { scale: 1, x: 0, y: 0, dragging: false, sx: 0, sy: 0, moved: false }; photoViewerApplyZoom(); }
+        window.togglePhotoViewerZoom = function(event) {
+            if (event) event.stopPropagation();
+            photoViewerZoom.scale = photoViewerZoom.scale > 1 ? 1 : 2; photoViewerZoom.x = 0; photoViewerZoom.y = 0; photoViewerApplyZoom();
+        };
+        (function wirePhotoViewerZoom() {
+            const img = document.getElementById('photo-viewer-img'); if (!img) return;
+            img.addEventListener('wheel', e => {
+                e.preventDefault(); e.stopPropagation();
+                const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+                const newScale = Math.min(6, Math.max(1, photoViewerZoom.scale * factor));
+                if (newScale === 1) {
+                    photoViewerZoom.x = 0; photoViewerZoom.y = 0;
+                } else {
+                    const rect = img.getBoundingClientRect();
+                    const dx = e.clientX - (rect.left + rect.width / 2);
+                    const dy = e.clientY - (rect.top + rect.height / 2);
+                    const f = newScale / photoViewerZoom.scale;
+                    photoViewerZoom.x = photoViewerZoom.x + dx * (1 - f);
+                    photoViewerZoom.y = photoViewerZoom.y + dy * (1 - f);
+                }
+                photoViewerZoom.scale = newScale;
+                photoViewerApplyZoom();
+            }, { passive: false });
+            img.addEventListener('dblclick', e => { e.stopPropagation(); photoViewerResetZoom(); });
+            img.addEventListener('mousedown', e => {
+                if (photoViewerZoom.scale <= 1) return;
+                e.preventDefault(); photoViewerZoom.dragging = true; photoViewerZoom.moved = false;
+                photoViewerZoom.sx = e.clientX - photoViewerZoom.x; photoViewerZoom.sy = e.clientY - photoViewerZoom.y; photoViewerApplyZoom();
+            });
+            window.addEventListener('mousemove', e => {
+                if (!photoViewerZoom.dragging) return;
+                photoViewerZoom.x = e.clientX - photoViewerZoom.sx; photoViewerZoom.y = e.clientY - photoViewerZoom.sy; photoViewerZoom.moved = true; photoViewerApplyZoom();
+            });
+            window.addEventListener('mouseup', () => { if (photoViewerZoom.dragging) { photoViewerZoom.dragging = false; photoViewerApplyZoom(); } });
+            img.addEventListener('click', e => { if (photoViewerZoom.scale > 1 || photoViewerZoom.moved) { e.stopPropagation(); photoViewerZoom.moved = false; } });
+        })();
         window.pedidoDragStart = function(e, i) { pedidoDragIndex = i; e.dataTransfer.effectAllowed = 'move'; };
         window.pedidoDragOver = function(e) { e.preventDefault(); };
         window.pedidoDrop = function(e, i) {
