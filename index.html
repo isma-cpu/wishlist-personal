@@ -5795,12 +5795,12 @@
                         </div>
                     </div>
 
-                    <div class="flex flex-col gap-1.5">
-                        <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="w-full bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30" title="Cliente">
+                    <div class="grid grid-cols-2 gap-2">
+                        <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="w-full min-w-0 bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30" title="Cliente">
                             <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
                             ${pedidosClientes.map(c => `<option value="${escAttr(c)}" ${p.cliente === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
                         </select>
-                        <select onchange="updatePedidoField('${p.id}','proveedor',this.value)" class="w-full bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-sky-400/30" title="Proveedor">
+                        <select onchange="updatePedidoField('${p.id}','proveedor',this.value)" class="w-full min-w-0 bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-sky-400/30" title="Proveedor">
                             <option value="" ${!p.proveedor ? 'selected' : ''}>— Sin proveedor —</option>
                             ${pedidosProveedores.map(c => `<option value="${escAttr(c)}" ${p.proveedor === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
                         </select>
@@ -5821,12 +5821,11 @@
                         </div>
                     </div>
 
-                    <button onclick="openShipModal('${p.id}', event)" title="${p.enviado && p.tracking ? 'Seguimiento: ' + escAttr(p.tracking) : (p.enviado ? 'Marcado como enviado' : 'Marcar como enviado')}" class="w-full text-center text-[11px] font-bold uppercase rounded-full px-2 py-1.5 border transition-colors cursor-pointer ${p.enviado ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'}">
-                        ${p.enviado ? '📦 Enviado' : '⏳ Pendiente de envío'}
-                    </button>
-
-                    <div class="flex items-center gap-2 mt-auto pt-1">
+                    <div class="flex items-center gap-2 mt-auto">
                         <button onclick="viewPedidoDetail('${p.id}')" class="flex-1 text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                        <button onclick="openShipModal('${p.id}', event)" title="${p.enviado && p.tracking ? 'Seguimiento: ' + escAttr(p.tracking) : (p.enviado ? 'Marcado como enviado' : 'Marcar como enviado')}" class="flex-1 text-center text-xs font-bold uppercase rounded-full px-2 py-1.5 border transition-colors cursor-pointer whitespace-nowrap ${p.enviado ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'}">
+                            ${p.enviado ? '📦 Enviado' : '⏳ Pendiente'}
+                        </button>
                         <button onclick="deletePedido('${p.id}')" class="del-x-btn shrink-0" title="Eliminar">✕</button>
                     </div>
                 </div>`;
