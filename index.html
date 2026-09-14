@@ -305,7 +305,7 @@
     <!-- Menú "⋯" (renombrar/mover/eliminar) de UNA opción del desplegable de Versión, fixed y por encima del propio desplegable -->
     <div id="version-option-menu" class="hidden fixed bg-white border border-gray-300 rounded-xl shadow-lg z-[310] flex flex-col min-w-[10rem] py-1 overflow-hidden"></div>
 
-    <div id="view-pedidos" class="hidden w-full pt-16 p-4 md:p-8 max-w-5xl mx-auto">
+    <div id="view-pedidos" class="hidden w-full pt-16 p-4 md:p-8 max-w-[100rem] mx-auto">
         <div class="flex items-center gap-3 mb-2 border-b border-zinc-800 pb-3">
             <div class="w-3 h-3 rounded-full bg-amber-400 shadow-[0_0_8px_#fbbf24]"></div>
             <h2 class="text-2xl font-black text-white tracking-wide uppercase">Pedidos</h2>
@@ -338,7 +338,7 @@
                 <h3 class="font-black text-amber-400 uppercase text-sm tracking-wide">📑 Pedidos</h3>
                 <span id="pedidos-filter-indicator"></span>
             </div>
-            <div id="pedidos-list"></div>
+            <div id="pedidos-list" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"></div>
         </div>
 
         <!-- Aquí se mueve #pedido-order-section mientras se edita un pedido archivado (editArchivedPedido) -
@@ -5774,48 +5774,60 @@
             list.innerHTML = source.map((p) => {
                 const i = pedidosArchivo.indexOf(p);
                 const nItems = p.rows.length;
-                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
-                    <span class="text-zinc-500 text-lg select-none" title="Arrastra para reordenar">☰</span>
-                    <div class="flex-1 min-w-[10rem]">
-                        <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-amber-400 rounded-full px-1 w-full">
-                        <div class="flex items-center gap-1.5 mt-0.5">
-                            <input type="date" value="${dateToInputValue(p.date)}" onchange="updatePedidoField('${p.id}','date', new Date(this.value + 'T12:00:00').toISOString())" class="text-xs text-zinc-400 uppercase bg-transparent border-0 p-0 cursor-pointer hover:text-amber-400 [color-scheme:dark]" title="Fecha del pedido (por defecto, la del día que se guardó)">
-                            <span class="text-[10px] text-zinc-600">· ${nItems} art${nItems === 1 ? 'ículo' : 'ículos'}</span>
+                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 flex flex-col gap-2.5 cursor-move">
+                    <div class="flex items-start gap-2">
+                        <span class="text-zinc-500 text-lg select-none mt-0.5 shrink-0" title="Arrastra para reordenar">☰</span>
+                        <div class="flex-1 min-w-0">
+                            <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-amber-400 rounded-full px-1 w-full truncate">
+                            <div class="flex items-center gap-1.5 mt-0.5">
+                                <input type="date" value="${dateToInputValue(p.date)}" onchange="updatePedidoField('${p.id}','date', new Date(this.value + 'T12:00:00').toISOString())" class="text-xs text-zinc-400 uppercase bg-transparent border-0 p-0 cursor-pointer hover:text-amber-400 [color-scheme:dark]" title="Fecha del pedido (por defecto, la del día que se guardó)">
+                                <span class="text-[10px] text-zinc-600 whitespace-nowrap">· ${nItems} art${nItems === 1 ? 'ículo' : 'ículos'}</span>
+                            </div>
+                        </div>
+                        <div class="relative shrink-0">
+                            <button data-menu-trigger onclick="toggleSimpleMenu('pedido-menu-${i}', event)" title="Más opciones" class="w-7 h-7 flex items-center justify-center border border-zinc-600 text-zinc-400 rounded-full hover:bg-zinc-700 hover:text-white transition-colors cursor-pointer font-black">⋯</button>
+                            <div id="pedido-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] py-1 overflow-hidden normal-case">
+                                <button onclick="editArchivedPedido('${p.id}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Editar</button>
+                                <button onclick="printArchivedPedido('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">🖨️ Descargar PDF</button>
+                                <button onclick="openShipModal('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${p.enviado ? 'text-emerald-400' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">📦 ${p.enviado ? 'Ver/editar envío' : 'Marcar como enviado'}</button>
+                            </div>
                         </div>
                     </div>
-                    <div class="flex flex-col gap-1">
-                        <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30" title="Cliente">
+
+                    <div class="flex flex-col gap-1.5">
+                        <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="w-full bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30" title="Cliente">
                             <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
                             ${pedidosClientes.map(c => `<option value="${escAttr(c)}" ${p.cliente === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
                         </select>
-                        <select onchange="updatePedidoField('${p.id}','proveedor',this.value)" class="bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-sky-400/30" title="Proveedor">
+                        <select onchange="updatePedidoField('${p.id}','proveedor',this.value)" class="w-full bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-sky-400/30" title="Proveedor">
                             <option value="" ${!p.proveedor ? 'selected' : ''}>— Sin proveedor —</option>
                             ${pedidosProveedores.map(c => `<option value="${escAttr(c)}" ${p.proveedor === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
                         </select>
                     </div>
-                    <div class="text-center">
-                        <div class="text-[9px] text-zinc-500 uppercase">Total</div>
-                        <div class="text-white font-bold text-sm">${formatMoney(p.total)} €</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-[9px] text-zinc-500 uppercase">Pagado</div>
-                        <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-20 text-center bg-zinc-900 text-white text-sm font-bold rounded-full px-1 py-1 border border-amber-400/30">
-                    </div>
-                    <div class="text-center">
-                        <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
-                        <div id="pedido-debe-${p.id}">${debeBoxHTML(p)}</div>
-                    </div>
-                    ${p.enviado ? `<span class="text-[10px] uppercase font-bold text-emerald-400 border border-emerald-500/40 bg-emerald-500/10 rounded-full px-2 py-1 whitespace-nowrap" title="${p.tracking ? 'Seguimiento: ' + escAttr(p.tracking) : 'Marcado como enviado'}">📦 Enviado</span>` : ''}
-                    <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
-                    <div class="relative ml-auto">
-                        <button data-menu-trigger onclick="toggleSimpleMenu('pedido-menu-${i}', event)" title="Más opciones" class="w-8 h-8 flex items-center justify-center border border-zinc-600 text-zinc-400 rounded-full hover:bg-zinc-700 hover:text-white transition-colors cursor-pointer font-black">⋯</button>
-                        <div id="pedido-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] py-1 overflow-hidden normal-case">
-                            <button onclick="editArchivedPedido('${p.id}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Editar</button>
-                            <button onclick="printArchivedPedido('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">🖨️ Descargar PDF</button>
-                            <button onclick="openShipModal('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${p.enviado ? 'text-emerald-400' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">📦 ${p.enviado ? 'Ver/editar envío' : 'Marcar como enviado'}</button>
+
+                    <div class="grid grid-cols-3 gap-2 text-center bg-black/20 rounded-xl py-2 px-1">
+                        <div>
+                            <div class="text-[9px] text-zinc-500 uppercase">Total</div>
+                            <div class="text-white font-bold text-sm">${formatMoney(p.total)} €</div>
+                        </div>
+                        <div>
+                            <div class="text-[9px] text-zinc-500 uppercase">Pagado</div>
+                            <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-full text-center bg-zinc-900 text-white text-sm font-bold rounded-full px-1 py-1 border border-amber-400/30">
+                        </div>
+                        <div>
+                            <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
+                            <div id="pedido-debe-${p.id}">${debeBoxHTML(p)}</div>
                         </div>
                     </div>
-                    <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
+
+                    <button onclick="openShipModal('${p.id}', event)" title="${p.enviado && p.tracking ? 'Seguimiento: ' + escAttr(p.tracking) : (p.enviado ? 'Marcado como enviado' : 'Marcar como enviado')}" class="w-full text-center text-[11px] font-bold uppercase rounded-full px-2 py-1.5 border transition-colors cursor-pointer ${p.enviado ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20' : 'border-zinc-700 bg-zinc-900 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'}">
+                        ${p.enviado ? '📦 Enviado' : '⏳ Pendiente de envío'}
+                    </button>
+
+                    <div class="flex items-center gap-2 mt-auto pt-1">
+                        <button onclick="viewPedidoDetail('${p.id}')" class="flex-1 text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
+                        <button onclick="deletePedido('${p.id}')" class="del-x-btn shrink-0" title="Eliminar">✕</button>
+                    </div>
                 </div>`;
             }).join('');
         }
