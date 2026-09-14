@@ -121,7 +121,8 @@
     <div id="custom-input-modal" class="fixed inset-0 bg-black/90 hidden z-[350] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
         <div class="bg-[#0a0a0a] border border-[#39FF14] p-6 rounded-2xl shadow-[0_0_30px_rgba(57,255,20,0.3)] w-full max-w-sm transform scale-100 transition-all">
             <h3 id="custom-input-title" class="text-lg font-black tracking-wider text-[#39FF14] mb-4 uppercase flex items-center gap-2"></h3>
-            <input type="text" id="custom-input-field" class="w-full bg-black border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14] rounded-xl mb-6 transition-all placeholder:text-zinc-600" autocomplete="off">
+            <input type="text" id="custom-input-field" class="w-full bg-black border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-[#39FF14] focus:ring-1 focus:ring-[#39FF14] rounded-xl mb-4 transition-all placeholder:text-zinc-600" autocomplete="off">
+            <div id="custom-input-emoji-presets" class="hidden flex-wrap gap-1.5 mb-6"></div>
             <div class="flex justify-end gap-3">
                 <button onclick="closeCustomInput()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button onclick="saveCustomInput()" class="px-5 py-2 text-xs font-bold bg-[#39FF14] text-black rounded-xl hover:bg-white transition-colors shadow-[0_0_15px_rgba(57,255,20,0.4)] cursor-pointer">GUARDAR</button>
@@ -311,10 +312,15 @@
             <span class="text-sm text-zinc-500 ml-auto" id="pedidos-count">0 pedidos</span>
         </div>
         <p class="text-xs text-zinc-500 mb-4">Se guardan aquí al pulsar "💾 Guardar pedido" en "Crear Pedido".</p>
-        <div class="flex items-center gap-2 flex-wrap mb-6">
+        <div class="flex items-center gap-2 flex-wrap mb-3">
             <span class="text-xs text-zinc-500 uppercase">Clientes:</span>
             <div id="pedidos-clientes-chips" class="flex gap-2 flex-wrap"></div>
             <button onclick="openInput('add-cliente', null, null, event)" class="text-xs text-sky-400 hover:text-sky-300 uppercase border border-sky-400/40 rounded-full px-2 py-1 cursor-pointer">➕ Cliente</button>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap mb-6">
+            <span class="text-xs text-zinc-500 uppercase">Proveedores:</span>
+            <div id="pedidos-proveedores-chips" class="flex gap-2 flex-wrap"></div>
+            <button onclick="openInput('add-proveedor', null, null, event)" class="text-xs text-amber-400 hover:text-amber-300 uppercase border border-amber-400/40 rounded-full px-2 py-1 cursor-pointer">➕ Proveedor</button>
         </div>
 
         <div class="mb-6 rounded-2xl border-2 border-red-500/40 bg-red-950/10 p-4">
@@ -478,6 +484,10 @@
                     <label class="text-[10px] text-zinc-500 uppercase block mb-1">Cliente</label>
                     <select id="save-order-cliente" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-emerald-400"></select>
                 </div>
+                <div>
+                    <label class="text-[10px] text-zinc-500 uppercase block mb-1">Proveedor</label>
+                    <select id="save-order-proveedor" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-emerald-400"></select>
+                </div>
                 <div class="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                     <div class="text-[10px] text-zinc-500 uppercase">Coste total del pedido</div>
                     <div id="save-order-total" class="text-xl font-black text-white">0,00 €</div>
@@ -497,6 +507,43 @@
             <div class="flex justify-end gap-3 mt-5">
                 <button onclick="closeSaveOrderModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button onclick="confirmSaveOrder()" class="px-4 py-2 text-xs font-bold uppercase bg-emerald-500 text-black rounded-full hover:bg-emerald-400 transition-colors cursor-pointer">GUARDAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Marcar un pedido archivado como enviado: foto del paquete preparado + foto de la etiqueta + nº de seguimiento -->
+    <div id="pedido-ship-modal" class="fixed inset-0 bg-black/95 hidden z-[220] items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-sky-500 p-6 rounded-2xl shadow-[0_0_30px_rgba(14,165,233,0.3)] w-full max-w-sm max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-black tracking-wider text-sky-400 mb-4 uppercase">📦 Marcar como enviado</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="text-[10px] text-zinc-500 uppercase block mb-1">Foto del pedido preparado</label>
+                    <div id="ship-paquete-preview" class="mb-1"></div>
+                    <div class="flex gap-2">
+                        <button onclick="pickShipPhoto('paquete')" class="flex-1 px-3 py-2 text-xs font-bold uppercase text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer">📷 Elegir foto</button>
+                        <button onclick="clearShipPhoto('paquete')" class="del-x-btn shrink-0" title="Quitar foto">✕</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] text-zinc-500 uppercase block mb-1">Foto de la etiqueta</label>
+                    <div id="ship-etiqueta-preview" class="mb-1"></div>
+                    <div class="flex gap-2">
+                        <button onclick="pickShipPhoto('etiqueta')" class="flex-1 px-3 py-2 text-xs font-bold uppercase text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer">📷 Elegir foto</button>
+                        <button onclick="clearShipPhoto('etiqueta')" class="del-x-btn shrink-0" title="Quitar foto">✕</button>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] text-zinc-500 uppercase block mb-1">Número de seguimiento</label>
+                    <input id="ship-tracking" placeholder="Ej: 1Z999AA10123456784" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-sky-400">
+                </div>
+                <label class="flex items-center gap-2 text-xs text-zinc-300 cursor-pointer select-none">
+                    <input type="checkbox" id="ship-enviado-check" class="w-4 h-4 accent-sky-500 cursor-pointer">
+                    ✅ Marcar pedido como ENVIADO
+                </label>
+            </div>
+            <div class="flex justify-end gap-3 mt-5">
+                <button onclick="closeShipModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+                <button onclick="confirmShipModal()" class="px-4 py-2 text-xs font-bold uppercase bg-sky-500 text-black rounded-full hover:bg-sky-400 transition-colors cursor-pointer">GUARDAR</button>
             </div>
         </div>
     </div>
@@ -941,7 +988,7 @@
                 exportedAt: new Date().toISOString(),
                 wishlist: { db, structure },
                 biblioteca: { pDb, pStructure },
-                pedidos: { pOrders, pedidosArchivo, pedidosClientes, savedAddresses }
+                pedidos: { pOrders, pedidosArchivo, pedidosClientes, pedidosProveedores, savedAddresses }
             };
         }
         // Si el archivo es una copia completa (tiene __backup) restaura las 3 partes; si no, es una copia antigua (solo `db`) que trata el propio caller.
@@ -961,8 +1008,10 @@
                 if (parsed.pedidos.pOrders) pOrders = parsed.pedidos.pOrders;
                 pedidosArchivo = parsed.pedidos.pedidosArchivo || [];
                 if (parsed.pedidos.pedidosClientes) pedidosClientes = parsed.pedidos.pedidosClientes;
+                if (parsed.pedidos.pedidosProveedores) pedidosProveedores = parsed.pedidos.pedidosProveedores;
                 if (parsed.pedidos.savedAddresses) savedAddresses = parsed.pedidos.savedAddresses;
                 saveClientes();
+                saveProveedores();
                 saveSavedAddresses();
                 await savePOrders();
                 await savePedidosArchivo();
@@ -1215,6 +1264,14 @@
             return false;
         };
 
+        // Fila de emoji típicos para elegir con un clic, además de poder pegar/escribir cualquier otro a mano.
+        const EMOJI_PRESETS = ['⚽', '🏆', '👕', '🧥', '🩳', '🧦', '🎽', '🔥', '⭐', '🛡️', '📦', '🌟', '🇪🇸', '🇬🇧', '🇮🇹', '🇫🇷', '🇩🇪', '🏅', '🎯', '📁'];
+        function showEmojiPresets() {
+            const box = document.getElementById('custom-input-emoji-presets');
+            box.innerHTML = EMOJI_PRESETS.map(e => `<button type="button" onclick="document.getElementById('custom-input-field').value='${e}'" class="w-8 h-8 flex items-center justify-center text-lg bg-zinc-900 border border-zinc-700 rounded-lg hover:border-[#39FF14] transition-colors cursor-pointer">${e}</button>`).join('');
+            box.classList.remove('hidden');
+            box.classList.add('flex');
+        }
         // --- MODALES Y TEXTOS ---
         window.openInput = function(action, targetId, extraId, event) {
             if(event) event.stopPropagation();
@@ -1224,12 +1281,17 @@
             const inputEl = document.getElementById('custom-input-field');
             
             inputEl.value = "";
+            document.getElementById('custom-input-emoji-presets').classList.add('hidden');
+            document.getElementById('custom-input-emoji-presets').innerHTML = "";
             if (action === 'name') {
                 titleEl.innerHTML = "📝 NOMBRE Y NÚMERO"; inputEl.placeholder = "Ej: MESSI 10";
                 inputEl.value = db[targetId][extraId].nameNumber || "";
             } else if (action === 'patch') {
                 titleEl.innerHTML = "🛡️ PARCHE"; inputEl.placeholder = "Ej: Champions League 2015";
                 inputEl.value = db[targetId][extraId].patch || "";
+            } else if (action === 'patch-name') {
+                titleEl.innerHTML = "🏷️ NOMBRE DEL PARCHE"; inputEl.placeholder = "Ej: Champions League 2015 (opcional)";
+                inputEl.value = db[targetId][extraId].patchName || "";
             } else if (action === 'add-group') {
                 titleEl.innerHTML = "➕ NUEVO BLOQUE"; inputEl.placeholder = "Nombre del bloque...";
             } else if (action === 'edit-group') {
@@ -1267,11 +1329,13 @@
                 titleEl.innerHTML = "😀 EMOJI DEL BLOQUE"; inputEl.placeholder = "Pega o escribe un emoji...";
                 const group = structure.find(g => g.groupId === targetId);
                 inputEl.value = group ? (group.emoji || "") : "";
+                showEmojiPresets();
             } else if (action === 'set-folder-emoji') {
                 titleEl.innerHTML = "😀 EMOJI DE LA CARPETA"; inputEl.placeholder = "Pega o escribe un emoji...";
                 const group = structure.find(g => g.groupId === targetId);
                 const folder = group && group.folders && group.folders.find(f => f.id === extraId);
                 inputEl.value = folder ? (folder.emoji || "") : "";
+                showEmojiPresets();
             } else if (action === 'add-subcollection') {
                 titleEl.innerHTML = "➕ NUEVA SUBCOLECCIÓN"; inputEl.placeholder = "Nombre de la subcolección...";
             } else if (action === 'edit-subcollection') {
@@ -1319,6 +1383,11 @@
             } else if (action === 'rename-cliente') {
                 titleEl.innerHTML = "✏️ RENOMBRAR CLIENTE"; inputEl.placeholder = "Ej: NOMBRE CLIENTE";
                 inputEl.value = targetId || "";
+            } else if (action === 'add-proveedor') {
+                titleEl.innerHTML = "➕ NUEVO PROVEEDOR"; inputEl.placeholder = "Ej: NOMBRE PROVEEDOR";
+            } else if (action === 'rename-proveedor') {
+                titleEl.innerHTML = "✏️ RENOMBRAR PROVEEDOR"; inputEl.placeholder = "Ej: NOMBRE PROVEEDOR";
+                inputEl.value = targetId || "";
             } else if (action === 'add-version-opcion') {
                 titleEl.innerHTML = "➕ NUEVA OPCIÓN DE VERSIÓN"; inputEl.placeholder = "Ej: FAN, PLAYER, RETRO...";
             } else if (action === 'rename-version-opcion') {
@@ -1349,6 +1418,8 @@
                 db[targetId][extraId].nameNumber = val; saveDB();
             } else if (action === 'patch') {
                 db[targetId][extraId].patch = val; saveDB();
+            } else if (action === 'patch-name') {
+                db[targetId][extraId].patchName = val; saveDB();
             } else if (action === 'add-group') {
                 if (val) { structure.push({ groupTitle: val, groupId: 'group-' + Date.now(), collections: [] }); saveStructure(); init(); }
             } else if (action === 'edit-group') {
@@ -1388,6 +1459,17 @@
                         pedidosArchivo.forEach(p => { if (p.cliente === targetId) p.cliente = newName; });
                         if (pedidosFilterCliente === targetId) pedidosFilterCliente = newName;
                         saveClientes(); savePedidosArchivo(); renderClientesChips(); renderPedidosTab();
+                    }
+                }
+            } else if (action === 'rename-proveedor') {
+                if (val && val !== targetId) {
+                    const newName = val.toUpperCase();
+                    const idx = pedidosProveedores.indexOf(targetId);
+                    if (idx !== -1) {
+                        if (pedidosProveedores.includes(newName)) pedidosProveedores.splice(idx, 1);
+                        else pedidosProveedores[idx] = newName;
+                        pedidosArchivo.forEach(p => { if (p.proveedor === targetId) p.proveedor = newName; });
+                        saveProveedores(); savePedidosArchivo(); renderProveedoresChips(); renderPedidosTab();
                     }
                 }
             } else if (action === 'add-version-opcion') {
@@ -1519,6 +1601,13 @@
                     const v = val.trim().toUpperCase();
                     if (v && !pedidosClientes.includes(v)) {
                         pedidosClientes.push(v); saveClientes(); renderClientesChips(); renderPedidosTab();
+                    }
+                }
+            } else if (action === 'add-proveedor') {
+                if (val) {
+                    const v = val.trim().toUpperCase();
+                    if (v && !pedidosProveedores.includes(v)) {
+                        pedidosProveedores.push(v); saveProveedores(); renderProveedoresChips(); renderPedidosTab();
                     }
                 }
             } else if (action === 'save-address') {
@@ -1861,7 +1950,7 @@
             if (item.nameNumber) textHtml.push(`<div class="text-[#39FF14] mb-1">📝 ${item.nameNumber}</div>`);
             if (item.patch) {
                 if (item.patch.startsWith('data:image')) {
-                    textHtml.push(`<div class="text-blue-400 flex items-center justify-center gap-1">🛡️ <img src="${item.patch}" class="w-6 h-7 object-contain inline-block align-middle"></div>`);
+                    textHtml.push(`<div class="text-blue-400 flex items-center justify-center gap-1">🛡️ <img src="${item.patch}" class="w-6 h-7 object-contain inline-block align-middle">${item.patchName ? ` <span class="text-xs">${escapeHtml(item.patchName)}</span>` : ''}</div>`);
                 } else {
                     textHtml.push(`<div class="text-blue-400">🛡️ ${item.patch}</div>`);
                 }
@@ -2241,6 +2330,8 @@
                    ondragleave="handleSidebarDragLeave(event)"
                    ondrop="handleSidebarDrop(event, '${col.id}')"
                    onclick="showView('${col.id}'); return false;"
+                   ondblclick="event.preventDefault(); event.stopPropagation(); openInput('edit-collection', '${group.groupId}', '${col.id}', event)"
+                   title="Doble clic para renombrar"
                    class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm text-zinc-400 hover:text-[#39FF14] hover:bg-zinc-900 rounded-full transition-all group select-none relative">
                     <span class="flex items-center gap-1.5 min-w-0 flex-1 pointer-events-none">
                         <span draggable="true" ondragstart="collectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar o mover a otra carpeta">⠿</span>
@@ -2367,7 +2458,7 @@
                 groupMenu.className = "neon-card-green rounded-2xl p-3";
                 groupMenu.innerHTML = `
                     <h3 class="text-xs font-bold text-[#39FF14] uppercase tracking-widest mb-3 border-b border-[#39FF14]/30 pb-2 flex items-center justify-between gap-2 relative" ondragover="groupDragOver(event)" ondrop="groupDrop(event, '${group.groupId}')">
-                        <button onclick="toggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
+                        <button onclick="toggleGroupCollapsed('${group.groupId}', event)" ondblclick="event.stopPropagation(); openInput('edit-group', '${group.groupId}', null, event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Doble clic para renombrar">
                             <span id="groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.emoji ? group.emoji + ' ' : ''}${group.groupTitle}</span>
                         </button>
@@ -2398,7 +2489,7 @@
                     folderLi.innerHTML = `
                         <div ondragover="folderDragOver(event)" ondragleave="folderDragLeave(event)" ondrop="folderDrop(event, '${group.groupId}', '${folder.id}')"
                              class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-full hover:bg-zinc-900 transition-all group select-none">
-                            <button onclick="toggleFolderCollapsed('${folder.id}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 text-sm font-bold text-zinc-300 hover:text-[#39FF14] transition-colors text-left">
+                            <button onclick="toggleFolderCollapsed('${folder.id}', event)" ondblclick="event.stopPropagation(); openInput('edit-folder', '${group.groupId}', '${folder.id}', event)" title="Doble clic para renombrar" class="flex items-center gap-1.5 min-w-0 flex-1 text-sm font-bold text-zinc-300 hover:text-[#39FF14] transition-colors text-left">
                                 <span id="folderchev-${folder.id}" class="text-[10px] shrink-0">${isFolderCollapsed ? '▸' : '▾'}</span>
                                 <span class="shrink-0">${folder.emoji || '📁'}</span>
                                 <span class="truncate">${folder.name}</span>
@@ -2764,9 +2855,10 @@
                         <span class="text-[9px] text-blue-400 uppercase tracking-wider leading-tight">🛡️ ${item.patch}</span>
                     </div>`
                 : '';
-            // Parche-imagen: recuadro pequeño en la esquina inferior izquierda, solo la foto.
+            // Parche-imagen: recuadro pequeño en la esquina inferior izquierda, solo la foto (el nombre, si tiene,
+            // es opcional y se ve al pasar el ratón por encima - no hay sitio para mostrarlo siempre en un recuadro tan pequeño).
             const patchImgHTML = isImagePatch
-                ? `<div class="absolute bottom-1 left-1 z-10 w-8 h-10 rounded-lg overflow-hidden pointer-events-none"><img src="${item.patch}" class="w-full h-full object-contain bg-white/90"></div>`
+                ? `<div class="absolute bottom-1 left-1 z-10 w-8 h-10 rounded-lg overflow-hidden pointer-events-none" ${item.patchName ? `title="${escAttr(item.patchName)}"` : ''}><img src="${item.patch}" class="w-full h-full object-contain bg-white/90"></div>`
                 : '';
             // Nombre/número en la esquina inferior derecha: el recuadro se ajusta al contenido (sin ancho fijo,
             // hasta el 65% de la tarjeta) para que la primera palabra (el nombre) nunca se corte - si hay más
@@ -2797,6 +2889,7 @@
                     <div class="flex flex-col gap-1.5 items-end self-end mb-8 pointer-events-auto">
                         <button onclick="openInput('name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-[#39FF14]/50 text-[#39FF14] rounded-xl text-xs hover:bg-[#39FF14] hover:text-black transition-all shadow-[0_0_10px_rgba(57,255,20,0.2)]" title="Añadir/Editar Nombre y Número">📝</button>
                         <button onclick="openWishlistPatchPicker('${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-blue-400/50 text-blue-400 rounded-xl text-xs hover:bg-blue-400 hover:text-black transition-all shadow-[0_0_10px_rgba(96,165,250,0.2)]" title="Añadir/Editar Parche">🛡️</button>
+                        ${isImagePatch ? `<button onclick="openInput('patch-name', '${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-[#0a0a0a] border border-amber-400/50 text-amber-400 rounded-xl text-xs hover:bg-amber-400 hover:text-black transition-all shadow-[0_0_10px_rgba(251,191,36,0.2)]" title="Poner/editar nombre del parche (opcional)">🏷️</button>` : ''}
                         <button onclick="openDeleteModal('${colId}', ${index}, event)" class="action-btn flex items-center justify-center w-7 h-7 bg-red-900/80 border border-red-500/50 text-red-300 rounded-xl text-xs hover:bg-red-500 hover:text-white transition-all mt-1" title="Eliminar">✕</button>
                     </div>
                 </div>
@@ -3253,7 +3346,7 @@
                             <button onclick="pDeleteGroup('${group.groupId}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 cursor-pointer">✕ Eliminar bloque</button>`;
                 groupMenu.innerHTML = `
                     <h3 class="text-xs font-bold ${patchCls} uppercase tracking-widest mb-3 border-b pb-2 flex items-center justify-between gap-2 relative" ondragover="pGroupDragOver(event)" ondrop="pGroupDrop(event, '${group.groupId}')">
-                        <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors" title="Minimizar / desplegar bloque">
+                        <button onclick="pToggleGroupCollapsed('${group.groupId}', event)" ondblclick="event.stopPropagation(); openInput('p-edit-group', '${group.groupId}', null, event)" title="Doble clic para renombrar" class="flex items-center gap-1.5 min-w-0 flex-1 hover:text-white transition-colors">
                             <span id="p-groupchev-${group.groupId}" class="text-[10px] shrink-0">${isCollapsed ? '▸' : '▾'}</span>
                             <span class="truncate">${group.isPatchGroup ? '🛡️ ' : ''}${group.groupTitle}</span>
                         </button>
@@ -3275,6 +3368,8 @@
                         <a href="#" id="p-link-${col.id}"
                            ondragover="pSidebarDragOver(event)" ondragleave="pSidebarDragLeave(event)" ondrop="pSidebarDrop(event, '${group.groupId}', '${col.id}')"
                            onclick="pShowViewFromClick('${col.id}'); return false;"
+                           ondblclick="event.preventDefault(); event.stopPropagation(); openInput('p-edit-collection', '${group.groupId}', '${col.id}', event)"
+                           title="Doble clic para renombrar"
                            class="sidebar-link flex justify-between items-center px-2 py-1.5 text-sm ${group.isPatchGroup ? 'text-amber-400/80' : 'text-zinc-400'} hover:text-sky-400 hover:bg-zinc-900 rounded-full transition-all group select-none relative">
                             <span class="flex items-center gap-1.5 min-w-0 flex-1 pointer-events-none">
                                 <span draggable="true" ondragstart="pCollectionDragStart(event, '${group.groupId}', '${col.id}')" class="text-zinc-600 hover:text-zinc-400 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-auto" title="Arrastra para reordenar">⠿</span>
@@ -3303,7 +3398,7 @@
                     folderLi.innerHTML = `
                         <div ondragover="pFolderDragOver(event)" ondragleave="pFolderDragLeave(event)" ondrop="pFolderDrop(event, '${group.groupId}', '${folder.id}')"
                              class="flex items-center justify-between gap-2 px-2 py-1.5 rounded-full hover:bg-zinc-900 transition-all group select-none">
-                            <button onclick="pToggleFolderCollapsed('${folder.id}', event)" class="flex items-center gap-1.5 min-w-0 flex-1 text-sm font-bold text-zinc-300 hover:text-sky-400 transition-colors text-left">
+                            <button onclick="pToggleFolderCollapsed('${folder.id}', event)" ondblclick="event.stopPropagation(); openInput('p-edit-folder', '${group.groupId}', '${folder.id}', event)" title="Doble clic para renombrar" class="flex items-center gap-1.5 min-w-0 flex-1 text-sm font-bold text-zinc-300 hover:text-sky-400 transition-colors text-left">
                                 <span id="p-folderchev-${folder.id}" class="text-[10px] shrink-0">${isFolderCollapsed ? '▸' : '▾'}</span>
                                 <span class="shrink-0">📁</span>
                                 <span class="truncate">${folder.name}</span>
@@ -4038,10 +4133,12 @@
                     if (c.isCustom) return `<td class="border border-gray-300 p-1 text-center">${escapeHtml((r.custom && r.custom[c.key]) || '')}</td>`;
                     if (c.key === 'img' || c.key === 'patch') {
                         const src = r[c.key];
-                        return `<td class="border border-gray-300 p-1 text-center">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-8 h-10 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
+                        return `<td class="border border-gray-300 p-1 text-center">${src && src.startsWith('data:image') ? `<img src="${src}" class="w-16 h-20 object-contain mx-auto">` : (src ? escapeHtml(src) : '')}</td>`;
                     }
                     if (c.key === 'nameNumber') return `<td class="border border-gray-300 p-1 text-center whitespace-nowrap"><span class="font-bold uppercase">${escapeHtml(r.name || '')}</span>${r.number ? ' ' + escapeHtml(r.number) : ''}</td>`;
-                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top bg-white">${renderAddrCellInner(sheet, readOnly)}</td>`; }
+                    // max-w para que una dirección larga no acapare todo el ancho y deje la foto del producto
+                    // diminuta/fuera de la vista visible - la foto es lo importante, la dirección es secundaria aquí.
+                    if (c.key === 'address') { if (!isFirst) return ''; return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top bg-white max-w-[9rem]">${renderAddrCellInner(sheet, readOnly)}</td>`; }
                     if (c.key === 'priceTotal') { if (!isFirst) return ''; const total = rows.reduce((s, rr) => s + (parseFloat(rr.price) || 0), 0); return `<td rowspan="${totalRows}" class="border border-gray-300 p-2 text-center align-top font-black text-gray-900 bg-yellow-100">${formatMoney(total)} €</td>`; }
                     return `<td class="border border-gray-300 p-1 text-center">${escapeHtml(String(r[c.key] == null ? '' : r[c.key]))}</td>`;
                 }).join('');
@@ -4431,6 +4528,11 @@
                 version: '', img: '', size: '', qty: '', name: '', number: '', patch: '', unitPrice: '', price: 0, height: null, custom: {}
             };
         }
+        // Una fila "vacía de verdad" (recién creada, nunca tocada) - sin foto, sin texto en ningún campo.
+        function isEmptyOrderRow(row) {
+            return !row.img && !row.patch && !row.version && !row.size && !row.qty && !row.name && !row.number && !row.unitPrice &&
+                (!row.custom || Object.values(row.custom).every(v => !v));
+        }
         window.addOrderRow = function() { activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
         // Añade una fila nueva con la foto ya puesta, en la hoja indicada (o la activa) - usado al enviar desde Wishlist o la biblioteca.
         // `extraFields` permite rellenar version/name/number/patch de una vez (p.ej. al enviar desde la Wishlist eligiendo variantes).
@@ -4475,6 +4577,9 @@
             const target = pOrders.sheets.find(s => s.id === document.getElementById('transfer-rows-target').value);
             if (!target) { closeTransferRowsModal(); return; }
             openConfirmNotice(`¿Traspasar las ${sheet.rows.length} fila${sheet.rows.length === 1 ? '' : 's'} de "${sheet.name}" a "${target.name}"?`, () => {
+                // Si la hoja destino solo tiene la fila en blanco con la que empieza toda hoja nueva (nunca
+                // tocada), se quita para no dejarla mezclada con las filas traspasadas.
+                if (target.rows.length === 1 && isEmptyOrderRow(target.rows[0])) target.rows = [];
                 sheet.rows.forEach(r => {
                     const copy = JSON.parse(JSON.stringify(r));
                     copy.id = 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
@@ -4482,6 +4587,9 @@
                     copy.price = 0;
                     target.rows.push(copy);
                 });
+                // La dirección de envío se traspasa también - misma hoja de destino final, no tiene sentido
+                // rellenarla dos veces.
+                if (hasAddressData(sheet.address)) target.address = JSON.parse(JSON.stringify(sheet.address));
                 savePOrders();
                 closeTransferRowsModal();
                 switchOrderSheet(target.id);
@@ -4800,9 +4908,9 @@
             const boxH = Math.max(28, (row.height || ORDER_ROW_DEFAULT_HEIGHT) - 8);
             const boxStyle = `style="height:${boxH}px"`;
             if (src && src.startsWith('data:image')) {
-                return `<div class="relative group w-full mx-auto" onclick="setSelectedImgCell('${row.id}','${field}')" oncontextmenu="event.preventDefault(); clearOrderRowImage('${row.id}','${field}')" ${boxStyle}>
+                return `<div class="relative group w-full mx-auto" onclick="setSelectedImgCell('${row.id}','${field}')" ${boxStyle}>
                     <img src="${src}" class="w-full h-full object-contain mx-auto">
-                    <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${field}')" title="Quitar foto (o clic derecho encima)" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
+                    <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${field}')" title="Quitar foto" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                         <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
                     </div>
@@ -4811,9 +4919,9 @@
             if (field === 'patch') {
                 if (src) {
                     // Parche antiguo guardado como texto libre (antes de que los parches fueran siempre imagen) - se conserva visible.
-                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" onclick="setSelectedImgCell('${row.id}','patch')" oncontextmenu="event.preventDefault(); clearOrderRowImage('${row.id}','patch')" ${boxStyle}>
+                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" onclick="setSelectedImgCell('${row.id}','patch')" ${boxStyle}>
                         <span class="cell-text text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
-                        <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','patch')" title="Quitar (o clic derecho encima)" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
+                        <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','patch')" title="Quitar" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
                         <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                             <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
                         </div>
@@ -4884,7 +4992,10 @@
                 if (c.key === 'priceTotal') {
                     if (!isFirstRow) return '';
                     const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
-                    return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px)" class="border-b border-black p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
+                    // Sigue "arriba del todo" (align-top, no centrado en TODA la hoja) pero bajado un poco para
+                    // quedar a la altura del centro de la 1ª fila, en vez de pegado al borde superior de la celda.
+                    const priceTotalPadTop = Math.max(8, Math.round(rowH / 2 - 15));
+                    return `<td id="cell-pricetotal" onclick="setSelectedImgCell('SHEET_TOTAL','priceTotal')" rowspan="${totalRows}" style="font-size:var(--cell-font-size,14px);padding-top:${priceTotalPadTop}px" class="border-b border-black p-2 align-top text-center font-black text-gray-900 bg-yellow-100 cursor-pointer">${formatMoney(total)} €</td>`;
                 }
                 if (c.key === 'price') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${priceCell}</td>`;
                 if (c.type === 'number') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${numCell(c.key)}</td>`;
@@ -5330,6 +5441,15 @@
                             div.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;';
                             if (input.parentNode) input.parentNode.replaceChild(div, input);
                         });
+                        // El botón de la celda de Versión es también un control nativo (<button>) con el mismo
+                        // problema de centrado que un <input> en html2canvas - mismo arreglo, sustituir por <div>.
+                        clonedDoc.querySelectorAll('#order-tbody button[data-version-trigger]').forEach(btn => {
+                            const div = clonedDoc.createElement('div');
+                            div.textContent = btn.textContent;
+                            div.className = btn.className;
+                            div.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;';
+                            if (btn.parentNode) btn.parentNode.replaceChild(div, btn);
+                        });
                         // Foto de producto a tamaño real (ver comentario arriba)
                         if (extraWidth > 0) {
                             const col = clonedDoc.getElementById('col-img');
@@ -5387,6 +5507,8 @@
             if (event) event.stopPropagation();
             const sel = document.getElementById('save-order-cliente');
             sel.innerHTML = `<option value="">— Sin cliente —</option>` + pedidosClientes.map(c => `<option value="${escAttr(c)}">${escapeHtml(c)}</option>`).join('');
+            const selProv = document.getElementById('save-order-proveedor');
+            selProv.innerHTML = `<option value="">— Sin proveedor —</option>` + pedidosProveedores.map(c => `<option value="${escAttr(c)}">${escapeHtml(c)}</option>`).join('');
             document.getElementById('save-order-paid').value = '';
             updateSaveOrderSummary();
             document.getElementById('save-order-modal').classList.remove('hidden');
@@ -5412,14 +5534,16 @@
         };
         window.confirmSaveOrder = function() {
             const cliente = document.getElementById('save-order-cliente').value;
+            const proveedor = document.getElementById('save-order-proveedor').value;
             const paid = document.getElementById('save-order-paid').value;
-            archiveOrderSheet(activeSheet(), cliente, paid);
+            archiveOrderSheet(activeSheet(), cliente, paid, proveedor);
             closeSaveOrderModal();
         };
 
         // --- Pestaña PEDIDOS: archivo de pedidos ya enviados/descargados (independiente de las hojas de la plantilla) ---
         let pedidosArchivo = [];
         let pedidosClientes = ['TITO', 'KIKE', 'PERSONAL', 'DROPSHIPPING'];
+        let pedidosProveedores = [];
         let pedidoDragIndex = null;
 
         async function loadPedidosArchivo() {
@@ -5431,14 +5555,20 @@
                 const c = localStorage.getItem('pedidos_clientes_v1');
                 if (c) { const arr = JSON.parse(c); if (Array.isArray(arr) && arr.length) pedidosClientes = arr; }
             } catch (e) {}
+            try {
+                const pr = localStorage.getItem('pedidos_proveedores_v1');
+                if (pr) { const arr = JSON.parse(pr); if (Array.isArray(arr)) pedidosProveedores = arr; }
+            } catch (e) {}
             renderClientesChips();
+            renderProveedoresChips();
             renderPedidosTab();
         }
         async function savePedidosArchivo() { try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {} }
         function saveClientes() { try { localStorage.setItem('pedidos_clientes_v1', JSON.stringify(pedidosClientes)); } catch (e) {} }
+        function saveProveedores() { try { localStorage.setItem('pedidos_proveedores_v1', JSON.stringify(pedidosProveedores)); } catch (e) {} }
 
         // Cada descarga de PDF guarda una foto fija (snapshot) de la hoja en ese momento - no afecta a la plantilla editable.
-        function archiveOrderSheet(sheet, cliente, paid) {
+        function archiveOrderSheet(sheet, cliente, paid, proveedor) {
             if (!sheet) return;
             const total = sheet.rows.reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
             const entry = {
@@ -5456,7 +5586,12 @@
                 rows: JSON.parse(JSON.stringify(sheet.rows || [])),
                 total,
                 cliente: cliente || '',
-                paid: paid || 0
+                paid: paid || 0,
+                proveedor: proveedor || '',
+                enviado: false,
+                fotoPaquete: '',
+                fotoEtiqueta: '',
+                tracking: ''
             };
             pedidosArchivo.unshift(entry);
             savePedidosArchivo();
@@ -5503,6 +5638,38 @@
             const [moved] = pedidosClientes.splice(from, 1);
             pedidosClientes.splice(to, 0, moved);
             saveClientes(); renderClientesChips();
+        };
+
+        // Proveedores: mismo patrón exacto que Clientes (crear/renombrar/reordenar/eliminar detrás del "⋯"),
+        // pero sin filtro de clic (aquí solo se gestionan; el proveedor de cada pedido se elige en su "⋯" propio).
+        function renderProveedoresChips() {
+            const el = document.getElementById('pedidos-proveedores-chips');
+            if (!el) return;
+            el.innerHTML = pedidosProveedores.map((c, i) => `
+                <span class="relative text-[10px] uppercase rounded-full pl-2 pr-1 py-1 flex items-center gap-1 bg-zinc-800 text-zinc-300">
+                    ${escapeHtml(c)}
+                    <button data-menu-trigger onclick="toggleSimpleMenu('proveedor-menu-${i}', event)" class="text-zinc-500 hover:text-white text-xs px-0.5 cursor-pointer font-black" title="Opciones">⋯</button>
+                    <div id="proveedor-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[10rem] py-1 overflow-hidden normal-case">
+                        <button onclick="openInput('rename-proveedor', '${escAttr(c)}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">✏️ Renombrar</button>
+                        <button onclick="movePedidoProveedor('${escAttr(c)}', -1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
+                        <button onclick="movePedidoProveedor('${escAttr(c)}', 1); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer ${i === pedidosProveedores.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
+                        <button onclick="removePedidoProveedor('${escAttr(c)}'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 cursor-pointer">✕ Eliminar</button>
+                    </div>
+                </span>`).join('');
+        }
+        window.removePedidoProveedor = function(name) {
+            openConfirmDelete('¿Quitar "' + name + '" de la lista de proveedores? Los pedidos ya asignados a este proveedor mantendrán el nombre guardado.', () => {
+                pedidosProveedores = pedidosProveedores.filter(c => c !== name);
+                saveProveedores(); renderProveedoresChips(); renderPedidosTab();
+            });
+        };
+        window.movePedidoProveedor = function(name, dir) {
+            const from = pedidosProveedores.indexOf(name);
+            const to = from + dir;
+            if (from === -1 || to < 0 || to >= pedidosProveedores.length) return;
+            const [moved] = pedidosProveedores.splice(from, 1);
+            pedidosProveedores.splice(to, 0, moved);
+            saveProveedores(); renderProveedoresChips();
         };
 
         // "Morosos": clientes que todavía deben dinero de algún pedido archivado, y de cuáles. Se calcula al
@@ -5556,6 +5723,12 @@
             }).join('');
         }
 
+        // Convierte una fecha ISO (con hora) al formato "YYYY-MM-DD" que necesita un <input type="date">.
+        function dateToInputValue(iso) {
+            const d = new Date(iso);
+            if (isNaN(d)) return '';
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
         // Recuadro de color de "Debe"/"Pagado": rojo con la cantidad si aún debe algo, verde con "✅ PAGADO" si ya está saldado.
         function debeBoxHTML(p) {
             const paid = parseFloat(p.paid) || 0;
@@ -5588,12 +5761,15 @@
             }
             list.innerHTML = source.map((p) => {
                 const i = pedidosArchivo.indexOf(p);
-                const fecha = new Date(p.date).toLocaleDateString('es-ES');
+                const nItems = p.rows.length;
                 return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 mb-3 flex flex-wrap items-center gap-4 cursor-move">
                     <span class="text-zinc-500 text-lg select-none" title="Arrastra para reordenar">☰</span>
                     <div class="flex-1 min-w-[10rem]">
                         <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-amber-400 rounded-full px-1 w-full">
-                        <div class="text-[10px] text-zinc-500 uppercase mt-0.5">${fecha}</div>
+                        <div class="flex items-center gap-1 mt-0.5">
+                            <input type="date" value="${dateToInputValue(p.date)}" onchange="updatePedidoField('${p.id}','date', new Date(this.value + 'T12:00:00').toISOString())" class="text-[10px] text-zinc-500 uppercase bg-transparent border-0 p-0 cursor-pointer hover:text-amber-400 [color-scheme:dark]" title="Fecha del pedido (por defecto, la del día que se guardó)">
+                            <span class="text-[10px] text-zinc-600">· ${nItems} art${nItems === 1 ? 'ículo' : 'ículos'}</span>
+                        </div>
                     </div>
                     <select onchange="updatePedidoField('${p.id}','cliente',this.value)" class="bg-zinc-900 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-amber-400/30">
                         <option value="" ${!p.cliente ? 'selected' : ''}>— Sin cliente —</option>
@@ -5614,6 +5790,18 @@
                     <button onclick="viewPedidoDetail('${p.id}')" class="text-sky-400 hover:text-sky-300 text-xs uppercase border border-sky-400/40 rounded-full px-2 py-1.5 cursor-pointer">👁️ Ver</button>
                     <button onclick="editArchivedPedido('${p.id}')" class="text-amber-400 hover:text-amber-300 text-xs uppercase border border-amber-400/40 rounded-full px-2 py-1.5 cursor-pointer">✏️ Editar</button>
                     <button onclick="printArchivedPedido('${p.id}', event)" title="Descargar PDF" class="w-8 h-8 flex items-center justify-center border border-emerald-500/50 text-emerald-400 rounded-full hover:bg-emerald-500 hover:text-black transition-colors cursor-pointer">🖨️</button>
+                    <button onclick="openShipModal('${p.id}', event)" title="${p.enviado ? 'Marcado como ENVIADO - ver/editar' : 'Marcar como enviado'}" class="w-8 h-8 flex items-center justify-center border rounded-full transition-colors cursor-pointer ${p.enviado ? 'border-emerald-500 text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500 hover:text-black' : 'border-zinc-600 text-zinc-400 hover:bg-sky-500 hover:text-black hover:border-sky-500'}">📦</button>
+                    <div class="relative">
+                        <button data-menu-trigger onclick="toggleSimpleMenu('pedido-menu-${i}', event)" title="Más opciones" class="w-8 h-8 flex items-center justify-center border border-zinc-600 text-zinc-400 rounded-full hover:bg-zinc-700 hover:text-white transition-colors cursor-pointer font-black">⋯</button>
+                        <div id="pedido-menu-${i}" class="simple-dropdown-menu hidden absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-xl shadow-lg z-[130] flex flex-col min-w-[12rem] p-3 gap-1 overflow-hidden normal-case">
+                            <label class="text-[10px] text-zinc-500 uppercase">Proveedor</label>
+                            <select onchange="updatePedidoField('${p.id}','proveedor',this.value); closeSimpleMenu();" class="bg-zinc-800 text-white text-xs uppercase rounded-full px-2 py-1.5 border border-zinc-700">
+                                <option value="" ${!p.proveedor ? 'selected' : ''}>— Sin proveedor —</option>
+                                ${pedidosProveedores.map(c => `<option value="${escAttr(c)}" ${p.proveedor === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+                            </select>
+                            ${p.tracking ? `<div class="text-[10px] text-zinc-500 mt-1 truncate" title="${escAttr(p.tracking)}">🔖 ${escapeHtml(p.tracking)}</div>` : ''}
+                        </div>
+                    </div>
                     <button onclick="deletePedido('${p.id}')" class="del-x-btn" title="Eliminar">✕</button>
                 </div>`;
             }).join('');
@@ -5639,6 +5827,62 @@
                 pedidosArchivo = pedidosArchivo.filter(p => p.id !== id);
                 savePedidosArchivo(); renderPedidosTab();
             });
+        };
+
+        // "Marcar como enviado": foto del paquete preparado + foto de la etiqueta + nº de seguimiento, por pedido.
+        let shipModalTarget = null;
+        let shipModalPhotos = { paquete: '', etiqueta: '' };
+        window.openShipModal = function(id, event) {
+            if (event) event.stopPropagation();
+            const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
+            shipModalTarget = id;
+            shipModalPhotos = { paquete: p.fotoPaquete || '', etiqueta: p.fotoEtiqueta || '' };
+            document.getElementById('ship-tracking').value = p.tracking || '';
+            document.getElementById('ship-enviado-check').checked = !!p.enviado;
+            renderShipPhotoPreview('paquete');
+            renderShipPhotoPreview('etiqueta');
+            document.getElementById('pedido-ship-modal').classList.remove('hidden');
+            document.getElementById('pedido-ship-modal').classList.add('flex');
+        };
+        window.closeShipModal = function() {
+            document.getElementById('pedido-ship-modal').classList.add('hidden');
+            document.getElementById('pedido-ship-modal').classList.remove('flex');
+            shipModalTarget = null;
+        };
+        function renderShipPhotoPreview(which) {
+            const el = document.getElementById('ship-' + which + '-preview');
+            if (!el) return;
+            const src = shipModalPhotos[which];
+            el.innerHTML = src
+                ? `<img src="${src}" class="w-full h-28 object-contain bg-zinc-900 rounded-xl border border-zinc-700">`
+                : `<div class="w-full h-14 flex items-center justify-center text-zinc-600 text-xs bg-zinc-900 rounded-xl border border-dashed border-zinc-700">Sin foto</div>`;
+        }
+        window.pickShipPhoto = function(which) {
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = 'image/*';
+            input.onchange = async () => {
+                const file = input.files && input.files[0];
+                if (!file) return;
+                try {
+                    shipModalPhotos[which] = await fileToResizedDataURL(file);
+                    renderShipPhotoPreview(which);
+                } catch (e) {}
+            };
+            input.click();
+        };
+        window.clearShipPhoto = function(which) {
+            shipModalPhotos[which] = '';
+            renderShipPhotoPreview(which);
+        };
+        window.confirmShipModal = function() {
+            const p = pedidosArchivo.find(x => x.id === shipModalTarget); if (!p) return;
+            p.fotoPaquete = shipModalPhotos.paquete || '';
+            p.fotoEtiqueta = shipModalPhotos.etiqueta || '';
+            p.tracking = document.getElementById('ship-tracking').value.trim();
+            p.enviado = document.getElementById('ship-enviado-check').checked;
+            savePedidosArchivo();
+            renderPedidosTab();
+            closeShipModal();
         };
         window.pedidoDragStart = function(e, i) { pedidoDragIndex = i; e.dataTransfer.effectAllowed = 'move'; };
         window.pedidoDragOver = function(e) { e.preventDefault(); };
