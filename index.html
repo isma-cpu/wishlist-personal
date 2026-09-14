@@ -338,7 +338,7 @@
                 <h3 class="font-black text-amber-400 uppercase text-sm tracking-wide">📑 Pedidos</h3>
                 <span id="pedidos-filter-indicator"></span>
             </div>
-            <div id="pedidos-list" class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4"></div>
+            <div id="pedidos-list" class="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-4"></div>
         </div>
 
         <!-- Aquí se mueve #pedido-order-section mientras se edita un pedido archivado (editArchivedPedido) -
@@ -5775,7 +5775,7 @@
                 const i = pedidosArchivo.indexOf(p);
                 const nItems = p.rows.length;
                 return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 flex flex-col gap-2.5 cursor-move">
-                    ${p.fotoPaquete ? `<img src="${p.fotoPaquete}" onclick="openShipModal('${p.id}', event)" title="Foto del pedido preparado - clic para ver/cambiar" class="w-full h-32 object-cover rounded-xl cursor-pointer">` : ''}
+                    ${p.fotoPaquete ? `<img src="${p.fotoPaquete}" onclick="openShipModal('${p.id}', event)" title="Foto del pedido preparado - clic para ver/cambiar" class="w-full aspect-video object-cover rounded-xl cursor-pointer">` : ''}
                     <div class="flex items-start gap-2">
                         <span class="text-zinc-500 text-lg select-none mt-0.5 shrink-0" title="Arrastra para reordenar">☰</span>
                         <div class="flex-1 min-w-0">
