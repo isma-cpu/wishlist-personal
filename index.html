@@ -354,6 +354,10 @@
                 <img id="p-modal-img" class="max-h-[70vh] max-w-[90vw] object-contain border border-sky-400 shadow-[0_0_30px_rgba(56,189,248,0.2)] rounded-2xl select-none transition-transform duration-100" style="transform-origin: center center;" draggable="false">
                 <button id="p-modal-zoom-btn" onclick="pToggleZoom(event)" title="Zoom" class="absolute top-2 left-2 z-30 w-9 h-9 rounded-full bg-black/70 border border-sky-400/70 text-sky-400 flex items-center justify-center hover:bg-sky-400 hover:text-black transition-all">🔍</button>
             </div>
+            <div id="p-modal-name-row" class="hidden items-center gap-2 text-sm -mt-4" onclick="event.stopPropagation()">
+                <span id="p-modal-name-text" class="text-amber-300 font-bold uppercase"></span>
+                <button onclick="openInput('p-item-name', pModalContext.colId, pModalContext.index, event)" class="text-amber-400 hover:text-amber-300 text-xs font-bold uppercase cursor-pointer" title="Poner/editar nombre (ej: torneo del parche)">🏷️ Nombre</button>
+            </div>
             <div class="flex flex-wrap justify-center gap-4" onclick="event.stopPropagation()">
                 <button onclick="openSendModal('p2w', event)" class="px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-[#39FF14] text-[#39FF14] hover:bg-[#39FF14] hover:text-black">⭐ Enviar a Wishlist</button>
                 <button id="p-modal-addrow-btn" onclick="addLibraryPhotoToOrder(event)" class="px-4 sm:px-5 py-2.5 rounded-2xl text-xs sm:text-sm font-bold uppercase tracking-wider cursor-pointer transition-all bg-black/80 border border-amber-400 text-amber-400 hover:bg-amber-400 hover:text-black">🛒 Añadir al pedido</button>
@@ -1332,6 +1336,9 @@
             } else if (action === 'patch-name') {
                 titleEl.innerHTML = "🏷️ NOMBRE DEL PARCHE"; inputEl.placeholder = "Ej: Champions League 2015 (opcional)";
                 inputEl.value = db[targetId][extraId].patchName || "";
+            } else if (action === 'p-item-name') {
+                titleEl.innerHTML = "🏷️ NOMBRE DEL PARCHE"; inputEl.placeholder = "Ej: Champions League 2015 (para identificar el torneo)";
+                inputEl.value = (pDb[targetId] && pDb[targetId][extraId] && pDb[targetId][extraId].name) || "";
             } else if (action === 'add-group') {
                 titleEl.innerHTML = "➕ NUEVO BLOQUE"; inputEl.placeholder = "Nombre del bloque...";
             } else if (action === 'edit-group') {
@@ -1460,6 +1467,15 @@
                 db[targetId][extraId].patch = val; saveDB();
             } else if (action === 'patch-name') {
                 db[targetId][extraId].patchName = val; saveDB();
+            } else if (action === 'p-item-name') {
+                if (pDb[targetId] && pDb[targetId][extraId]) {
+                    pDb[targetId][extraId].name = val;
+                    pSaveDB();
+                    if (pModalContext.colId === targetId && pModalContext.index === extraId) {
+                        const t = document.getElementById('p-modal-name-text');
+                        if (t) t.textContent = val;
+                    }
+                }
             } else if (action === 'add-group') {
                 if (val) { structure.push({ groupTitle: val, groupId: 'group-' + Date.now(), collections: [] }); saveStructure(); init(); }
             } else if (action === 'edit-group') {
@@ -3682,8 +3698,13 @@
                     ondragover="pCardDragOver(event)" ondragleave="pCardDragLeave(event)" ondrop="pCardDrop(event, '${colId}', ${index})"
                     onclick="pOpenModal('${colId}', ${index})">
                 <img src="${item.src}" draggable="false" class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity pointer-events-none">
-                ${isPatch ? `<button onclick="event.stopPropagation(); sendPatchToOrder('${colId}', ${index})" title="Enviar a un producto del pedido" class="absolute bottom-0 inset-x-0 z-10 py-1 bg-amber-500/90 text-black text-[9px] font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity">📎 Enviar a pedido</button>` : ''}
-                <button onclick="event.stopPropagation(); pDeleteImage('${colId}', ${index})" title="Eliminar" class="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-red-900/80 border border-red-500/50 text-red-300 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                ${isPatch ? `
+                <div class="absolute inset-0 z-10 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <button onclick="event.stopPropagation(); sendPatchToOrder('${colId}', ${index})" title="Enviar a un producto del pedido" class="px-2.5 py-1.5 rounded-full bg-amber-500/90 text-black text-[9px] font-bold uppercase cursor-pointer">📎 Enviar a pedido</button>
+                </div>
+                <button onclick="event.stopPropagation(); openInput('p-item-name', '${colId}', ${index}, event)" title="Poner/editar nombre (ej: torneo del parche)" class="absolute top-1 left-1 z-20 w-6 h-6 rounded-full bg-black/70 border border-amber-400/60 text-amber-400 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">🏷️</button>` : ''}
+                <button onclick="event.stopPropagation(); pDeleteImage('${colId}', ${index})" title="Eliminar" class="absolute top-1 right-1 z-20 w-6 h-6 rounded-full bg-red-900/80 border border-red-500/50 text-red-300 text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
+                ${item.name ? `<div class="absolute bottom-0 inset-x-0 z-10 py-1 px-1.5 bg-black/80 text-amber-300 text-[9px] font-bold uppercase text-center truncate pointer-events-none">${escapeHtml(item.name)}</div>` : ''}
             </div>`;
         }
 
@@ -3832,6 +3853,10 @@
             const isPatch = pIsPatchCollection(colId);
             document.getElementById('p-modal-addrow-btn').classList.toggle('hidden', isPatch);
             document.getElementById('p-modal-sendpatch-btn').classList.toggle('hidden', !isPatch);
+            const nameRow = document.getElementById('p-modal-name-row');
+            nameRow.classList.toggle('hidden', !isPatch);
+            nameRow.classList.toggle('flex', isPatch);
+            document.getElementById('p-modal-name-text').textContent = item.name || '';
             document.getElementById('p-modal').classList.remove('hidden');
             document.body.style.overflow = 'hidden';
         };
@@ -5169,6 +5194,17 @@
             const h = Math.max(28, Math.round(rowResizing.startHeight + (e.clientY - rowResizing.startY)));
             const tr = document.getElementById('tr-' + rowResizing.rowId);
             if (tr) tr.style.height = h + 'px';
+            // La foto/parche de la fila tiene una altura FIJA en px (no "h-full" como los demás campos de texto,
+            // que ya se centran solos al crecer la celda) - sin esto, se quedaba con el tamaño de antes de
+            // arrastrar hasta el siguiente repintado completo, en vez de reajustarse en vivo con la fila.
+            const row = activeSheet().rows.find(r => r.id === rowResizing.rowId);
+            if (row) {
+                row.height = h;
+                const imgCell = document.getElementById('cell-img-' + row.id);
+                if (imgCell) imgCell.innerHTML = renderImgCellInner(row, 'img');
+                const patchCell = document.getElementById('cell-patch-' + row.id);
+                if (patchCell) patchCell.innerHTML = renderImgCellInner(row, 'patch');
+            }
         }
         function onRowResizeUp(e) {
             if (!rowResizing) return;
@@ -5178,6 +5214,9 @@
             rowResizing = null;
             document.removeEventListener('mousemove', onRowResizeMove);
             document.removeEventListener('mouseup', onRowResizeUp);
+            // Repintado completo al soltar: recalcula también el hueco del "Precio Total" (centrado a la altura
+            // de la 1ª fila) y cualquier otra cosa que dependa de la altura, no solo la foto/parche.
+            renderOrderTable();
         }
 
         window.clearOrderRowImage = function(rowId, field) {
@@ -5240,7 +5279,10 @@
                     html += `<div><h4 class="text-xs uppercase tracking-widest text-zinc-500 mb-2">${escapeHtml(gr.name)}</h4><div class="grid gap-2" style="grid-template-columns:repeat(auto-fill,minmax(4.5rem,1fr))">`;
                     gr.items.forEach(it => {
                         pickerImages.push(it.src);
-                        html += `<img src="${it.src}" onclick="pickLibraryImage(${pickerImages.length - 1})" class="aspect-[3/4] w-full object-cover rounded-xl border border-zinc-700 hover:border-sky-400 cursor-pointer">`;
+                        html += `<div class="relative">
+                            <img src="${it.src}" onclick="pickLibraryImage(${pickerImages.length - 1})" class="aspect-[3/4] w-full object-cover rounded-xl border border-zinc-700 hover:border-sky-400 cursor-pointer">
+                            ${it.name ? `<div class="absolute bottom-0 inset-x-0 py-0.5 px-1 bg-black/80 text-amber-300 text-[8px] font-bold uppercase text-center truncate pointer-events-none rounded-b-xl">${escapeHtml(it.name)}</div>` : ''}
+                        </div>`;
                     });
                     html += `</div></div>`;
                 });
