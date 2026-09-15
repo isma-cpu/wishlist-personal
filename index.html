@@ -1152,6 +1152,53 @@
                 return;
             }
 
+            // Si estamos en "Crear Pedido" con una celda de foto/parche seleccionada (clic previo, ver
+            // selectedImgCell), pegar ahí directamente - tanto un archivo de imagen del portapapeles como una
+            // imagen copiada desde OTRA página web (mismo mecanismo que ya usa arrastrar-y-soltar en estas
+            // celdas: extractImageUrls/urlToImageFile, reutilizado tal cual porque ClipboardData tiene la misma
+            // interfaz getData() que DataTransfer). Nunca cae en la lógica de pegado de la Wishlist de más abajo
+            // (esa usa currentView, que es de la OTRA pestaña y aquí daría un resultado incorrecto).
+            const pedidoViewVisible = !document.getElementById('view-pedido').classList.contains('hidden');
+            if (pedidoViewVisible) {
+                if (selectedImgCell && (selectedImgCell.field === 'img' || selectedImgCell.field === 'patch')) {
+                    const dt = e.clipboardData || e.originalEvent.clipboardData;
+                    const sheet = activeSheet();
+                    const row = sheet && sheet.rows.find(r => r.id === selectedImgCell.rowId);
+                    const field = selectedImgCell.field;
+                    if (row) {
+                        const cellEl = document.getElementById('cell-' + field + '-' + row.id);
+                        const cbItems = dt.items;
+                        const files = [];
+                        for (let k in cbItems) {
+                            if (cbItems[k].kind === 'file' && cbItems[k].type.startsWith('image/')) files.push(cbItems[k].getAsFile());
+                        }
+                        if (files.length) {
+                            e.preventDefault();
+                            fileToResizedDataURL(files[0]).then(src => {
+                                row[field] = src; savePOrders();
+                                if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+                            }).catch(() => {});
+                        } else {
+                            const urls = extractImageUrls(dt);
+                            if (urls.length) {
+                                e.preventDefault();
+                                (async () => {
+                                    const f = await urlToImageFile(urls[0]);
+                                    if (f) {
+                                        const src = await fileToResizedDataURL(f);
+                                        row[field] = src; savePOrders();
+                                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+                                    } else {
+                                        alert('No se pudo cargar la imagen pegada (el sitio de origen la bloquea). Prueba a arrastrarla desde el ordenador, o descárgala y pégala de nuevo.');
+                                    }
+                                })();
+                            }
+                        }
+                    }
+                }
+                return;
+            }
+
             if (currentView === 'home') {
                 alert("Debes entrar a una colección (ej: Shorts, Camisetas...) para poder pegar una imagen.");
                 return;
