@@ -273,6 +273,7 @@
                         <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
                         <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
                         <button onclick="openTransferRowsModal()" title="Traspasar filas a otra hoja (sin precios)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">🔁 Traspasar</button>
+                        <button onclick="openPreciosClienteModal(event)" title="Tabla de precios por cliente" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-white text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors cursor-pointer text-lg">💰</button>
                         <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
                         <button id="save-order-btn" onclick="openSaveOrderModal(event)" title="Guardar pedido" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-emerald-600 rounded-full hover:bg-emerald-500 transition-colors cursor-pointer text-lg">💾</button>
                     </div>
@@ -454,6 +455,22 @@
                 <select id="transfer-rows-target" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-amber-400"></select>
             </div>
             <button onclick="confirmTransferRows()" class="w-full px-4 py-2.5 text-sm font-bold bg-amber-400 text-black rounded-full hover:bg-white transition-colors cursor-pointer">✅ Traspasar todas las filas</button>
+        </div>
+    </div>
+
+    <!-- Tabla de precios por cliente: consulta rápida mientras se monta un pedido, independiente de la hoja en sí -->
+    <div id="precios-cliente-modal" class="fixed inset-0 bg-black/95 hidden z-[220] items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-emerald-500 p-6 rounded-2xl shadow-[0_0_30px_rgba(16,185,129,0.3)] w-full max-w-md max-h-[85vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-black tracking-wider text-emerald-400 uppercase">💰 Tabla de precios</h3>
+                <button onclick="closePreciosClienteModal()" class="text-zinc-500 hover:text-white text-3xl leading-none cursor-pointer">&times;</button>
+            </div>
+            <div class="mb-4">
+                <label class="text-[10px] text-zinc-500 uppercase block mb-1">Cliente</label>
+                <select id="precios-cliente-select" onchange="loadPreciosClienteForm()" class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-full focus:outline-none focus:border-emerald-400"></select>
+            </div>
+            <div id="precios-cliente-empty" class="hidden text-xs text-zinc-500">Todavía no tienes ningún cliente - añade uno primero en la pestaña "📑 Pedidos".</div>
+            <div id="precios-cliente-fields" class="space-y-2"></div>
         </div>
     </div>
 
@@ -1011,7 +1028,7 @@
                 exportedAt: new Date().toISOString(),
                 wishlist: { db, structure },
                 biblioteca: { pDb, pStructure },
-                pedidos: { pOrders, pedidosArchivo, pedidosClientes, pedidosProveedores, savedAddresses }
+                pedidos: { pOrders, pedidosArchivo, pedidosClientes, pedidosProveedores, pedidosPreciosClientes, savedAddresses }
             };
         }
         // Si el archivo es una copia completa (tiene __backup) restaura las 3 partes; si no, es una copia antigua (solo `db`) que trata el propio caller.
@@ -1032,9 +1049,11 @@
                 pedidosArchivo = parsed.pedidos.pedidosArchivo || [];
                 if (parsed.pedidos.pedidosClientes) pedidosClientes = parsed.pedidos.pedidosClientes;
                 if (parsed.pedidos.pedidosProveedores) pedidosProveedores = parsed.pedidos.pedidosProveedores;
+                if (parsed.pedidos.pedidosPreciosClientes) pedidosPreciosClientes = parsed.pedidos.pedidosPreciosClientes;
                 if (parsed.pedidos.savedAddresses) savedAddresses = parsed.pedidos.savedAddresses;
                 saveClientes();
                 saveProveedores();
+                savePreciosClientes();
                 saveSavedAddresses();
                 await savePOrders();
                 await savePedidosArchivo();
@@ -1561,6 +1580,12 @@
                         else pedidosClientes[idx] = newName;
                         pedidosArchivo.forEach(p => { if (p.cliente === targetId) p.cliente = newName; });
                         if (pedidosFilterCliente === targetId) pedidosFilterCliente = newName;
+                        // Su tabla de precios (si tenía una) viaja con el nuevo nombre, en vez de quedarse huérfana.
+                        if (pedidosPreciosClientes[targetId] && !pedidosPreciosClientes[newName]) {
+                            pedidosPreciosClientes[newName] = pedidosPreciosClientes[targetId];
+                            delete pedidosPreciosClientes[targetId];
+                            savePreciosClientes();
+                        }
                         saveClientes(); savePedidosArchivo(); renderClientesChips(); renderPedidosTab();
                     }
                 }
@@ -5688,6 +5713,10 @@
                 const pr = localStorage.getItem('pedidos_proveedores_v1');
                 if (pr) { const arr = JSON.parse(pr); if (Array.isArray(arr)) pedidosProveedores = arr; }
             } catch (e) {}
+            try {
+                const pc = localStorage.getItem('pedidos_precios_clientes_v1');
+                if (pc) { const obj = JSON.parse(pc); if (obj && typeof obj === 'object') pedidosPreciosClientes = obj; }
+            } catch (e) {}
             renderClientesChips();
             renderProveedoresChips();
             renderPedidosTab();
@@ -5695,6 +5724,80 @@
         async function savePedidosArchivo() { try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {} }
         function saveClientes() { try { localStorage.setItem('pedidos_clientes_v1', JSON.stringify(pedidosClientes)); } catch (e) {} }
         function saveProveedores() { try { localStorage.setItem('pedidos_proveedores_v1', JSON.stringify(pedidosProveedores)); } catch (e) {} }
+
+        // Tabla de precios por cliente: consulta/edición rápida desde "Crear Pedido" (botón 💰), independiente
+        // de la hoja en sí - solo un chuletario de referencia, no afecta a ninguna fila/precio de la plantilla.
+        let pedidosPreciosClientes = {}; // { "NOMBRE CLIENTE": { fan, player, ... } }
+        const PRECIOS_CAMPOS = [
+            { key: 'fan', label: 'FAN' },
+            { key: 'player', label: 'PLAYER' },
+            { key: 'shortsFan', label: 'SHORTS FAN' },
+            { key: 'shortsPlayer', label: 'SHORTS PLAYER' },
+            { key: 'nba', label: 'NBA (DORSALES INCLUIDOS)' },
+            { key: 'conjCortosSinMangas', label: 'CONJUNTOS CORTOS / SIN MANGAS' },
+            { key: 'conjCortosNinos', label: 'CONJUNTOS CORTOS (NIÑOS)' },
+            { key: 'conjLargos', label: 'CONJUNTOS LARGOS' },
+            { key: 'cortavientos', label: 'CORTAVIENTOS / CHAQUETAS' },
+            { key: 'abrigos', label: 'ABRIGOS' },
+            { key: 'parche', label: 'PARCHE' },
+            { key: 'personalizacion', label: 'PERSONALIZACIÓN' },
+        ];
+        function savePreciosClientes() { try { localStorage.setItem('pedidos_precios_clientes_v1', JSON.stringify(pedidosPreciosClientes)); } catch (e) {} }
+        window.openPreciosClienteModal = function(event) {
+            if (event) event.stopPropagation();
+            const sel = document.getElementById('precios-cliente-select');
+            const empty = document.getElementById('precios-cliente-empty');
+            const fields = document.getElementById('precios-cliente-fields');
+            if (!pedidosClientes.length) {
+                sel.innerHTML = '';
+                sel.classList.add('hidden');
+                empty.classList.remove('hidden');
+                fields.classList.add('hidden');
+            } else {
+                sel.classList.remove('hidden');
+                empty.classList.add('hidden');
+                fields.classList.remove('hidden');
+                sel.innerHTML = pedidosClientes.map(c => `<option value="${escAttr(c)}">${escapeHtml(c)}</option>`).join('');
+                renderPreciosClienteFields();
+                loadPreciosClienteForm();
+            }
+            document.getElementById('precios-cliente-modal').classList.remove('hidden');
+            document.getElementById('precios-cliente-modal').classList.add('flex');
+        };
+        window.closePreciosClienteModal = function() {
+            document.getElementById('precios-cliente-modal').classList.add('hidden');
+            document.getElementById('precios-cliente-modal').classList.remove('flex');
+        };
+        function renderPreciosClienteFields() {
+            const el = document.getElementById('precios-cliente-fields');
+            el.innerHTML = PRECIOS_CAMPOS.map(f => `
+                <div class="flex items-center justify-between gap-2">
+                    <label class="text-xs text-zinc-300 uppercase flex-1">${f.label}</label>
+                    <input type="text" data-precio-key="${f.key}" oninput="savePrecioClienteField('${f.key}', this.value)" placeholder="—" class="w-24 text-center bg-zinc-900 text-white text-sm font-bold rounded-full px-2 py-1.5 border border-emerald-400/30 focus:outline-none focus:border-emerald-400">
+                </div>`).join('') + `
+                <div class="border-t border-zinc-800 my-3"></div>
+                <div class="flex items-center justify-between gap-2">
+                    <label class="text-xs text-zinc-300 uppercase flex-1">Incluye 1 camiseta gratis cada</label>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <input type="text" data-precio-key="gratisCada" oninput="savePrecioClienteField('gratisCada', this.value)" placeholder="X" class="w-14 text-center bg-zinc-900 text-white text-sm font-bold rounded-full px-2 py-1.5 border border-emerald-400/30 focus:outline-none focus:border-emerald-400">
+                        <span class="text-[10px] text-zinc-500 uppercase whitespace-nowrap">pedidos</span>
+                    </div>
+                </div>`;
+        }
+        window.loadPreciosClienteForm = function() {
+            const cliente = document.getElementById('precios-cliente-select').value;
+            const data = pedidosPreciosClientes[cliente] || {};
+            document.querySelectorAll('#precios-cliente-fields [data-precio-key]').forEach(inp => {
+                inp.value = data[inp.dataset.precioKey] || '';
+            });
+        };
+        window.savePrecioClienteField = function(key, value) {
+            const cliente = document.getElementById('precios-cliente-select').value;
+            if (!cliente) return;
+            if (!pedidosPreciosClientes[cliente]) pedidosPreciosClientes[cliente] = {};
+            pedidosPreciosClientes[cliente][key] = value;
+            savePreciosClientes();
+        };
 
         // Cada descarga de PDF guarda una foto fija (snapshot) de la hoja en ese momento - no afecta a la plantilla editable.
         function archiveOrderSheet(sheet, cliente, paid, proveedor) {
