@@ -133,7 +133,7 @@
     <div id="delete-confirm-modal" class="fixed inset-0 bg-black/90 hidden z-[250] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
         <div class="bg-[#0a0a0a] border border-red-500 p-6 rounded-2xl shadow-[0_0_30px_rgba(239,68,68,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
             <h3 class="text-xl font-black tracking-wider text-red-500 mb-3 uppercase flex flex-col items-center gap-2">
-                <span class="text-3xl">⚠️</span> Confirmar Eliminación
+                <span class="text-3xl">⚠️</span> <span id="delete-confirm-title">Confirmar Eliminación</span>
             </h3>
             <p id="delete-confirm-text" class="text-zinc-400 text-sm mb-6"></p>
             <div class="flex justify-center gap-4">
@@ -154,6 +154,22 @@
             <div class="flex justify-center gap-4">
                 <button id="confirm-notice-cancel-btn" onclick="closeConfirmNoticeModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button id="confirm-notice-btn" class="px-5 py-2 text-xs font-bold bg-amber-400 text-black rounded-xl hover:bg-amber-300 transition-colors shadow-[0_0_15px_rgba(251,191,36,0.4)] cursor-pointer">CONTINUAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Aviso de 3 opciones tras "Enviar a Pedido": mantener en ambos sitios, marcar como conseguido (se mueve a
+         Conseguidas) o cancelar del todo (deshace también la fila que se acababa de añadir al pedido). -->
+    <div id="send-followup-modal" class="fixed inset-0 bg-black/90 hidden z-[250] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
+            <h3 class="text-xl font-black tracking-wider text-amber-400 mb-3 uppercase flex flex-col items-center gap-2">
+                <span class="text-3xl">ℹ️</span> Aviso
+            </h3>
+            <p id="send-followup-text" class="text-zinc-400 text-sm mb-6"></p>
+            <div class="flex flex-col gap-2">
+                <button onclick="sendFollowupKeepBoth()" class="w-full px-4 py-2.5 text-xs font-bold bg-amber-400 text-black rounded-xl hover:bg-amber-300 transition-colors shadow-[0_0_15px_rgba(251,191,36,0.4)] cursor-pointer">🟡 MANTENER EN AMBOS</button>
+                <button onclick="sendFollowupMarkObtained()" class="w-full px-4 py-2.5 text-xs font-bold bg-emerald-500 text-black rounded-xl hover:bg-emerald-400 transition-colors cursor-pointer">✅ MARCAR COMO CONSEGUIDO</button>
+                <button onclick="sendFollowupCancel()" class="w-full px-3 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">✕ CANCELAR</button>
             </div>
         </div>
     </div>
@@ -574,6 +590,18 @@
             <div class="flex justify-end gap-3 mt-5">
                 <button onclick="closeShipModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
                 <button onclick="confirmShipModal()" class="px-4 py-2 text-xs font-bold uppercase bg-sky-500 text-black rounded-full hover:bg-sky-400 transition-colors cursor-pointer">GUARDAR</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Nota libre de un pedido archivado - solo texto, para recordar cualquier cosa sobre ese pedido. -->
+    <div id="pedido-nota-modal" class="fixed inset-0 bg-black/95 hidden z-[220] items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[#0a0a0a] border border-amber-400 p-6 rounded-2xl shadow-[0_0_30px_rgba(251,191,36,0.3)] w-full max-w-sm">
+            <h3 class="text-lg font-black tracking-wider text-amber-400 mb-4 uppercase">📝 Nota del pedido</h3>
+            <textarea id="pedido-nota-field" rows="6" placeholder="Escribe aquí lo que quieras recordar de este pedido..." class="w-full bg-black border border-zinc-700 text-white px-3 py-2 text-sm rounded-2xl focus:outline-none focus:border-amber-400 resize-none"></textarea>
+            <div class="flex justify-end gap-3 mt-4">
+                <button onclick="closePedidoNotaModal()" class="px-4 py-2 text-xs text-zinc-400 hover:text-white transition-colors cursor-pointer">CANCELAR</button>
+                <button onclick="savePedidoNota()" class="px-4 py-2 text-xs font-bold uppercase bg-amber-400 text-black rounded-full hover:bg-white transition-colors cursor-pointer">GUARDAR</button>
             </div>
         </div>
     </div>
@@ -1129,7 +1157,7 @@
                         await saveDB();
                     }
                     location.reload(); // el propio reload ya es la señal de éxito, no depende de un alert()
-                });
+                }, null, { title: 'Confirmar Importación', confirmLabel: 'IMPORTAR' });
             };
             reader.readAsText(file);
         }
@@ -1508,6 +1536,10 @@
                 inputEl.value = targetId || "";
             } else if (action === 'save-address') {
                 titleEl.innerHTML = "💾 GUARDAR DIRECCIÓN COMO..."; inputEl.placeholder = "Ej: PERSONAL, TITO, KIKE...";
+            } else if (action === 'pedido-store-link') {
+                titleEl.innerHTML = "🔗 LINK DEL PEDIDO EN TU TIENDA"; inputEl.placeholder = "https://...";
+                const p = pedidosArchivo.find(x => x.id === targetId);
+                inputEl.value = (p && p.storeOrderLink) || "";
             }
 
             modal.classList.remove('hidden');
@@ -1759,6 +1791,9 @@
                     renderAddrSavedSelect();
                     document.getElementById('addr-saved-select').value = entry.id;
                 }
+            } else if (action === 'pedido-store-link') {
+                const p = pedidosArchivo.find(x => x.id === targetId);
+                if (p) { p.storeOrderLink = val; savePedidosArchivo(); renderPedidosTab(); }
             }
             closeCustomInput();
         };
@@ -1857,9 +1892,16 @@
         // puede quedar bloqueado por el propio navegador tras varios avisos seguidos) y ejecuta el callback si acepta.
         // onCancel (opcional) se dispara solo si el usuario cierra sin confirmar (botón Cancelar/✕) - útil cuando
         // hay que deshacer un cambio temporal hecho antes de mostrar el aviso (ver printArchivedPedido).
-        window.openConfirmDelete = function(message, onConfirm, onCancel) {
+        // opts opcional: { title, confirmLabel } para las pocas acciones que SÍ reemplazan/pierden datos de
+        // verdad (por eso siguen usando este modal rojo, no el ámbar de openConfirmNotice) pero no son
+        // literalmente "eliminar" (p.ej. importar una copia de seguridad) - sin opts, título y botón son los
+        // de siempre ("Confirmar Eliminación"/"ELIMINAR"), para no dejar un título de una llamada anterior puesto.
+        window.openConfirmDelete = function(message, onConfirm, onCancel, opts) {
+            opts = opts || {};
             deleteContext = { mode: 'callback', callback: onConfirm, onCancel: onCancel || null };
             document.getElementById('delete-confirm-text').innerText = message;
+            document.getElementById('delete-confirm-title').textContent = opts.title || 'Confirmar Eliminación';
+            document.getElementById('delete-confirm-btn').textContent = opts.confirmLabel || 'ELIMINAR';
             document.getElementById('delete-confirm-modal').classList.remove('hidden');
         };
 
@@ -1887,6 +1929,30 @@
             if (typeof noticeContext.callback === 'function') noticeContext.callback();
             noticeContext.onCancel = null; // ya se confirmó - que closeConfirmNoticeModal() no dispare también el aviso de cancelar
             closeConfirmNoticeModal();
+        };
+
+        // Aviso de 3 opciones tras "Enviar a Pedido" (ver #send-followup-modal): mantener en ambos sitios,
+        // marcar como conseguido (se mueve a Conseguidas) o cancelar del todo. `undo` deshace lo que haga falta
+        // si el usuario cancela (p.ej. quitar la fila que se acababa de añadir al pedido).
+        let sendFollowupContext = { wishlistColId: null, wishlistIndex: null, undo: null };
+        window.openSendFollowupModal = function(message, wishlistColId, wishlistIndex, undo) {
+            sendFollowupContext = { wishlistColId, wishlistIndex, undo: undo || null };
+            document.getElementById('send-followup-text').innerText = message;
+            document.getElementById('send-followup-modal').classList.remove('hidden');
+        };
+        window.closeSendFollowupModal = function() {
+            document.getElementById('send-followup-modal').classList.add('hidden');
+            sendFollowupContext = { wishlistColId: null, wishlistIndex: null, undo: null };
+        };
+        window.sendFollowupKeepBoth = function() { closeSendFollowupModal(); };
+        window.sendFollowupMarkObtained = function() {
+            moveWishlistItemToConseguidas(sendFollowupContext.wishlistColId, sendFollowupContext.wishlistIndex);
+            closeModal();
+            closeSendFollowupModal();
+        };
+        window.sendFollowupCancel = function() {
+            if (typeof sendFollowupContext.undo === 'function') sendFollowupContext.undo();
+            closeSendFollowupModal();
         };
 
         // --- SELECCIÓN MÚLTIPLE (mini casilla en cada tarjeta, siempre visible) ---
@@ -2224,16 +2290,22 @@
         };
 
         // --- MARCAR COMO CONSEGUIDA (mover a la carpeta Conseguidas) ---
-        window.markAsObtained = function(event) {
-            if (event) event.stopPropagation();
-            const { colId, index } = modalContext;
+        // Reutilizable fuera del visor grande (p.ej. desde el aviso de "Enviar a Pedido") - opera directamente
+        // sobre un colId/index dados, sin depender de que modalContext apunte a ese producto en ese momento.
+        function moveWishlistItemToConseguidas(colId, index) {
             if (colId == null || index == null || !db[colId] || !db[colId][index]) return;
-            if (colId === CONSEGUIDAS_ID) { closeModal(); return; }
+            if (colId === CONSEGUIDAS_ID) return;
             const item = db[colId].splice(index, 1)[0];
+            if (!item) return;
             if (!db[CONSEGUIDAS_ID]) db[CONSEGUIDAS_ID] = [];
             item.timestamp = Date.now();
             db[CONSEGUIDAS_ID].unshift(item);
             saveDB();
+        }
+        window.markAsObtained = function(event) {
+            if (event) event.stopPropagation();
+            const { colId, index } = modalContext;
+            moveWishlistItemToConseguidas(colId, index);
             closeModal();
         };
 
@@ -2325,6 +2397,22 @@
             renderModalRelated();
         };
 
+        // Elegir cuál de las fotos del producto es la portada (la que se ve en la tarjeta de la colección) -
+        // simplemente intercambia item.src con la imagen relacionada elegida, la vieja portada pasa a ser una más.
+        window.setAsCoverImage = function(i) {
+            const item = getModalItem();
+            if (!item || !Array.isArray(item.related) || !item.related[i]) return;
+            const newMain = item.related[i];
+            item.related[i] = item.src;
+            item.src = newMain;
+            modalContext.mainSrc = newMain;
+            modalContext.src = newMain;
+            saveDB();
+            document.getElementById('modal-img').src = newMain;
+            resetZoom();
+            renderModalRelated();
+        };
+
         window.removeRelatedImage = function(i) {
             const item = getModalItem();
             if (!item || !Array.isArray(item.related)) return;
@@ -2359,6 +2447,8 @@
                      ondragstart="relDragStart(event, ${i})" ondragover="relDragOver(event)" ondrop="relDrop(event, ${i})" ondragend="relDragEnd(event)"
                      onclick="event.stopPropagation(); openRelatedImage(${i})">
                     <img src="${src}" draggable="false" class="w-full h-full object-cover pointer-events-none">
+                    <button onclick="event.stopPropagation(); setAsCoverImage(${i})" title="Poner como portada"
+                            class="absolute top-1 left-1 w-5 h-5 rounded-full bg-black/70 border border-[#39FF14]/70 text-[#39FF14] text-[10px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">🖼️</button>
                     <button onclick="event.stopPropagation(); removeRelatedImage(${i})" title="Quitar"
                             class="absolute top-1 right-1 w-5 h-5 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">✕</button>
                 </div>`).join('');
@@ -4317,17 +4407,21 @@
                 patch: sendToPedidoCtx.patchSrc || ''
             };
             const src = sendToPedidoCtx.src;
-            addOrderRowWithImage(src, sheetId, extra);
+            const newRow = addOrderRowWithImage(src, sheetId, extra);
             closeSendToPedidoDetailsModal();
-            openConfirmNotice('Producto añadido al pedido ✔\n\n¿Quieres eliminarlo también de la Wishlist?', () => {
-                const { wishlistColId, wishlistIndex } = sendToPedidoCtx;
-                const arr = wishlistColId != null ? db[wishlistColId] : null;
-                if (Array.isArray(arr) && wishlistIndex != null && arr[wishlistIndex] && arr[wishlistIndex].src === src) {
-                    arr.splice(wishlistIndex, 1);
-                    saveDB();
+            const { wishlistColId, wishlistIndex } = sendToPedidoCtx;
+            openSendFollowupModal('Producto añadido al pedido ✔\n\n¿Qué quieres hacer con la Wishlist?', wishlistColId, wishlistIndex, () => {
+                // "Cancelar" deshace TODA la operación, incluida la fila que se acababa de añadir al pedido -
+                // la Wishlist no se toca en ningún caso al cancelar.
+                if (newRow) {
+                    const sheet = pOrders.sheets.find(s => s.id === sheetId);
+                    if (sheet) {
+                        sheet.rows = sheet.rows.filter(r => r.id !== newRow.id);
+                        if (!sheet.rows.length) sheet.rows.push(newOrderRow());
+                        savePOrders(); renderOrderTable();
+                    }
                 }
-                closeModal();
-            }, () => {}, { confirmLabel: 'MOVERLO (BORRAR DE WISHLIST)', cancelLabel: 'MANTENER EN AMBOS' });
+            });
         };
 
         window.addLibraryPhotoToOrder = function(event) {
@@ -4686,6 +4780,7 @@
             // un producto desde la Wishlist (la pestaña de Crear Pedido está oculta en ese momento) la tabla se
             // quedaba con el contenido antiguo hasta recargar la página, aunque el producto sí se había guardado.
             renderOrderSheetsBar(); renderOrderTable();
+            return row;
         }
         window.deleteOrderRow = function(rowId) {
             openConfirmDelete('¿Eliminar esta fila del pedido?', () => {
@@ -4920,7 +5015,17 @@
         function saveVersionOptions() { try { localStorage.setItem('pedido_version_opciones_v1', JSON.stringify(pedidoVersionOptions)); } catch (e) {} }
         function renderVersionCellInner(row) {
             const val = row.version || '';
-            return `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown(versionRowTarget('${row.id}'), event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span data-empty-hint class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
+            const btn = `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown(versionRowTarget('${row.id}'), event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span data-empty-hint class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
+            // Arrastrar-para-reordenar, eliminar fila y cambiar la altura viven aquí, en la 1ª columna (arriba a
+            // la izquierda de la celda) - antes tenían su propia columna al final de la tabla, que además salía
+            // vacía en el PDF descargado (aunque print:hidden la ocultara, seguía "de más" en el layout/ancho).
+            const controls = `
+                <div class="absolute top-0 left-0 z-10 flex items-center gap-0.5 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity print:hidden">
+                    <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-400 hover:text-gray-600 text-xs cursor-grab select-none bg-white/90 rounded" title="Arrastra para reordenar la fila">⠿</span>
+                    <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn del-x-btn-sm" title="Eliminar fila">✕</button>
+                </div>
+                <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer print:hidden" title="Arrastra para cambiar la altura de la fila"></span>`;
+            return btn + controls;
         }
         function refreshVersionCellDOM(rowId) {
             const sheet = activeSheet();
@@ -5050,6 +5155,7 @@
                     <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${field}')" title="Quitar foto" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
                         <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                        <button onclick="event.stopPropagation(); rotateOrderRowImage('${row.id}','${field}')" title="Girar 90°" class="w-6 h-6 bg-white/90 rounded-full text-[13px] flex items-center justify-center">↻</button>
                     </div>
                 </div>`;
             }
@@ -5116,7 +5222,7 @@
                 if (c.isCustom) return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">
                         <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full h-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0">
                     </td>`;
-                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${renderVersionCellInner(row)}</td>`;
+                if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-b border-b-black p-1 align-middle text-center relative">${renderVersionCellInner(row)}</td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border-b border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border-b border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
                 if (c.key === 'nameNumber') return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">${nameNumberCellCombined}</td>`;
@@ -5140,18 +5246,12 @@
             }).join('');
 
             const heightStyle = ` style="height:${rowH}px"`;
-            return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}<td class="border-b border-black p-1 text-center align-middle relative print:hidden">
-                    <span draggable="true" ondragstart="rowDragStart(event, '${row.id}')" class="text-gray-300 hover:text-gray-500 text-sm cursor-grab select-none" title="Arrastra para reordenar la fila">⠿</span>
-                    <button onclick="deleteOrderRow('${row.id}')" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar fila">✕</button>
-                    <span onmousedown="startRowResize(event, '${row.id}')" class="row-resizer" title="Arrastra para cambiar la altura de la fila"></span>
-                </td></tr>`;
+            return `<tr id="tr-${row.id}" class="group" ondragover="rowDragOverTr(event)" ondrop="rowDropTr(event, '${row.id}')"${heightStyle}>${tds}</tr>`;
         }
 
         function renderColgroupHTML(sheet) {
             const widths = pOrders.colWidths || {};
-            let html = getOrderedColumns(sheet).map(c => `<col id="col-${c.key}" style="width:${widths[c.key] || c.w || 90}px">`).join('');
-            html += `<col style="width:32px">`;
-            return html;
+            return getOrderedColumns(sheet).map(c => `<col id="col-${c.key}" style="width:${widths[c.key] || c.w || 90}px">`).join('');
         }
 
         function renderOrderTable() {
@@ -5183,7 +5283,7 @@
                         <span class="${es ? `font-bold ${headerText} text-sm` : 'text-gray-500 text-[10px] font-normal'} leading-tight uppercase">${c.es}</span>`}
                     <span onmousedown="startColResize(event, '${c.key}')" class="col-resizer" title="Arrastra para cambiar el ancho"></span>
                 </th>`).join('');
-            thead.innerHTML = `<tr>${thAll}<th class="border-b border-black ${headerBg} px-2 py-2 print:hidden"></th></tr>`;
+            thead.innerHTML = `<tr>${thAll}</tr>`;
             tbody.innerHTML = sheet.rows.map((r, i) => renderOrderRowHTML(r, i === 0, sheet.rows.length)).join('');
             renderHiddenColsBar(sheet);
         }
@@ -5297,6 +5397,31 @@
             row[field] = ''; savePOrders();
             const cell = document.getElementById('cell-' + field + '-' + rowId);
             if (cell) cell.innerHTML = renderImgCellInner(row, field);
+        };
+        // Gira 90° la foto de producto/parche de una fila - a veces llega vertical cuando debería verse en
+        // horizontal (o al revés). Gira la imagen DE VERDAD (redibujada en un canvas), no solo con CSS, para que
+        // el giro se vea igual en cualquier sitio donde se use esa foto (la propia celda, el PDF, "Ver"...).
+        window.rotateOrderRowImage = function(rowId, field) {
+            field = field || 'img';
+            const row = activeSheet().rows.find(r => r.id === rowId);
+            if (!row || !row[field] || !row[field].startsWith('data:image')) return;
+            const mimeMatch = row[field].match(/^data:(image\/[a-z]+);/);
+            const mime = (mimeMatch && mimeMatch[1]) || 'image/jpeg';
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalHeight;
+                canvas.height = img.naturalWidth;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(Math.PI / 2);
+                ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+                row[field] = mime === 'image/jpeg' ? canvas.toDataURL(mime, 0.9) : canvas.toDataURL(mime);
+                savePOrders();
+                const cell = document.getElementById('cell-' + field + '-' + rowId);
+                if (cell) cell.innerHTML = renderImgCellInner(row, field);
+            };
+            img.src = row[field];
         };
 
         window.orderCellDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer) || libraryDragSrc) { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); } };
@@ -5562,20 +5687,19 @@
                 });
                 const extraHeight = rowOverrides.reduce((s, r) => s + r.deltaH, 0);
                 const extraWidth = Math.max(0, maxTargetW - currentColW);
-                // La columna de acciones (⠿ arrastrar / ✕ eliminar), al final de cada fila, es "print:hidden" -
-                // se oculta en la captura pero su ancho seguía contando en table.scrollWidth (medido con esa
-                // columna todavía visible), dejando un hueco en blanco a la derecha del todo en el PDF. Se mide
-                // y se resta aparte.
-                const actionsTh = table.querySelector('#order-thead th:last-child');
-                const actionsW = actionsTh ? actionsTh.getBoundingClientRect().width : 0;
+                // (Ya no hace falta restar el ancho de ninguna columna de acciones - esa columna se eliminó
+                // del todo, en vez de solo ocultarla con print:hidden como antes; ver renderOrderRowHTML.)
 
                 const canvas = await html2canvas(table, {
                     scale: 2,
                     backgroundColor: '#ffffff',
-                    width: table.scrollWidth + extraWidth - actionsW,
+                    width: table.scrollWidth + extraWidth,
                     height: table.scrollHeight + extraHeight,
-                    windowWidth: table.scrollWidth + extraWidth - actionsW,
+                    windowWidth: table.scrollWidth + extraWidth,
                     onclone: (clonedDoc) => {
+                        // El anillo azul de "celda seleccionada" (clic en una foto/parche/precio) es solo una
+                        // ayuda visual en pantalla - nunca debe verse en el PDF descargado.
+                        clonedDoc.querySelectorAll('.cell-selected-img').forEach(el => { el.classList.remove('cell-selected-img'); });
                         // Ocultamos en la captura los botones/tiradores que no deben salir en el PDF
                         clonedDoc.querySelectorAll('[class*="print:hidden"]').forEach(el => { el.style.display = 'none'; });
                         // Sin dirección todavía: se descarga sin esa columna en vez de dejarla en blanco con el "+"
@@ -5645,6 +5769,43 @@
                     first = false;
                 }
 
+                // El PDF entero es una imagen (captura de html2canvas) - ningún texto es seleccionable de
+                // normal. Para la dirección en concreto, se añade también como texto real pero INVISIBLE
+                // ("renderingMode: 'invisible'", el mismo truco que un PDF escaneado con capa OCR) encima de
+                // donde ya se ve escrita en la imagen - así se puede seleccionar/copiar sin que se vea duplicada.
+                // Solo cubre la página donde EMPIEZA la dirección (rowspan a toda la hoja) - si la hoja es tan
+                // larga que pagina, el resto de páginas no llevan esta capa de texto (caso raro, no crítico).
+                if (addrHasData) {
+                    try {
+                        const addrCell = document.getElementById('cell-addr');
+                        if (addrCell) {
+                            const addrRect = addrCell.getBoundingClientRect();
+                            const tableRect = table.getBoundingClientRect();
+                            const scaleX = canvas.width / (table.scrollWidth + extraWidth);
+                            const scaleY = canvas.height / (table.scrollHeight + extraHeight);
+                            const canvasX = (addrRect.left - tableRect.left) * scaleX;
+                            const canvasY = (addrRect.top - tableRect.top) * scaleY;
+                            const pageIndex = Math.min(Math.floor(canvasY / pageHeightPx), Math.floor((canvas.height - 1) / pageHeightPx));
+                            const mmX = canvasX / pxPerMm + margin + 1;
+                            const mmY = (canvasY - pageIndex * pageHeightPx) / pxPerMm + margin + 4;
+                            const a = sheet.address || {};
+                            const lines = [];
+                            if (a.dest) lines.push('Destinatario: ' + a.dest);
+                            if (a.dir) lines.push('Dirección: ' + a.dir);
+                            if (a.cp) lines.push('C.P.: ' + a.cp);
+                            if (a.ciudad) lines.push('Ciudad: ' + a.ciudad);
+                            if (a.prov) lines.push('Provincia: ' + a.prov);
+                            if (a.pais) lines.push('País: ' + a.pais);
+                            if (a.tel) lines.push('Tel: ' + a.tel);
+                            if (lines.length) {
+                                pdf.setPage(pageIndex + 1);
+                                pdf.setFontSize(9);
+                                pdf.text(lines, mmX, mmY, { renderingMode: 'invisible', lineHeightFactor: 1.4 });
+                            }
+                        }
+                    } catch (e) {}
+                }
+
                 const fecha = new Date().toISOString().split('T')[0];
                 const nombreHoja = (sheet.name || 'pedido').replace(/[^a-z0-9]+/gi, '_');
                 await saveFileUniversal(`${nombreHoja}_${fecha}.pdf`, pdf.output('blob'));
@@ -5698,7 +5859,6 @@
         let pedidosArchivo = [];
         let pedidosClientes = ['TITO', 'KIKE', 'PERSONAL', 'DROPSHIPPING'];
         let pedidosProveedores = [];
-        let pedidoDragIndex = null;
 
         async function loadPedidosArchivo() {
             try {
@@ -5824,7 +5984,9 @@
                 fotoPaquete: '',
                 fotoEtiqueta: '',
                 tracking: '',
-                trackingUrl: ''
+                trackingUrl: '',
+                nota: '',
+                storeOrderLink: ''
             };
             pedidosArchivo.unshift(entry);
             savePedidosArchivo();
@@ -5980,6 +6142,48 @@
             }
             return `<span class="inline-flex items-center text-[11px] font-black text-red-400 bg-red-500/10 border border-red-500/40 rounded-full px-2.5 py-1 whitespace-nowrap">${formatMoney(debe)} €</span>`;
         }
+
+        // Si un pedido archivado no tiene foto del pedido preparado, la portada de su tarjeta se rellena sola
+        // con una captura de la propia hoja (misma tabla que "Ver"), a 1920x1080 igual que una foto real - así
+        // nunca hay una tarjeta sin portada. Se genera UNA vez y se guarda en p.autoSnapshot (si no, capturar con
+        // html2canvas en cada repintado de la lista sería demasiado lento con varios pedidos a la vez).
+        let autoSnapshotInProgress = new Set();
+        async function ensurePedidoAutoSnapshot(p) {
+            if (p.fotoPaquete || p.autoSnapshot || autoSnapshotInProgress.has(p.id)) return;
+            autoSnapshotInProgress.add(p.id);
+            try {
+                const dataUrl = await generatePedidoAutoSnapshot(p);
+                if (dataUrl && !p.fotoPaquete) {
+                    p.autoSnapshot = dataUrl;
+                    savePedidosArchivo();
+                    renderPedidosTab();
+                }
+            } catch (e) {
+            } finally {
+                autoSnapshotInProgress.delete(p.id);
+            }
+        }
+        async function generatePedidoAutoSnapshot(p) {
+            await ensurePdfLibs();
+            const container = document.createElement('div');
+            container.style.cssText = 'position:fixed; left:-99999px; top:0; width:900px; background:#fff;';
+            container.innerHTML = renderFullSheetPreviewTable(p, true);
+            document.body.appendChild(container);
+            try {
+                const innerCanvas = await html2canvas(container, { scale: 2, backgroundColor: '#ffffff' });
+                const out = document.createElement('canvas');
+                out.width = 1920; out.height = 1080;
+                const ctx = out.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 1920, 1080);
+                const scale = Math.min(1920 / innerCanvas.width, 1080 / innerCanvas.height);
+                const w = innerCanvas.width * scale, h = innerCanvas.height * scale;
+                ctx.drawImage(innerCanvas, (1920 - w) / 2, (1080 - h) / 2, w, h);
+                return out.toDataURL('image/jpeg', 0.85);
+            } finally {
+                document.body.removeChild(container);
+            }
+        }
         function renderPedidosTab() {
             const countEl = document.getElementById('pedidos-count');
             if (countEl) countEl.textContent = pedidosArchivo.length + (pedidosArchivo.length === 1 ? ' pedido' : ' pedidos');
@@ -5993,7 +6197,9 @@
             }
             const list = document.getElementById('pedidos-list');
             if (!list) return;
-            let source = pedidosArchivo;
+            // Siempre por fecha, empezando por los más recientes - ya no se puede reordenar a mano (antes se
+            // podía arrastrar con el ☰, pero eso dejaba de tener sentido en cuanto el orden pasó a ser fijo).
+            let source = [...pedidosArchivo].sort((a, b) => new Date(b.date) - new Date(a.date));
             if (pedidosFilterCliente) source = source.filter(p => p.cliente === pedidosFilterCliente);
             if (pedidosFilterProveedor) source = source.filter(p => p.proveedor === pedidosFilterProveedor);
             if (!pedidosArchivo.length) {
@@ -6010,15 +6216,18 @@
                 // Si hay foto del pedido preparado, se considera enviado automáticamente aunque p.enviado no
                 // se haya guardado explícitamente así (ver confirmShipModal, que ya lo fuerza al guardar).
                 const enviado = !!(p.enviado || p.fotoPaquete);
-                return `<div draggable="true" ondragstart="pedidoDragStart(event, ${i})" ondragover="pedidoDragOver(event)" ondrop="pedidoDrop(event, ${i})" class="neon-card-amber rounded-2xl p-4 flex flex-col gap-2.5 cursor-move">
-                    ${p.fotoPaquete ? `<img src="${p.fotoPaquete}" onclick="openPhotoViewer(this.src, event)" title="Foto del pedido preparado - clic para ampliar" class="w-full aspect-video object-cover rounded-xl cursor-zoom-in">` : ''}
+                const esDropshipping = (p.cliente || '').toUpperCase().includes('DROPSHIPPING');
+                if (!p.fotoPaquete && !p.autoSnapshot) ensurePedidoAutoSnapshot(p); // en segundo plano - se repinta sola al terminar
+                const coverSrc = p.fotoPaquete || p.autoSnapshot || '';
+                return `<div class="neon-card-amber rounded-2xl p-4 flex flex-col gap-2.5">
+                    ${coverSrc ? `<img src="${coverSrc}" onclick="openPhotoViewer(this.src, event)" title="${p.fotoPaquete ? 'Foto del pedido preparado' : 'Vista previa automática de la hoja'} - clic para ampliar" class="w-full aspect-video object-cover rounded-xl cursor-zoom-in">` : ''}
                     <div class="flex items-start gap-2">
-                        <span class="text-zinc-500 text-lg select-none mt-0.5 shrink-0" title="Arrastra para reordenar">☰</span>
                         <div class="flex-1 min-w-0">
                             <input value="${escAttr(p.name)}" oninput="updatePedidoField('${p.id}','name',this.value)" class="bg-transparent border-0 text-white font-bold text-sm focus:ring-1 focus:ring-amber-400 rounded-full px-1 w-full truncate">
                             <div class="flex items-center gap-1.5 mt-0.5">
                                 <input type="date" value="${dateToInputValue(p.date)}" onchange="updatePedidoField('${p.id}','date', new Date(this.value + 'T12:00:00').toISOString())" class="text-xs text-zinc-400 uppercase bg-transparent border-0 p-0 cursor-pointer hover:text-amber-400 [color-scheme:dark]" title="Fecha del pedido (por defecto, la del día que se guardó)">
                                 <span class="text-[10px] text-zinc-600 whitespace-nowrap">· ${nItems} art${nItems === 1 ? 'ículo' : 'ículos'}</span>
+                                ${p.nota ? `<button onclick="openPedidoNotaModal('${p.id}', event)" title="Ver/editar nota" class="text-xs leading-none cursor-pointer hover:scale-110 transition-transform">📝</button>` : ''}
                             </div>
                         </div>
                         <div class="relative shrink-0">
@@ -6028,6 +6237,9 @@
                                 <button onclick="printArchivedPedido('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 cursor-pointer">🖨️ Descargar PDF</button>
                                 <button onclick="openShipModal('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${enviado ? 'text-emerald-400' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">📦 ${enviado ? 'Ver/editar envío' : 'Marcar como enviado'}</button>
                                 ${p.trackingUrl ? `<button onclick="window.open('${escAttr(p.trackingUrl)}','_blank'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-sky-400 hover:bg-zinc-800 cursor-pointer">🔗 Ver seguimiento</button>` : ''}
+                                <button onclick="openPedidoNotaModal('${p.id}', event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${p.nota ? 'text-amber-300' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">📝 ${p.nota ? 'Editar nota' : 'Añadir nota'}</button>
+                                ${esDropshipping ? `<button onclick="openInput('pedido-store-link', '${p.id}', null, event); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs ${p.storeOrderLink ? 'text-amber-300' : 'text-zinc-300'} hover:bg-zinc-800 cursor-pointer">🔗 ${p.storeOrderLink ? 'Editar' : 'Añadir'} link del pedido en tienda</button>` : ''}
+                                ${esDropshipping && p.storeOrderLink ? `<button onclick="window.open('${escAttr(p.storeOrderLink)}','_blank'); closeSimpleMenu();" class="px-3 py-1.5 text-left text-xs text-sky-400 hover:bg-zinc-800 cursor-pointer">🛍️ Ver pedido en tienda</button>` : ''}
                             </div>
                         </div>
                     </div>
@@ -6216,6 +6428,30 @@
             window.open(url, '_blank');
         };
 
+        // Nota libre por pedido archivado: el mismo popup sirve para verla y para editarla (ya se ve el texto
+        // al abrirlo), no hace falta un modo "solo lectura" aparte.
+        let pedidoNotaTarget = null;
+        window.openPedidoNotaModal = function(id, event) {
+            if (event) event.stopPropagation();
+            const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
+            pedidoNotaTarget = id;
+            document.getElementById('pedido-nota-field').value = p.nota || '';
+            document.getElementById('pedido-nota-modal').classList.remove('hidden');
+            document.getElementById('pedido-nota-modal').classList.add('flex');
+        };
+        window.closePedidoNotaModal = function() {
+            document.getElementById('pedido-nota-modal').classList.add('hidden');
+            document.getElementById('pedido-nota-modal').classList.remove('flex');
+            pedidoNotaTarget = null;
+        };
+        window.savePedidoNota = function() {
+            const p = pedidosArchivo.find(x => x.id === pedidoNotaTarget); if (!p) return;
+            p.nota = document.getElementById('pedido-nota-field').value.trim();
+            savePedidosArchivo();
+            renderPedidosTab();
+            closePedidoNotaModal();
+        };
+
         // Visor grande con zoom para una foto suelta (la portada del pedido en la tarjeta) - mismo patrón que
         // pToggleZoom/pWireZoom del visor de la biblioteca (rueda 1x-6x, arrastrar para paso, doble-clic reset),
         // pero generalizado a un simple `src` en vez de depender de pDb/colId/index.
@@ -6278,16 +6514,6 @@
             window.addEventListener('mouseup', () => { if (photoViewerZoom.dragging) { photoViewerZoom.dragging = false; photoViewerApplyZoom(); } });
             img.addEventListener('click', e => { if (photoViewerZoom.scale > 1 || photoViewerZoom.moved) { e.stopPropagation(); photoViewerZoom.moved = false; } });
         })();
-        window.pedidoDragStart = function(e, i) { pedidoDragIndex = i; e.dataTransfer.effectAllowed = 'move'; };
-        window.pedidoDragOver = function(e) { e.preventDefault(); };
-        window.pedidoDrop = function(e, i) {
-            e.preventDefault();
-            if (pedidoDragIndex === null || pedidoDragIndex === i) return;
-            const [moved] = pedidosArchivo.splice(pedidoDragIndex, 1);
-            pedidosArchivo.splice(i, 0, moved);
-            pedidoDragIndex = null;
-            savePedidosArchivo(); renderPedidosTab();
-        };
 
         // "Ver" (solo lectura) - separado de "Editar" (reutiliza renderFullSheetPreviewTable, que ya es
         // genérica sobre cualquier objeto con forma de hoja: rows/style/colOrder/address/customColumns).
