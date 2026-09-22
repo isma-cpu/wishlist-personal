@@ -76,6 +76,13 @@
            siempre visible sería demasiado ruido: solo aparece al pasar el ratón (combinar con opacity-0 group-hover:opacity-100). */
         .del-x-btn.del-x-btn-sm { min-width: 0.85rem; min-height: 0.85rem; padding: 0.05rem; font-size: 9px; }
 
+        /* Variante azul de #delete-confirm-modal para avisos que SÍ reemplazan datos pero no son un "eliminar"
+           de verdad (p.ej. importar una copia de seguridad) - misma estructura, solo cambia el color. */
+        #delete-confirm-modal.theme-blue #delete-confirm-box { border-color: #3b82f6; box-shadow: 0 0 30px rgba(59,130,246,0.3); }
+        #delete-confirm-modal.theme-blue #delete-confirm-title-row { color: #60a5fa; }
+        #delete-confirm-modal.theme-blue #delete-confirm-btn { background: #2563eb; box-shadow: 0 0 15px rgba(37,99,235,0.4); }
+        #delete-confirm-modal.theme-blue #delete-confirm-btn:hover { background: #3b82f6; }
+
         /* Texto que el usuario escribe para personalizar el producto (versión, talla, cantidad, nombre, número,
            precios, columnas personalizadas, dirección...): tamaño ajustable con los botones A-/A+ de la barra
            (--cell-font-size, en px, puesto como variable inline en #order-table por renderOrderTable). */
@@ -131,9 +138,9 @@
     </div>
 
     <div id="delete-confirm-modal" class="fixed inset-0 bg-black/90 hidden z-[250] flex items-center justify-center p-4 backdrop-blur-md transition-opacity">
-        <div class="bg-[#0a0a0a] border border-red-500 p-6 rounded-2xl shadow-[0_0_30px_rgba(239,68,68,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
-            <h3 class="text-xl font-black tracking-wider text-red-500 mb-3 uppercase flex flex-col items-center gap-2">
-                <span class="text-3xl">⚠️</span> <span id="delete-confirm-title">Confirmar Eliminación</span>
+        <div id="delete-confirm-box" class="bg-[#0a0a0a] border border-red-500 p-6 rounded-2xl shadow-[0_0_30px_rgba(239,68,68,0.3)] w-full max-w-sm text-center transform scale-100 transition-all">
+            <h3 id="delete-confirm-title-row" class="text-xl font-black tracking-wider text-red-500 mb-3 uppercase flex flex-col items-center gap-2">
+                <span id="delete-confirm-icon" class="text-3xl">⚠️</span> <span id="delete-confirm-title">Confirmar Eliminación</span>
             </h3>
             <p id="delete-confirm-text" class="text-zinc-400 text-sm mb-6"></p>
             <div class="flex justify-center gap-4">
@@ -280,6 +287,10 @@
                     <h2 class="font-black text-lg tracking-wide text-black">📦 PLANTILLA DE PEDIDO</h2>
                     <div id="order-hidden-cols" class="flex flex-wrap gap-1"></div>
                     <div class="flex flex-wrap items-center gap-2 ml-auto">
+                        <div class="flex items-center gap-0.5 border border-gray-300 rounded-full px-1 py-1 bg-white">
+                            <button onclick="orderUndo()" title="Deshacer (Ctrl+Z)" class="w-7 h-7 flex items-center justify-center text-gray-600 hover:text-black text-sm rounded-full hover:bg-gray-100 cursor-pointer">↶</button>
+                            <button onclick="orderRedo()" title="Rehacer (Ctrl+Y)" class="w-7 h-7 flex items-center justify-center text-gray-600 hover:text-black text-sm rounded-full hover:bg-gray-100 cursor-pointer">↷</button>
+                        </div>
                         <div class="flex items-center gap-0.5 border border-gray-300 rounded-full pl-2 pr-1 py-1 bg-white" title="Tamaño del texto de las columnas">
                             <span class="text-[9px] text-gray-400 uppercase mr-1">Texto</span>
                             <button onclick="adjustCellFontSize(-1)" class="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-black text-xs font-black rounded-full hover:bg-gray-100 cursor-pointer">A−</button>
@@ -1157,7 +1168,7 @@
                         await saveDB();
                     }
                     location.reload(); // el propio reload ya es la señal de éxito, no depende de un alert()
-                }, null, { title: 'Confirmar Importación', confirmLabel: 'IMPORTAR' });
+                }, null, { title: 'Confirmar Importación', confirmLabel: 'IMPORTAR', theme: 'blue', icon: '📥' });
             };
             reader.readAsText(file);
         }
@@ -1222,6 +1233,7 @@
                         if (files.length) {
                             e.preventDefault();
                             fileToResizedDataURL(files[0]).then(src => {
+                                pushOrderUndoSnapshot();
                                 row[field] = src; savePOrders();
                                 if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
                             }).catch(() => {});
@@ -1233,6 +1245,7 @@
                                     const f = await urlToImageFile(urls[0]);
                                     if (f) {
                                         const src = await fileToResizedDataURL(f);
+                                        pushOrderUndoSnapshot();
                                         row[field] = src; savePOrders();
                                         if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
                                     } else {
@@ -1739,6 +1752,7 @@
                 }
             } else if (action === 'rename-order-column') {
                 if (val) {
+                    pushOrderUndoSnapshot();
                     const sheet = activeSheet();
                     if (extraId === 'custom') {
                         const col = sheet.customColumns.find(c => c.id === targetId);
@@ -1751,6 +1765,7 @@
                 }
             } else if (action === 'rename-order-column-zh') {
                 if (val) {
+                    pushOrderUndoSnapshot();
                     const sheet = activeSheet();
                     if (!sheet.columnZhOverrides) sheet.columnZhOverrides = {};
                     sheet.columnZhOverrides[targetId] = val;
@@ -1902,6 +1917,8 @@
             document.getElementById('delete-confirm-text').innerText = message;
             document.getElementById('delete-confirm-title').textContent = opts.title || 'Confirmar Eliminación';
             document.getElementById('delete-confirm-btn').textContent = opts.confirmLabel || 'ELIMINAR';
+            document.getElementById('delete-confirm-icon').textContent = opts.icon || '⚠️';
+            document.getElementById('delete-confirm-modal').classList.toggle('theme-blue', opts.theme === 'blue');
             document.getElementById('delete-confirm-modal').classList.remove('hidden');
         };
 
@@ -4586,6 +4603,70 @@
             }
             return pOrders.sheets.find(s => s.id === pOrders.activeSheetId) || pOrders.sheets[0];
         }
+
+        // --- DESHACER / REHACER en la hoja de pedido (Ctrl+Z / Ctrl+Y, como un Excel normal) ---
+        // Guarda una foto COMPLETA de la hoja activa justo ANTES de cada cambio (no diffs finos por campo) - más
+        // simple y a prueba de fallos que instrumentar cada tipo de mutación con su propio "deshacer" a medida,
+        // a cambio de algo más de memoria. `activeSheet()` ya resuelve sola si es una hoja en vivo de pOrders o
+        // un pedido archivado en edición (editingArchivedId) - por eso cada snapshot guarda el id de la hoja a
+        // la que pertenece, para no aplicar por error un "deshacer" de una hoja sobre otra distinta. El ancho de
+        // columnas (pOrders.colWidths) vive fuera de la hoja, COMPARTIDO entre todas - se guarda aparte en cada
+        // entrada para que también se pueda deshacer, aunque técnicamente no sea "de esta hoja".
+        let orderUndoStack = [];
+        let orderRedoStack = [];
+        const ORDER_UNDO_MAX = 40;
+        function pushOrderUndoSnapshot() {
+            const sheet = activeSheet();
+            if (!sheet) return;
+            try {
+                orderUndoStack.push({ sheetId: sheet.id, snapshot: JSON.stringify(sheet), colWidths: JSON.stringify(pOrders.colWidths || {}) });
+                if (orderUndoStack.length > ORDER_UNDO_MAX) orderUndoStack.shift();
+                orderRedoStack = [];
+            } catch (e) {}
+        }
+        // Restaura las propiedades del snapshot SOBRE el mismo objeto (no lo reemplaza) - así el cambio se ve
+        // reflejado en el array donde ya vivía (pOrders.sheets o pedidosArchivo) sin tener que tocar ese array.
+        function restoreSheetSnapshot(sheet, snapshotJSON) {
+            const data = JSON.parse(snapshotJSON);
+            Object.keys(sheet).forEach(k => { delete sheet[k]; });
+            Object.assign(sheet, data);
+        }
+        window.orderUndo = function() {
+            const sheet = activeSheet();
+            if (!sheet || !orderUndoStack.length) return;
+            const entry = orderUndoStack[orderUndoStack.length - 1];
+            if (entry.sheetId !== sheet.id) return; // el último cambio guardado era de otra hoja - no mezclar
+            orderUndoStack.pop();
+            orderRedoStack.push({ sheetId: sheet.id, snapshot: JSON.stringify(sheet), colWidths: JSON.stringify(pOrders.colWidths || {}) });
+            restoreSheetSnapshot(sheet, entry.snapshot);
+            pOrders.colWidths = JSON.parse(entry.colWidths);
+            savePOrders();
+            renderOrderSheetsBar(); renderOrderTable();
+        };
+        window.orderRedo = function() {
+            const sheet = activeSheet();
+            if (!sheet || !orderRedoStack.length) return;
+            const entry = orderRedoStack[orderRedoStack.length - 1];
+            if (entry.sheetId !== sheet.id) return;
+            orderRedoStack.pop();
+            orderUndoStack.push({ sheetId: sheet.id, snapshot: JSON.stringify(sheet), colWidths: JSON.stringify(pOrders.colWidths || {}) });
+            restoreSheetSnapshot(sheet, entry.snapshot);
+            pOrders.colWidths = JSON.parse(entry.colWidths);
+            savePOrders();
+            renderOrderSheetsBar(); renderOrderTable();
+        };
+        document.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            if (!(e.ctrlKey || e.metaKey) || (key !== 'z' && key !== 'y')) return;
+            if (document.getElementById('view-pedido').classList.contains('hidden')) return;
+            // Dentro de un campo de texto normal, dejar que el propio navegador deshaga lo escrito ahí (su
+            // comportamiento nativo de toda la vida) - el deshacer de la hoja entra solo fuera de eso.
+            const active = document.activeElement;
+            if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) return;
+            e.preventDefault();
+            if (key === 'y') { orderRedo(); return; }
+            if (e.shiftKey) orderRedo(); else orderUndo();
+        });
         function newSheet(name) {
             return {
                 id: 'sheet-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6), name: name || ('Pedido ' + (pOrders.sheets.length + 1)),
@@ -4594,6 +4675,7 @@
         }
         function hasAddressData(a) { return !!(a && (a.dest || a.dir || a.cp || a.ciudad || a.prov || a.pais || a.tel)); }
         window.setSheetStyle = function(style) {
+            pushOrderUndoSnapshot();
             activeSheet().style = style;
             savePOrders(); renderOrderTable();
         };
@@ -4725,6 +4807,7 @@
             closeSheetMenu();
             const sheet = pOrders.sheets.find(s => s.id === id);
             if (!sheet) return;
+            if (activeSheet().id === id) pushOrderUndoSnapshot(); // solo si es la hoja activa - si no, el snapshot sería de otra hoja distinta
             sheet.splitNameNumber = !sheet.splitNameNumber;
             savePOrders();
             if (activeSheet().id === id) renderOrderTable();
@@ -4764,7 +4847,7 @@
             return !row.img && !row.patch && !row.version && !row.size && !row.qty && !row.name && !row.number && !row.unitPrice &&
                 (!row.custom || Object.values(row.custom).every(v => !v));
         }
-        window.addOrderRow = function() { activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
+        window.addOrderRow = function() { pushOrderUndoSnapshot(); activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
         // Añade una fila nueva con la foto ya puesta, en la hoja indicada (o la activa) - usado al enviar desde Wishlist o la biblioteca.
         // `extraFields` permite rellenar version/name/number/patch de una vez (p.ej. al enviar desde la Wishlist eligiendo variantes).
         function addOrderRowWithImage(src, sheetId, extraFields) {
@@ -4784,6 +4867,7 @@
         }
         window.deleteOrderRow = function(rowId) {
             openConfirmDelete('¿Eliminar esta fila del pedido?', () => {
+                pushOrderUndoSnapshot();
                 const sheet = activeSheet();
                 sheet.rows = sheet.rows.filter(r => r.id !== rowId);
                 if (!sheet.rows.length) sheet.rows.push(newOrderRow());
@@ -4839,16 +4923,19 @@
             const from = rows.findIndex(r => r.id === rowDragId), to = rows.findIndex(r => r.id === targetRowId);
             rowDragId = null;
             if (from === -1 || to === -1) return;
+            pushOrderUndoSnapshot();
             const [moved] = rows.splice(from, 1);
             rows.splice(to, 0, moved);
             savePOrders(); renderOrderTable();
         };
         function addOrderColumnNamed(name) {
+            pushOrderUndoSnapshot();
             activeSheet().customColumns.push({ id: 'col-' + Date.now(), label: name });
             savePOrders(); renderOrderTable();
         }
         window.deleteOrderColumn = function(colId) {
             openConfirmDelete('¿Eliminar esta columna? Se perderá el texto que hayas escrito en ella para todas las filas.', () => {
+                pushOrderUndoSnapshot();
                 const sheet = activeSheet();
                 sheet.customColumns = sheet.customColumns.filter(c => c.id !== colId);
                 sheet.rows.forEach(r => { delete r.custom[colId]; });
@@ -4868,6 +4955,7 @@
             const from = keys.indexOf(colDragKey), to = keys.indexOf(targetKey);
             colDragKey = null;
             if (from === -1 || to === -1) return;
+            pushOrderUndoSnapshot();
             const [moved] = keys.splice(from, 1);
             keys.splice(to, 0, moved);
             sheet.colOrder = keys;
@@ -4929,6 +5017,11 @@
             if (el) el.classList.add('cell-selected-img');
         };
         window.clearSelectedImgCell = function() {
+            // Se llama al ENFOCAR cualquier celda de texto de la tabla (ver onfocus más abajo) - de paso, es el
+            // sitio perfecto para el "checkpoint" de deshacer de esa celda: una foto de cómo estaba la hoja justo
+            // ANTES de que el usuario empiece a escribir en ella, así toda la sesión de tecleo cuenta como UN
+            // solo paso de deshacer (como en Excel), no uno por cada letra.
+            pushOrderUndoSnapshot();
             if (!selectedImgCell) return;
             const prevEl = cellElementFor(selectedImgCell.rowId, selectedImgCell.field);
             if (prevEl) prevEl.classList.remove('cell-selected-img');
@@ -4986,7 +5079,7 @@
                 } else if (field === 'version') {
                     cellClipboard = { type: 'text', value: row.version || '' };
                     e.preventDefault();
-                    if (key === 'x') { row.version = ''; savePOrders(); refreshVersionCellDOM(row.id); }
+                    if (key === 'x') { pushOrderUndoSnapshot(); row.version = ''; savePOrders(); refreshVersionCellDOM(row.id); }
                 }
                 return;
             }
@@ -4994,12 +5087,14 @@
             if (isReadOnlyField) return;
             if (isImageField && cellClipboard && cellClipboard.type === 'image') {
                 e.preventDefault();
+                pushOrderUndoSnapshot();
                 row[field] = cellClipboard.value;
                 savePOrders();
                 const cellEl = document.getElementById('cell-' + field + '-' + row.id);
                 if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
             } else if (field === 'version' && cellClipboard && cellClipboard.type === 'text') {
                 e.preventDefault();
+                pushOrderUndoSnapshot();
                 row.version = cellClipboard.value;
                 savePOrders();
                 refreshVersionCellDOM(row.id);
@@ -5038,7 +5133,7 @@
             return {
                 key: 'row-' + rowId,
                 getValue: () => { const s = activeSheet(); const r = s && s.rows.find(x => x.id === rowId); return r ? (r.version || '') : ''; },
-                setValue: (v) => { const s = activeSheet(); const r = s && s.rows.find(x => x.id === rowId); if (r) { r.version = v; savePOrders(); } refreshVersionCellDOM(rowId); }
+                setValue: (v) => { const s = activeSheet(); const r = s && s.rows.find(x => x.id === rowId); if (r) { pushOrderUndoSnapshot(); r.version = v; savePOrders(); } refreshVersionCellDOM(rowId); }
             };
         }
         // Target genérico para un campo suelto fuera de una tabla (p.ej. el formulario de "Enviar a Pedido"):
@@ -5303,12 +5398,14 @@
             }).join('');
         }
         window.hideOrderColumn = function(key) {
+            pushOrderUndoSnapshot();
             const sheet = activeSheet();
             if (!Array.isArray(sheet.hiddenColumns)) sheet.hiddenColumns = [];
             if (!sheet.hiddenColumns.includes(key)) sheet.hiddenColumns.push(key);
             savePOrders(); renderOrderTable();
         };
         window.restoreOrderColumn = function(key) {
+            pushOrderUndoSnapshot();
             const sheet = activeSheet();
             if (!Array.isArray(sheet.hiddenColumns)) return;
             sheet.hiddenColumns = sheet.hiddenColumns.filter(k => k !== key);
@@ -5317,6 +5414,7 @@
         // Tamaño (px) del texto que se escribe en las columnas (versión, talla, cantidad, nombre, número, precios,
         // columnas personalizadas, dirección), ajustable por hoja con los botones A-/A+ de la barra de herramientas.
         window.adjustCellFontSize = function(delta) {
+            pushOrderUndoSnapshot();
             const sheet = activeSheet();
             const cur = sheet.cellFontSize || 14;
             sheet.cellFontSize = Math.max(10, Math.min(22, cur + delta));
@@ -5331,6 +5429,7 @@
             e.preventDefault(); e.stopPropagation();
             const col = document.getElementById('col-' + key);
             if (!col) return;
+            pushOrderUndoSnapshot();
             colResizing = { key, startX: e.clientX, startWidth: col.getBoundingClientRect().width || 90 };
             document.addEventListener('mousemove', onColResizeMove);
             document.addEventListener('mouseup', onColResizeUp);
@@ -5357,6 +5456,7 @@
             e.preventDefault(); e.stopPropagation();
             const tr = document.getElementById('tr-' + rowId);
             if (!tr) return;
+            pushOrderUndoSnapshot();
             rowResizing = { rowId, startY: e.clientY, startHeight: tr.getBoundingClientRect().height || ORDER_ROW_DEFAULT_HEIGHT };
             document.addEventListener('mousemove', onRowResizeMove);
             document.addEventListener('mouseup', onRowResizeUp);
@@ -5365,7 +5465,15 @@
             if (!rowResizing) return;
             const h = Math.max(28, Math.round(rowResizing.startHeight + (e.clientY - rowResizing.startY)));
             const tr = document.getElementById('tr-' + rowResizing.rowId);
-            if (tr) tr.style.height = h + 'px';
+            if (tr) {
+                tr.style.height = h + 'px';
+                // Cada <td> normal de la fila tiene su PROPIA altura fija en px (para que los campos de texto
+                // con "h-full" sepan a qué 100% referirse - un input al 100% de altura se resuelve contra la
+                // altura DE SU <td>, no contra la de toda la fila) - sin esto, solo crecía la fila en sí (y la
+                // foto, que se reajusta aparte abajo) pero el resto de celdas se quedaban con el alto viejo.
+                // La dirección/precio total (con rowspan, compartidas entre TODAS las filas) se excluyen aposta.
+                tr.querySelectorAll(':scope > td').forEach(td => { if (!td.hasAttribute('rowspan')) td.style.height = h + 'px'; });
+            }
             // La foto/parche de la fila tiene una altura FIJA en px (no "h-full" como los demás campos de texto,
             // que ya se centran solos al crecer la celda) - sin esto, se quedaba con el tamaño de antes de
             // arrastrar hasta el siguiente repintado completo, en vez de reajustarse en vivo con la fila.
@@ -5394,6 +5502,7 @@
         window.clearOrderRowImage = function(rowId, field) {
             field = field || 'img';
             const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
+            pushOrderUndoSnapshot();
             row[field] = ''; savePOrders();
             const cell = document.getElementById('cell-' + field + '-' + rowId);
             if (cell) cell.innerHTML = renderImgCellInner(row, field);
@@ -5407,6 +5516,7 @@
             if (!row || !row[field] || !row[field].startsWith('data:image')) return;
             const mimeMatch = row[field].match(/^data:(image\/[a-z]+);/);
             const mime = (mimeMatch && mimeMatch[1]) || 'image/jpeg';
+            pushOrderUndoSnapshot();
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
@@ -5434,6 +5544,7 @@
             const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
 
             if (libraryDragSrc) {
+                pushOrderUndoSnapshot();
                 row[field] = libraryDragSrc.src; libraryDragSrc = null;
                 savePOrders();
                 if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
@@ -5441,6 +5552,7 @@
             }
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
                 fileToResizedDataURL(e.dataTransfer.files[0]).then(src => {
+                    pushOrderUndoSnapshot();
                     row[field] = src; savePOrders();
                     if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
                 }).catch(() => {});
@@ -5452,6 +5564,7 @@
                     const f = await urlToImageFile(urls[0]);
                     if (f) {
                         const src = await fileToResizedDataURL(f);
+                        pushOrderUndoSnapshot();
                         row[field] = src; savePOrders();
                         if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
                     } else {
@@ -5537,6 +5650,7 @@
             }
             const row = activeSheet().rows.find(r => r.id === pickerTargetRow);
             if (row && pickerImages[i] != null) {
+                pushOrderUndoSnapshot();
                 row[pickerTargetField] = pickerImages[i]; savePOrders();
                 const cell = document.getElementById('cell-' + pickerTargetField + '-' + row.id);
                 if (cell) cell.innerHTML = renderImgCellInner(row, pickerTargetField);
@@ -5596,6 +5710,7 @@
         };
         window.closeAddressModal = function() { document.getElementById('p-address-modal').classList.add('hidden'); };
         window.saveAddressModal = function() {
+            pushOrderUndoSnapshot();
             const sheet = activeSheet();
             sheet.address = {
                 dest: document.getElementById('addr-dest').value.trim(),
@@ -5704,6 +5819,13 @@
                         clonedDoc.querySelectorAll('[class*="print:hidden"]').forEach(el => { el.style.display = 'none'; });
                         // Sin dirección todavía: se descarga sin esa columna en vez de dejarla en blanco con el "+"
                         if (!addrHasData) clonedDoc.querySelectorAll('[data-col-key="address"]').forEach(el => { el.style.display = 'none'; });
+                        // Con dirección: el TEXTO de la celda se oculta en la imagen capturada (visibility, no
+                        // display, para no mover/encoger la celda) - se dibuja aparte como texto de PDF de
+                        // verdad, más abajo, para que se pueda seleccionar y copiar bien (ver más abajo por qué).
+                        if (addrHasData) {
+                            const addrTextEl = clonedDoc.querySelector('#cell-addr .cell-text');
+                            if (addrTextEl) addrTextEl.style.visibility = 'hidden';
+                        }
                         // Textos de ejemplo (placeholder de los inputs, "Elegir ▾" de Versión vacía) fuera del PDF -
                         // en la app ayudan a saber dónde escribir, pero en el documento que se envía deben verse en blanco.
                         clonedDoc.querySelectorAll('#order-table input[placeholder]').forEach(el => el.removeAttribute('placeholder'));
@@ -5769,12 +5891,15 @@
                     first = false;
                 }
 
-                // El PDF entero es una imagen (captura de html2canvas) - ningún texto es seleccionable de
-                // normal. Para la dirección en concreto, se añade también como texto real pero INVISIBLE
-                // ("renderingMode: 'invisible'", el mismo truco que un PDF escaneado con capa OCR) encima de
-                // donde ya se ve escrita en la imagen - así se puede seleccionar/copiar sin que se vea duplicada.
+                // El PDF entero es una imagen (captura de html2canvas) - ningún texto es seleccionable de normal.
+                // Para la dirección en concreto: en vez de dejarla dibujada en la imagen y superponerle encima
+                // una capa de texto INVISIBLE aproximada (lo que se probó primero - la selección salía mal
+                // porque el texto invisible nunca encajaba pixel a pixel con lo ya pintado en la imagen), ahora
+                // el texto de esa celda se OCULTA en la imagen capturada (ver onclone más arriba, con
+                // visibility:hidden para no mover la celda) y se dibuja aquí como texto de PDF DE VERDAD, visible
+                // - así lo que se ve y lo que se selecciona es exactamente lo mismo, sin desajuste posible.
                 // Solo cubre la página donde EMPIEZA la dirección (rowspan a toda la hoja) - si la hoja es tan
-                // larga que pagina, el resto de páginas no llevan esta capa de texto (caso raro, no crítico).
+                // larga que pagina, el resto de páginas no llevan este texto (caso raro, no crítico).
                 if (addrHasData) {
                     try {
                         const addrCell = document.getElementById('cell-addr');
@@ -5785,9 +5910,14 @@
                             const scaleY = canvas.height / (table.scrollHeight + extraHeight);
                             const canvasX = (addrRect.left - tableRect.left) * scaleX;
                             const canvasY = (addrRect.top - tableRect.top) * scaleY;
+                            const canvasW = addrRect.width * scaleX;
                             const pageIndex = Math.min(Math.floor(canvasY / pageHeightPx), Math.floor((canvas.height - 1) / pageHeightPx));
-                            const mmX = canvasX / pxPerMm + margin + 1;
-                            const mmY = (canvasY - pageIndex * pageHeightPx) / pxPerMm + margin + 4;
+                            const mmW = Math.max(20, canvasW / pxPerMm - 4);
+                            // align:'center' ancla el texto por su CENTRO horizontal, no por la izquierda -
+                            // mmX tiene que ser el centro de la celda, no su borde, para que quede centrado
+                            // igual que en pantalla (la celda de dirección es "text-center").
+                            const mmX = canvasX / pxPerMm + margin + 2 + mmW / 2;
+                            const mmY = (canvasY - pageIndex * pageHeightPx) / pxPerMm + margin + 5;
                             const a = sheet.address || {};
                             const lines = [];
                             if (a.dest) lines.push('Destinatario: ' + a.dest);
@@ -5800,7 +5930,11 @@
                             if (lines.length) {
                                 pdf.setPage(pageIndex + 1);
                                 pdf.setFontSize(9);
-                                pdf.text(lines, mmX, mmY, { renderingMode: 'invisible', lineHeightFactor: 1.4 });
+                                pdf.setTextColor(55, 65, 81);
+                                // maxWidth envuelve cada línea larga (una dirección larga) al ancho real de la
+                                // celda, en vez de salirse de ella - mismo comportamiento que en pantalla.
+                                pdf.text(lines, mmX, mmY, { lineHeightFactor: 1.35, align: 'center', maxWidth: mmW });
+                                pdf.setTextColor(0, 0, 0);
                             }
                         }
                     } catch (e) {}
@@ -6228,6 +6362,7 @@
                                 <input type="date" value="${dateToInputValue(p.date)}" onchange="updatePedidoField('${p.id}','date', new Date(this.value + 'T12:00:00').toISOString())" class="text-xs text-zinc-400 uppercase bg-transparent border-0 p-0 cursor-pointer hover:text-amber-400 [color-scheme:dark]" title="Fecha del pedido (por defecto, la del día que se guardó)">
                                 <span class="text-[10px] text-zinc-600 whitespace-nowrap">· ${nItems} art${nItems === 1 ? 'ículo' : 'ículos'}</span>
                                 ${p.nota ? `<button onclick="openPedidoNotaModal('${p.id}', event)" title="Ver/editar nota" class="text-xs leading-none cursor-pointer hover:scale-110 transition-transform">📝</button>` : ''}
+                                ${esDropshipping && p.storeOrderLink ? `<button onclick="openInput('pedido-store-link', '${p.id}', null, event)" title="Ver/editar link del pedido en tienda" class="text-xs leading-none cursor-pointer hover:scale-110 transition-transform">📎</button>` : ''}
                             </div>
                         </div>
                         <div class="relative shrink-0">
