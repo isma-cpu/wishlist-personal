@@ -4750,6 +4750,7 @@
             menu.innerHTML = `
                 <button onclick="renameOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">✏️ Renombrar</button>
                 <button onclick="duplicateOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">📄 Duplicar</button>
+                <button onclick="clearOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-amber-50 text-amber-600">🧹 Limpiar hoja</button>
                 <button onclick="toggleSheetSplitNameNumber('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">${s.splitNameNumber ? '🔗 Combinar nombre y número' : '🔀 Separar nombre y número'}</button>
                 <button onclick="moveOrderSheet('${s.id}', -1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
                 <button onclick="moveOrderSheet('${s.id}', 1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === pOrders.sheets.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
@@ -4834,6 +4835,21 @@
                 if (pOrders.activeSheetId === id) pOrders.activeSheetId = pOrders.sheets[0].id;
                 savePOrders(); renderOrderSheetsBar(); renderOrderTable();
             });
+        };
+        // Vaciar una hoja sin eliminarla: quita todas las filas (fotos, precios, etc.) y la dirección, pero
+        // conserva la hoja en sí (nombre, estilo, columnas propias) - para reutilizarla desde cero en vez de
+        // crear una hoja nueva. Usa el mismo deshacer que el resto de acciones de la hoja (solo si es la activa).
+        window.clearOrderSheet = function(id, event) {
+            if (event) event.stopPropagation();
+            closeSheetMenu();
+            openConfirmDelete('¿Vaciar esta hoja de pedido? Se eliminarán todas sus filas (fotos, precios, etc.) y la dirección de envío. La hoja en sí y sus columnas se mantienen. Esta acción no se puede deshacer.', () => {
+                const sheet = pOrders.sheets.find(s => s.id === id);
+                if (!sheet) return;
+                if (activeSheet().id === id) pushOrderUndoSnapshot();
+                sheet.rows = [newOrderRow()];
+                sheet.address = { dest: '', dir: '', cp: '', ciudad: '', prov: '', pais: '', tel: '' };
+                savePOrders(); renderOrderSheetsBar(); renderOrderTable();
+            }, null, { title: 'Confirmar Vaciado', confirmLabel: 'VACIAR', icon: '🧹' });
         };
 
         function newOrderRow() {
@@ -5777,33 +5793,48 @@
                 const sheet = activeSheet();
                 const addrHasData = hasAddressData(sheet.address);
 
-                // La foto del producto es lo más importante del PDF - nunca debe verse aplanada ni diminuta.
-                // html2canvas no siempre respeta bien "object-fit:contain" en <img>, así que aquí se calcula el
-                // tamaño real que debería tener cada foto según su proporción de verdad (ancho/alto naturales).
-                // IMPORTANTE: la COLUMNA nunca se ensancha (debe quedar con el mismo ancho que en la hoja -
-                // ensancharla robaba espacio de las demás columnas, que acababan imprimiéndose más estrechas
+                // La foto del producto es lo más importante del PDF - nunca debe verse aplanada ni diminuta - y
+                // el parche no debe salir distorsionado tampoco. html2canvas no siempre respeta bien
+                // "object-fit:contain" en un <img> (ni con la foto ni con el parche, aunque en pantalla se vean
+                // perfectos), así que para CUALQUIER fila con foto y/o parche - no solo las que antes pedían más
+                // espacio - se calcula a mano el tamaño real que tendría con "contain" de verdad y se fija
+                // explícito en el clon, en vez de confiar en que el motor de captura lo haga bien por su cuenta.
+                // IMPORTANTE: las COLUMNAS nunca se ensanchan (deben quedar con el mismo ancho que en la hoja -
+                // ensancharlas robaba espacio de las demás columnas, que acababan imprimiéndose más estrechas
                 // que en pantalla; ver nota 2026-10-01 más abajo). Solo la FILA puede crecer en alto para que
-                // una foto muy vertical tenga más sitio; el ancho de la imagen dentro de esa caja se calcula
-                // "a mano" igual que haría object-fit:contain de verdad (limitado por lo que sea más estrecho,
-                // el ancho de columna o el alto disponible), porque html2canvas no reproduce bien esa propiedad.
+                // una foto muy vertical tenga más sitio; el ancho de la imagen/parche dentro de su caja se
+                // calcula "a mano" igual que haría object-fit:contain de verdad (limitado por lo que sea más
+                // estrecho, el ancho de columna o el alto disponible).
                 const MIN_IMG_H = 160;
                 const imgCol = document.getElementById('col-img');
+                const patchColEl = document.getElementById('col-patch');
                 const currentColW = imgCol ? imgCol.getBoundingClientRect().width : 90;
+                const currentPatchColW = patchColEl ? patchColEl.getBoundingClientRect().width : 90;
+                function containFit(boxW, boxH, ratio) {
+                    let w = Math.round(boxH * ratio), h = boxH;
+                    if (w > boxW) { w = boxW; h = Math.round(boxW / ratio); }
+                    return { w, h };
+                }
                 const rowOverrides = [];
-                table.querySelectorAll('td[id^="cell-img-"] img').forEach(img => {
-                    if (!img.naturalWidth || !img.naturalHeight) return;
-                    const tr = img.closest('tr');
-                    if (!tr || !tr.id) return;
+                sheet.rows.forEach(row => {
+                    const tr = document.getElementById('tr-' + row.id);
+                    if (!tr) return;
                     const currentRowH = tr.getBoundingClientRect().height;
-                    const ratio = img.naturalWidth / img.naturalHeight;
-                    const targetBoxH = Math.max(MIN_IMG_H, currentRowH - 16);
-                    let imgW = Math.round(targetBoxH * ratio);
-                    let imgH = targetBoxH;
-                    if (imgW > currentColW) { imgW = currentColW; imgH = Math.round(currentColW / ratio); }
-                    const neededRowH = imgH + 16;
-                    if (neededRowH > currentRowH) {
-                        rowOverrides.push({ trId: tr.id, rowH: neededRowH, boxH: imgH, imgW, deltaH: neededRowH - currentRowH });
+                    const imgTag = document.querySelector('#cell-img-' + row.id + ' img');
+                    const patchTag = document.querySelector('#cell-patch-' + row.id + ' img');
+                    const imgRatio = (imgTag && imgTag.naturalWidth && imgTag.naturalHeight) ? imgTag.naturalWidth / imgTag.naturalHeight : null;
+                    const patchRatio = (patchTag && patchTag.naturalWidth && patchTag.naturalHeight) ? patchTag.naturalWidth / patchTag.naturalHeight : null;
+                    if (!imgRatio && !patchRatio) return; // nada que fijar a mano en esta fila
+                    // Solo la foto de producto puede pedir más alto de fila (nunca diminuta); el parche se
+                    // encaja luego en la altura que quede, haya crecido la fila por la foto o no.
+                    let finalRowH = currentRowH;
+                    if (imgRatio) {
+                        const targetBoxH = Math.max(MIN_IMG_H, currentRowH - 16);
+                        finalRowH = Math.max(finalRowH, containFit(currentColW, targetBoxH, imgRatio).h + 16);
                     }
+                    const img = imgRatio ? containFit(currentColW, finalRowH - 16, imgRatio) : null;
+                    const patch = patchRatio ? containFit(currentPatchColW, finalRowH - 16, patchRatio) : null;
+                    rowOverrides.push({ trId: tr.id, rowH: finalRowH, deltaH: Math.max(0, finalRowH - currentRowH), img, patch });
                 });
                 const extraHeight = rowOverrides.reduce((s, r) => s + r.deltaH, 0);
                 // (Ya no hace falta restar el ancho de ninguna columna de acciones - esa columna se eliminó
@@ -5866,18 +5897,26 @@
                             div.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;';
                             if (btn.parentNode) btn.parentNode.replaceChild(div, btn);
                         });
-                        // Foto de producto a tamaño real (ver comentario arriba) - la columna ya NO se toca,
-                        // solo la fila y el tamaño/posición de la propia imagen dentro de su caja.
+                        // Foto de producto y parche a tamaño real (ver comentario arriba) - las columnas ya NO
+                        // se tocan, solo la fila y el tamaño/posición de cada imagen dentro de su propia caja.
                         rowOverrides.forEach(r => {
                             const tr = clonedDoc.getElementById(r.trId);
                             if (!tr) return;
                             tr.style.height = r.rowH + 'px';
-                            const imgCell = tr.querySelector('td[id^="cell-img-"]');
-                            if (!imgCell) return;
-                            const wrapper = imgCell.firstElementChild;
-                            if (wrapper) wrapper.style.height = r.boxH + 'px';
-                            const img = imgCell.querySelector('img');
-                            if (img) { img.style.width = r.imgW + 'px'; img.style.height = r.boxH + 'px'; img.style.maxWidth = 'none'; }
+                            if (r.img) {
+                                const imgCell = tr.querySelector('td[id^="cell-img-"]');
+                                const wrapper = imgCell ? imgCell.firstElementChild : null;
+                                const img = imgCell ? imgCell.querySelector('img') : null;
+                                if (wrapper) wrapper.style.height = r.img.h + 'px';
+                                if (img) { img.style.width = r.img.w + 'px'; img.style.height = r.img.h + 'px'; img.style.maxWidth = 'none'; }
+                            }
+                            if (r.patch) {
+                                const patchCell = tr.querySelector('td[id^="cell-patch-"]');
+                                const wrapper = patchCell ? patchCell.firstElementChild : null;
+                                const img = patchCell ? patchCell.querySelector('img') : null;
+                                if (wrapper) wrapper.style.height = r.patch.h + 'px';
+                                if (img) { img.style.width = r.patch.w + 'px'; img.style.height = r.patch.h + 'px'; img.style.maxWidth = 'none'; }
+                            }
                         });
                     }
                 });
@@ -6259,10 +6298,11 @@
                 const rows = orders.map(p => {
                     const debe = Math.max(0, (p.total || 0) - (parseFloat(p.paid) || 0));
                     const fecha = new Date(p.date).toLocaleDateString('es-ES');
-                    return `<button onclick="editArchivedPedido('${p.id}')" class="w-full flex items-center justify-between gap-2 text-xs text-zinc-300 hover:text-white py-1.5 border-b border-red-500/10 last:border-0 cursor-pointer text-left">
-                            <span class="truncate">${escapeHtml(p.name)} <span class="text-zinc-500">· ${fecha}</span></span>
+                    return `<div class="w-full flex items-center gap-2 text-xs text-zinc-300 py-1.5 border-b border-red-500/10 last:border-0">
+                            <button onclick="editArchivedPedido('${p.id}')" class="flex-1 min-w-0 text-left hover:text-white cursor-pointer truncate">${escapeHtml(p.name)} <span class="text-zinc-500">· ${fecha}</span></button>
                             <span class="text-red-400 font-bold shrink-0">${formatMoney(debe)} €</span>
-                        </button>`;
+                            <button onclick="markPedidoFullyPaid('${p.id}', event)" title="Marcar como pagado entero" class="shrink-0 w-6 h-6 flex items-center justify-center rounded-full border border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/20 cursor-pointer">✅</button>
+                        </div>`;
                 }).join('');
                 return `<div class="rounded-2xl p-4 border border-red-500/30 bg-red-950/10 flex flex-col gap-2.5">
                     <h4 class="font-black text-white uppercase text-lg truncate">${escapeHtml(cliente)}</h4>
@@ -6418,8 +6458,10 @@
                             <div class="text-white font-bold text-sm">${formatMoney(p.total)} €</div>
                         </div>
                         <div>
-                            <div class="text-[9px] text-zinc-500 uppercase">Pagado</div>
-                            <input type="number" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-full text-center bg-zinc-900 text-white text-sm font-bold rounded-full px-1 py-1 border border-amber-400/30">
+                            <div class="text-[9px] text-zinc-500 uppercase flex items-center justify-center gap-1">Pagado
+                                <button onclick="markPedidoFullyPaid('${p.id}', event)" title="Marcar como pagado entero" class="text-emerald-400 hover:text-emerald-300 cursor-pointer leading-none">✅</button>
+                            </div>
+                            <input type="number" id="pedido-paid-${p.id}" value="${escAttr(p.paid)}" oninput="updatePedidoField('${p.id}','paid',this.value)" class="w-full text-center bg-zinc-900 text-white text-sm font-bold rounded-full px-1 py-1 border border-amber-400/30">
                         </div>
                         <div>
                             <div class="text-[9px] text-zinc-500 uppercase">Debe</div>
@@ -6444,6 +6486,20 @@
                 if (debeEl) debeEl.innerHTML = debeBoxHTML(p);
                 renderMorosos();
             }
+        };
+        // Marcar un pedido archivado como pagado del todo sin teclear la cifra a mano - pone "pagado" igual al
+        // total exacto del pedido. Se usa tanto desde la tarjeta de Pedidos como desde cada fila de "Morosos"
+        // (ahí, al saldarse la deuda, el pedido desaparece solo de la lista en el siguiente repintado).
+        window.markPedidoFullyPaid = function(id, event) {
+            if (event) event.stopPropagation();
+            const p = pedidosArchivo.find(x => x.id === id); if (!p) return;
+            p.paid = p.total;
+            savePedidosArchivo();
+            const paidInput = document.getElementById('pedido-paid-' + id);
+            if (paidInput) paidInput.value = p.paid;
+            const debeEl = document.getElementById('pedido-debe-' + id);
+            if (debeEl) debeEl.innerHTML = debeBoxHTML(p);
+            renderMorosos();
         };
         window.deletePedido = function(id) {
             openConfirmDelete('¿Eliminar este pedido archivado? Esta acción no se puede deshacer.', () => {
