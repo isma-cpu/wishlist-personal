@@ -5779,13 +5779,16 @@
 
                 // La foto del producto es lo más importante del PDF - nunca debe verse aplanada ni diminuta.
                 // html2canvas no siempre respeta bien "object-fit:contain" en <img>, así que aquí se calcula el
-                // tamaño real que debería tener cada foto según su proporción de verdad (ancho/alto naturales),
-                // agrandando fila y columna si hace falta - medido ANTES de llamar a html2canvas, para poder
-                // pasarle ya el ancho/alto final correcto del lienzo (si no, el contenido de más quedaría cortado).
+                // tamaño real que debería tener cada foto según su proporción de verdad (ancho/alto naturales).
+                // IMPORTANTE: la COLUMNA nunca se ensancha (debe quedar con el mismo ancho que en la hoja -
+                // ensancharla robaba espacio de las demás columnas, que acababan imprimiéndose más estrechas
+                // que en pantalla; ver nota 2026-10-01 más abajo). Solo la FILA puede crecer en alto para que
+                // una foto muy vertical tenga más sitio; el ancho de la imagen dentro de esa caja se calcula
+                // "a mano" igual que haría object-fit:contain de verdad (limitado por lo que sea más estrecho,
+                // el ancho de columna o el alto disponible), porque html2canvas no reproduce bien esa propiedad.
                 const MIN_IMG_H = 160;
                 const imgCol = document.getElementById('col-img');
                 const currentColW = imgCol ? imgCol.getBoundingClientRect().width : 90;
-                let maxTargetW = currentColW;
                 const rowOverrides = [];
                 table.querySelectorAll('td[id^="cell-img-"] img').forEach(img => {
                     if (!img.naturalWidth || !img.naturalHeight) return;
@@ -5794,23 +5797,25 @@
                     const currentRowH = tr.getBoundingClientRect().height;
                     const ratio = img.naturalWidth / img.naturalHeight;
                     const targetBoxH = Math.max(MIN_IMG_H, currentRowH - 16);
-                    const targetW = Math.round(targetBoxH * ratio);
-                    if (targetBoxH + 16 > currentRowH || targetW > currentColW) {
-                        rowOverrides.push({ trId: tr.id, rowH: targetBoxH + 16, boxH: targetBoxH, imgW: targetW, deltaH: Math.max(0, (targetBoxH + 16) - currentRowH) });
-                        maxTargetW = Math.max(maxTargetW, targetW);
+                    let imgW = Math.round(targetBoxH * ratio);
+                    let imgH = targetBoxH;
+                    if (imgW > currentColW) { imgW = currentColW; imgH = Math.round(currentColW / ratio); }
+                    const neededRowH = imgH + 16;
+                    if (neededRowH > currentRowH) {
+                        rowOverrides.push({ trId: tr.id, rowH: neededRowH, boxH: imgH, imgW, deltaH: neededRowH - currentRowH });
                     }
                 });
                 const extraHeight = rowOverrides.reduce((s, r) => s + r.deltaH, 0);
-                const extraWidth = Math.max(0, maxTargetW - currentColW);
                 // (Ya no hace falta restar el ancho de ninguna columna de acciones - esa columna se eliminó
                 // del todo, en vez de solo ocultarla con print:hidden como antes; ver renderOrderRowHTML.)
 
+                let addrClonePos = null;
                 const canvas = await html2canvas(table, {
                     scale: 2,
                     backgroundColor: '#ffffff',
-                    width: table.scrollWidth + extraWidth,
+                    width: table.scrollWidth,
                     height: table.scrollHeight + extraHeight,
-                    windowWidth: table.scrollWidth + extraWidth,
+                    windowWidth: table.scrollWidth,
                     onclone: (clonedDoc) => {
                         // El anillo azul de "celda seleccionada" (clic en una foto/parche/precio) es solo una
                         // ayuda visual en pantalla - nunca debe verse en el PDF descargado.
@@ -5825,6 +5830,17 @@
                         if (addrHasData) {
                             const addrTextEl = clonedDoc.querySelector('#cell-addr .cell-text');
                             if (addrTextEl) addrTextEl.style.visibility = 'hidden';
+                            // Posición/ancho REALES de la celda ya en el clon (después de todos los cambios de
+                            // este onclone), para dibujar el texto del PDF exactamente donde cae el recuadro -
+                            // ver nota 2026-10-01 más abajo sobre por qué recalcularlo a partir del DOM en vivo
+                            // (como se hacía antes) quedaba desalineado.
+                            const addrCellClone = clonedDoc.getElementById('cell-addr');
+                            const tableClone = clonedDoc.getElementById('order-table');
+                            if (addrCellClone && tableClone) {
+                                const car = addrCellClone.getBoundingClientRect();
+                                const ctr = tableClone.getBoundingClientRect();
+                                addrClonePos = { x: car.left - ctr.left, y: car.top - ctr.top, w: car.width, tableW: ctr.width };
+                            }
                         }
                         // Textos de ejemplo (placeholder de los inputs, "Elegir ▾" de Versión vacía) fuera del PDF -
                         // en la app ayudan a saber dónde escribir, pero en el documento que se envía deben verse en blanco.
@@ -5850,11 +5866,8 @@
                             div.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;text-align:center;';
                             if (btn.parentNode) btn.parentNode.replaceChild(div, btn);
                         });
-                        // Foto de producto a tamaño real (ver comentario arriba)
-                        if (extraWidth > 0) {
-                            const col = clonedDoc.getElementById('col-img');
-                            if (col) col.style.width = maxTargetW + 'px';
-                        }
+                        // Foto de producto a tamaño real (ver comentario arriba) - la columna ya NO se toca,
+                        // solo la fila y el tamaño/posición de la propia imagen dentro de su caja.
                         rowOverrides.forEach(r => {
                             const tr = clonedDoc.getElementById(r.trId);
                             if (!tr) return;
@@ -5900,42 +5913,43 @@
                 // - así lo que se ve y lo que se selecciona es exactamente lo mismo, sin desajuste posible.
                 // Solo cubre la página donde EMPIEZA la dirección (rowspan a toda la hoja) - si la hoja es tan
                 // larga que pagina, el resto de páginas no llevan este texto (caso raro, no crítico).
-                if (addrHasData) {
+                // Nota 2026-10-01: antes la posición se recalculaba aquí a partir del DOM EN VIVO (sin modificar)
+                // asumiendo una escala UNIFORME entre esas medidas y el lienzo ya capturado - eso se rompía en
+                // cuanto alguna fila crecía de forma no uniforme (ver más arriba), porque entonces esa escala
+                // única ya no era válida para ninguna celda situada más allá de la fila que creció, y el texto
+                // aparecía desplazado fuera de su recuadro. Ahora se usa `addrClonePos`, la posición/ancho REALES
+                // ya medidos dentro del propio `onclone` sobre el clon definitivo que SÍ se capturó - sin
+                // suposiciones de escala, el texto cae exactamente donde está el recuadro en la imagen.
+                if (addrHasData && addrClonePos) {
                     try {
-                        const addrCell = document.getElementById('cell-addr');
-                        if (addrCell) {
-                            const addrRect = addrCell.getBoundingClientRect();
-                            const tableRect = table.getBoundingClientRect();
-                            const scaleX = canvas.width / (table.scrollWidth + extraWidth);
-                            const scaleY = canvas.height / (table.scrollHeight + extraHeight);
-                            const canvasX = (addrRect.left - tableRect.left) * scaleX;
-                            const canvasY = (addrRect.top - tableRect.top) * scaleY;
-                            const canvasW = addrRect.width * scaleX;
-                            const pageIndex = Math.min(Math.floor(canvasY / pageHeightPx), Math.floor((canvas.height - 1) / pageHeightPx));
-                            const mmW = Math.max(20, canvasW / pxPerMm - 4);
-                            // align:'center' ancla el texto por su CENTRO horizontal, no por la izquierda -
-                            // mmX tiene que ser el centro de la celda, no su borde, para que quede centrado
-                            // igual que en pantalla (la celda de dirección es "text-center").
-                            const mmX = canvasX / pxPerMm + margin + 2 + mmW / 2;
-                            const mmY = (canvasY - pageIndex * pageHeightPx) / pxPerMm + margin + 5;
-                            const a = sheet.address || {};
-                            const lines = [];
-                            if (a.dest) lines.push('Destinatario: ' + a.dest);
-                            if (a.dir) lines.push('Dirección: ' + a.dir);
-                            if (a.cp) lines.push('C.P.: ' + a.cp);
-                            if (a.ciudad) lines.push('Ciudad: ' + a.ciudad);
-                            if (a.prov) lines.push('Provincia: ' + a.prov);
-                            if (a.pais) lines.push('País: ' + a.pais);
-                            if (a.tel) lines.push('Tel: ' + a.tel);
-                            if (lines.length) {
-                                pdf.setPage(pageIndex + 1);
-                                pdf.setFontSize(9);
-                                pdf.setTextColor(55, 65, 81);
-                                // maxWidth envuelve cada línea larga (una dirección larga) al ancho real de la
-                                // celda, en vez de salirse de ella - mismo comportamiento que en pantalla.
-                                pdf.text(lines, mmX, mmY, { lineHeightFactor: 1.35, align: 'center', maxWidth: mmW });
-                                pdf.setTextColor(0, 0, 0);
-                            }
+                        const scale = canvas.width / addrClonePos.tableW;
+                        const canvasX = addrClonePos.x * scale;
+                        const canvasY = addrClonePos.y * scale;
+                        const canvasW = addrClonePos.w * scale;
+                        const pageIndex = Math.min(Math.floor(canvasY / pageHeightPx), Math.floor((canvas.height - 1) / pageHeightPx));
+                        const mmW = Math.max(20, canvasW / pxPerMm - 4);
+                        // align:'center' ancla el texto por su CENTRO horizontal, no por la izquierda -
+                        // mmX tiene que ser el centro de la celda, no su borde, para que quede centrado
+                        // igual que en pantalla (la celda de dirección es "text-center").
+                        const mmX = canvasX / pxPerMm + margin + 2 + mmW / 2;
+                        const mmY = (canvasY - pageIndex * pageHeightPx) / pxPerMm + margin + 5;
+                        const a = sheet.address || {};
+                        const lines = [];
+                        if (a.dest) lines.push('Destinatario: ' + a.dest);
+                        if (a.dir) lines.push('Dirección: ' + a.dir);
+                        if (a.cp) lines.push('C.P.: ' + a.cp);
+                        if (a.ciudad) lines.push('Ciudad: ' + a.ciudad);
+                        if (a.prov) lines.push('Provincia: ' + a.prov);
+                        if (a.pais) lines.push('País: ' + a.pais);
+                        if (a.tel) lines.push('Tel: ' + a.tel);
+                        if (lines.length) {
+                            pdf.setPage(pageIndex + 1);
+                            pdf.setFontSize(9);
+                            pdf.setTextColor(55, 65, 81);
+                            // maxWidth envuelve cada línea larga (una dirección larga) al ancho real de la
+                            // celda, en vez de salirse de ella - mismo comportamiento que en pantalla.
+                            pdf.text(lines, mmX, mmY, { lineHeightFactor: 1.35, align: 'center', maxWidth: mmW });
+                            pdf.setTextColor(0, 0, 0);
                         }
                     } catch (e) {}
                 }
