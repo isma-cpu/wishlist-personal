@@ -290,6 +290,7 @@
                         <div class="flex items-center gap-0.5 border border-gray-300 rounded-full px-1 py-1 bg-white">
                             <button onclick="orderUndo()" title="Deshacer (Ctrl+Z)" class="w-7 h-7 flex items-center justify-center text-gray-600 hover:text-black text-sm rounded-full hover:bg-gray-100 cursor-pointer">↶</button>
                             <button onclick="orderRedo()" title="Rehacer (Ctrl+Y)" class="w-7 h-7 flex items-center justify-center text-gray-600 hover:text-black text-sm rounded-full hover:bg-gray-100 cursor-pointer">↷</button>
+                            <button onclick="clearOrderSheet(activeSheet().id, event)" title="Limpiar hoja (vaciar todas las filas y la dirección)" class="w-7 h-7 flex items-center justify-center text-sm rounded-full hover:bg-amber-50 cursor-pointer">🧹</button>
                         </div>
                         <div class="flex items-center gap-0.5 border border-gray-300 rounded-full pl-2 pr-1 py-1 bg-white" title="Tamaño del texto de las columnas">
                             <span class="text-[9px] text-gray-400 uppercase mr-1">Texto</span>
@@ -569,6 +570,7 @@
                     <div id="ship-paquete-preview" onclick="setShipPasteTarget('paquete')" ondragover="shipDragOver(event)" ondragleave="shipDragLeave(event)" ondrop="handleShipPhotoDrop(event, 'paquete')" class="mb-1 cursor-pointer"></div>
                     <div class="flex gap-2">
                         <button onclick="pickShipPhoto('paquete')" class="flex-1 px-3 py-2 text-xs font-bold uppercase text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer">📷 Elegir foto</button>
+                        <button onclick="rotateShipPhoto('paquete')" class="shrink-0 w-9 h-9 flex items-center justify-center text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer" title="Girar 90°">↻</button>
                         <button onclick="clearShipPhoto('paquete')" class="del-x-btn shrink-0" title="Quitar foto">✕</button>
                     </div>
                 </div>
@@ -577,6 +579,7 @@
                     <div id="ship-etiqueta-preview" onclick="setShipPasteTarget('etiqueta')" ondragover="shipDragOver(event)" ondragleave="shipDragLeave(event)" ondrop="handleShipPhotoDrop(event, 'etiqueta')" class="mb-1 cursor-pointer"></div>
                     <div class="flex gap-2">
                         <button onclick="pickShipPhoto('etiqueta')" class="flex-1 px-3 py-2 text-xs font-bold uppercase text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer">📷 Elegir foto</button>
+                        <button onclick="rotateShipPhoto('etiqueta')" class="shrink-0 w-9 h-9 flex items-center justify-center text-sky-400 border border-sky-400/50 rounded-full hover:bg-sky-500 hover:text-black transition-colors cursor-pointer" title="Girar 90°">↻</button>
                         <button onclick="clearShipPhoto('etiqueta')" class="del-x-btn shrink-0" title="Quitar foto">✕</button>
                     </div>
                 </div>
@@ -4855,12 +4858,13 @@
         function newOrderRow() {
             return {
                 id: 'row-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
-                version: '', img: '', size: '', qty: '', name: '', number: '', patch: '', unitPrice: '', price: 0, height: null, custom: {}
+                version: '', img: '', size: '', qty: '1', name: '', number: '', patch: '', unitPrice: '', price: 0, height: null, custom: {}
             };
         }
         // Una fila "vacía de verdad" (recién creada, nunca tocada) - sin foto, sin texto en ningún campo.
+        // La cantidad "1" que traen por defecto las filas nuevas no cuenta como contenido.
         function isEmptyOrderRow(row) {
-            return !row.img && !row.patch && !row.version && !row.size && !row.qty && !row.name && !row.number && !row.unitPrice &&
+            return !row.img && !row.patch && !row.version && !row.size && (!row.qty || row.qty === '1') && !row.name && !row.number && !row.unitPrice &&
                 (!row.custom || Object.values(row.custom).every(v => !v));
         }
         window.addOrderRow = function() { pushOrderUndoSnapshot(); activeSheet().rows.push(newOrderRow()); savePOrders(); renderOrderTable(); };
@@ -5841,13 +5845,22 @@
                 // del todo, en vez de solo ocultarla con print:hidden como antes; ver renderOrderRowHTML.)
 
                 let addrClonePos = null;
+                const liveTableW = table.getBoundingClientRect().width;
+                const captureW = table.scrollWidth;
                 const canvas = await html2canvas(table, {
                     scale: 2,
                     backgroundColor: '#ffffff',
-                    width: table.scrollWidth,
+                    width: captureW,
                     height: table.scrollHeight + extraHeight,
-                    windowWidth: table.scrollWidth,
+                    windowWidth: captureW,
                     onclone: (clonedDoc) => {
+                        // La tabla es "w-full": en una pantalla ancha ocupa todo el contenedor (p.ej. 1542px aunque
+                        // las columnas sumen 975px, y reparte el sobrante entre ellas). En el clon, la ventana virtual
+                        // mide solo lo que mide la tabla, así que sin sidebar/márgenes el contenedor queda más
+                        // estrecho y la tabla salía más estrecha que en la hoja (otro reparto de columnas, hueco en
+                        // blanco a la derecha y la dirección desplazada). Se fija su ancho al de la hoja real.
+                        const tableForWidth = clonedDoc.getElementById('order-table');
+                        if (tableForWidth) tableForWidth.style.width = liveTableW + 'px';
                         // El anillo azul de "celda seleccionada" (clic en una foto/parche/precio) es solo una
                         // ayuda visual en pantalla - nunca debe verse en el PDF descargado.
                         clonedDoc.querySelectorAll('.cell-selected-img').forEach(el => { el.classList.remove('cell-selected-img'); });
@@ -5961,7 +5974,7 @@
                 // suposiciones de escala, el texto cae exactamente donde está el recuadro en la imagen.
                 if (addrHasData && addrClonePos) {
                     try {
-                        const scale = canvas.width / addrClonePos.tableW;
+                        const scale = canvas.width / captureW; // píxeles de lienzo por píxel CSS (= la opción scale de html2canvas)
                         const canvasX = addrClonePos.x * scale;
                         const canvasY = addrClonePos.y * scale;
                         const canvasW = addrClonePos.w * scale;
@@ -6584,6 +6597,27 @@
             shipModalPhotos[which] = '';
             renderShipPhotoPreview(which);
             updateShipEnviadoState();
+        };
+        // Gira 90° (en sentido horario) la foto del paquete o de la etiqueta del popup de envío - a veces se
+        // adjuntan de lado. Redibuja la imagen en un canvas, así el giro queda en la imagen guardada de verdad.
+        window.rotateShipPhoto = function(which) {
+            const src = shipModalPhotos[which];
+            if (!src || !src.startsWith('data:image')) return;
+            const mimeMatch = src.match(/^data:(image\/[a-z]+);/);
+            const mime = (mimeMatch && mimeMatch[1]) || 'image/jpeg';
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.naturalHeight;
+                canvas.height = img.naturalWidth;
+                const ctx = canvas.getContext('2d');
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(Math.PI / 2);
+                ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
+                shipModalPhotos[which] = mime === 'image/jpeg' ? canvas.toDataURL(mime, 0.9) : canvas.toDataURL(mime);
+                renderShipPhotoPreview(which);
+            };
+            img.src = src;
         };
         window.shipDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer)) { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); } };
         window.shipDragLeave = function(e) { e.currentTarget.classList.remove('ring-2', 'ring-sky-400'); };
