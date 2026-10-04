@@ -5845,6 +5845,7 @@
                 // del todo, en vez de solo ocultarla con print:hidden como antes; ver renderOrderRowHTML.)
 
                 let addrClonePos = null;
+                const rowBottomsCss = [];
                 const liveTableW = table.getBoundingClientRect().width;
                 const captureW = table.scrollWidth;
                 const canvas = await html2canvas(table, {
@@ -5931,6 +5932,10 @@
                                 if (img) { img.style.width = r.patch.w + 'px'; img.style.height = r.patch.h + 'px'; img.style.maxWidth = 'none'; }
                             }
                         });
+                        // Parte inferior de cada fila ya con todos los cambios de arriba (alto final), para que
+                        // al paginar el PDF se corte siempre ENTRE filas y no por la mitad de una.
+                        const tableTop = clonedDoc.getElementById('order-table').getBoundingClientRect().top;
+                        clonedDoc.querySelectorAll('#order-tbody tr').forEach(tr => { rowBottomsCss.push(tr.getBoundingClientRect().bottom - tableTop); });
                     }
                 });
 
@@ -5944,8 +5949,17 @@
 
                 const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
                 let y = 0, first = true;
+                const rowBreaksPx = rowBottomsCss.map(b => Math.ceil(b * (canvas.width / captureW)));
                 while (y < canvas.height) {
-                    const sliceH = Math.min(pageHeightPx, canvas.height - y);
+                    let sliceH = Math.min(pageHeightPx, canvas.height - y);
+                    // Si el corte de página cae por la mitad de una fila, se sube hasta el final de la fila anterior
+                    // para que esa fila pase ENTERA a la página siguiente (salvo que una sola fila no quepa en una
+                    // página, que entonces se corta como antes).
+                    if (y + sliceH < canvas.height) {
+                        let best = 0;
+                        rowBreaksPx.forEach(b => { if (b > y + 1 && b <= y + sliceH) best = b; });
+                        if (best > y) sliceH = best - y;
+                    }
                     const pageCanvas = document.createElement('canvas');
                     pageCanvas.width = canvas.width;
                     pageCanvas.height = sliceH;
