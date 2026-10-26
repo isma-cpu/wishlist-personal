@@ -932,6 +932,10 @@
             const g = structure.find(gr => gr.groupId === 'reventa');
             if (!g || !Array.isArray(g.collections) || !g.collections.length) return false;
             if (g.collections.some(c => c.id === 'reventa-camisetas')) return false; // ya fusionado
+            // Solo para la estructura ANTIGUA (todas sus colecciones con id "rev-..."). Si el usuario ha borrado
+            // "Camisetas" y ha creado bloques/colecciones propios aquí, NO se tocan - antes esta migración los
+            // fusionaba como subcolecciones de una "Camisetas" nueva en el siguiente arranque.
+            if (!g.collections.every(c => typeof c.id === 'string' && c.id.startsWith('rev-'))) return false;
 
             const subCols = [];
             g.collections.forEach(c => {
@@ -944,7 +948,7 @@
             return true;
         }
 
-        function saveStructure() { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); }
+        function saveStructure() { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); mirrorSettings(); }
         async function saveDB() { await localforage.setItem('ninjagoal_db_v3', db); updateAll(); }
         async function saveDBQuiet() { try { await localforage.setItem('ninjagoal_db_v3', db); } catch (e) {} }
         // Repinta SOLO la cuadrícula de una (sub)colección concreta (y su contador), en vez de reconstruir TODA
@@ -1070,33 +1074,125 @@
                 exportedAt: new Date().toISOString(),
                 wishlist: { db, structure },
                 biblioteca: { pDb, pStructure },
-                pedidos: { pOrders, pedidosArchivo, pedidosClientes, pedidosProveedores, pedidosPreciosClientes, savedAddresses }
+                pedidos: { pOrders, pedidosArchivo, pedidosClientes, pedidosProveedores, pedidosPreciosClientes, savedAddresses },
+                ajustes: { versionOptions: pedidoVersionOptions }
             };
+        }
+
+        // --- AJUSTES (bloques/carpetas/colecciones, clientes, proveedores, direcciones guardadas, precios, opciones de versión) ---
+        // Viven en localStorage (aparte de las fotos, que van en IndexedDB). Reglas para no perderlos nunca:
+        //  1) restaurar una copia JSON FUSIONA estos ajustes con los actuales en vez de reemplazarlos (antes una copia
+        //     antigua o de otro sitio pisaba los proveedores/direcciones/carpetas creados después de ella);
+        //  2) se guarda un espejo en IndexedDB (settings_mirror_v1) y, si al abrir la app falta algo que el espejo sí
+        //     tiene, se recupera solo;
+        //  3) la copia JSON completa los incluye (buildFullBackup) y existe un archivo de "solo ajustes" (wishlist-settings-v1).
+        function getSettings() {
+            return { structure, pStructure, clientes: pedidosClientes, proveedores: pedidosProveedores, addresses: savedAddresses, precios: pedidosPreciosClientes, versionOptions: pedidoVersionOptions };
+        }
+        let mirrorEnabled = false, _mirrorTimer = null;
+        function mirrorSettings() {
+            if (!mirrorEnabled) return;
+            clearTimeout(_mirrorTimer);
+            _mirrorTimer = setTimeout(() => {
+                try { localforage.setItem('settings_mirror_v1', { ...getSettings(), savedAt: new Date().toISOString() }); } catch (e) {}
+            }, 400);
+        }
+        // Añade a `current` (bloques > carpetas > colecciones > subcolecciones) lo que falte de `incoming`, sin quitar,
+        // renombrar ni reordenar nada de lo que ya hay. Devuelve true si añadió algo.
+        function mergeStructure(current, incoming) {
+            if (!Array.isArray(current) || !Array.isArray(incoming)) return false;
+            let changed = false;
+            const clone = o => JSON.parse(JSON.stringify(o));
+            incoming.forEach(ig => {
+                if (!ig || !Array.isArray(ig.collections)) return;
+                let cg = current.find(g => g.groupId === ig.groupId);
+                if (!cg) {
+                    const hasAll = ig.collections.length && ig.collections.every(ic => current.some(g => g.collections.some(c => c.id === ic.id)));
+                    if (!hasAll) { current.push(clone(ig)); changed = true; }
+                    return;
+                }
+                if (Array.isArray(ig.folders)) {
+                    if (!Array.isArray(cg.folders)) cg.folders = [];
+                    ig.folders.forEach(f => { if (!cg.folders.some(x => x.id === f.id)) { cg.folders.push(clone(f)); changed = true; } });
+                }
+                ig.collections.forEach(ic => {
+                    const existing = current.flatMap(g => g.collections).find(c => c.id === ic.id);
+                    if (!existing) { cg.collections.push(clone(ic)); changed = true; return; }
+                    if (Array.isArray(ic.subCols)) {
+                        if (!Array.isArray(existing.subCols)) existing.subCols = [];
+                        ic.subCols.forEach(s => { if (!existing.subCols.some(x => x.id === s.id)) { existing.subCols.push(clone(s)); changed = true; } });
+                    }
+                });
+            });
+            return changed;
+        }
+        // Fusiona (solo añade, nunca quita) unos ajustes entrantes con los actuales y los guarda. Devuelve cuántas cosas añadió.
+        function mergeSettingsInto(d) {
+            if (!d) return 0;
+            let added = 0;
+            const norm = s => String(s || '').trim().toLowerCase();
+            const mergeNames = (cur, inc) => { (Array.isArray(inc) ? inc : []).forEach(x => { if (typeof x === 'string' && x.trim() && !cur.some(c => norm(c) === norm(x))) { cur.push(x); added++; } }); };
+            const nCl = added; mergeNames(pedidosClientes, d.clientes); const clAdded = added > nCl;
+            const nPr = added; mergeNames(pedidosProveedores, d.proveedores); const prAdded = added > nPr;
+            const nVo = added; mergeNames(pedidoVersionOptions, d.versionOptions); const voAdded = added > nVo;
+            let adAdded = false;
+            (Array.isArray(d.addresses) ? d.addresses : []).forEach(a => {
+                if (a && a.label && !savedAddresses.some(s => norm(s.label) === norm(a.label))) {
+                    savedAddresses.push({ ...a, id: a.id || ('addr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)) });
+                    added++; adAdded = true;
+                }
+            });
+            let pcAdded = false;
+            if (d.precios && typeof d.precios === 'object') {
+                Object.keys(d.precios).forEach(k => {
+                    if (!pedidosPreciosClientes[k]) { pedidosPreciosClientes[k] = { ...d.precios[k] }; added++; pcAdded = true; return; }
+                    Object.keys(d.precios[k] || {}).forEach(f => { if (!pedidosPreciosClientes[k][f] && d.precios[k][f]) { pedidosPreciosClientes[k][f] = d.precios[k][f]; added++; pcAdded = true; } });
+                });
+            }
+            const stAdded = mergeStructure(structure, d.structure);
+            const pstAdded = mergeStructure(pStructure, d.pStructure);
+            if (stAdded) added++;
+            if (pstAdded) added++;
+            if (clAdded) saveClientes();
+            if (prAdded) saveProveedores();
+            if (voAdded) saveVersionOptions();
+            if (adAdded) saveSavedAddresses();
+            if (pcAdded) savePreciosClientes();
+            if (stAdded) saveStructure();
+            if (pstAdded) pSaveStructure();
+            return added;
+        }
+        // Foto rápida (sin imágenes) de los ajustes actuales justo antes de restaurar una copia, por si algo sale mal.
+        function snapshotSettingsBeforeRestore() {
+            try { localStorage.setItem('settings_pre_restore_snapshot_v1', JSON.stringify({ savedAt: new Date().toISOString(), ...getSettings() })); } catch (e) {}
+        }
+        // Si al arrancar faltan ajustes que el espejo (IndexedDB) sí tenía, se recuperan. Devuelve cuántos añadió.
+        function recoverSettingsFromMirror(mirror) {
+            try { return mirror ? mergeSettingsInto(mirror) : 0; } catch (e) { return 0; }
         }
         // Si el archivo es una copia completa (tiene __backup) restaura las 3 partes; si no, es una copia antigua (solo `db`) que trata el propio caller.
         async function tryRestoreFullBackup(parsed) {
             if (!parsed || parsed.__backup !== 'wishlist-full-v1') return false;
+            snapshotSettingsBeforeRestore();
+            mirrorEnabled = true;
             if (parsed.wishlist) {
                 db = parsed.wishlist.db || {};
-                if (parsed.wishlist.structure) structure = parsed.wishlist.structure;
+                mergeStructure(structure, parsed.wishlist.structure);
                 saveStructure();
             }
             if (parsed.biblioteca) {
                 pDb = parsed.biblioteca.pDb || {};
-                if (parsed.biblioteca.pStructure) pStructure = parsed.biblioteca.pStructure;
+                mergeStructure(pStructure, parsed.biblioteca.pStructure);
                 pSaveStructure();
             }
             if (parsed.pedidos) {
                 if (parsed.pedidos.pOrders) pOrders = parsed.pedidos.pOrders;
                 pedidosArchivo = parsed.pedidos.pedidosArchivo || [];
-                if (parsed.pedidos.pedidosClientes) pedidosClientes = parsed.pedidos.pedidosClientes;
-                if (parsed.pedidos.pedidosProveedores) pedidosProveedores = parsed.pedidos.pedidosProveedores;
-                if (parsed.pedidos.pedidosPreciosClientes) pedidosPreciosClientes = parsed.pedidos.pedidosPreciosClientes;
-                if (parsed.pedidos.savedAddresses) savedAddresses = parsed.pedidos.savedAddresses;
-                saveClientes();
-                saveProveedores();
-                savePreciosClientes();
-                saveSavedAddresses();
+                mergeSettingsInto({
+                    clientes: parsed.pedidos.pedidosClientes, proveedores: parsed.pedidos.pedidosProveedores,
+                    precios: parsed.pedidos.pedidosPreciosClientes, addresses: parsed.pedidos.savedAddresses,
+                    versionOptions: parsed.ajustes && parsed.ajustes.versionOptions
+                });
                 await savePOrders();
                 await savePedidosArchivo();
             }
@@ -1165,7 +1261,16 @@
                     openConfirmNotice('❌ Ese archivo no es una copia de seguridad válida (no se pudo leer como JSON).', () => {}, () => {}, { confirmLabel: 'ENTENDIDO' });
                     return;
                 }
-                openConfirmDelete('⚠️ ¿Quieres restaurar esta copia de seguridad? Se reemplazarán los datos actuales.', async () => {
+                // Archivo de "solo ajustes" (proveedores, direcciones, clientes, bloques/carpetas...): solo AÑADE lo que
+                // falte, no toca fotos ni pedidos ni borra nada.
+                if (imported && imported.__backup === 'wishlist-settings-v1') {
+                    mirrorEnabled = true;
+                    snapshotSettingsBeforeRestore();
+                    const n = mergeSettingsInto(imported);
+                    openConfirmNotice(n ? `✅ Se han recuperado ${n} elemento${n === 1 ? '' : 's'} (proveedores, direcciones, clientes o bloques/carpetas que faltaban). No se ha borrado nada.` : 'ℹ️ Ya tenías todo lo de este archivo, no había nada que añadir.', () => location.reload(), () => location.reload(), { confirmLabel: 'ENTENDIDO' });
+                    return;
+                }
+                openConfirmDelete('⚠️ ¿Quieres restaurar esta copia de seguridad? Se reemplazarán las fotos y los pedidos actuales (los proveedores, direcciones y carpetas se fusionan, no se pierden).', async () => {
                     if (!(await tryRestoreFullBackup(imported))) {
                         db = imported; // copia antigua: solo contenía la wishlist
                         await saveDB();
@@ -3345,7 +3450,7 @@
             if (changed) { try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {} }
         })();
 
-        function pSaveStructure() { try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {} }
+        function pSaveStructure() { try { localStorage.setItem('pedido_structure_v2', JSON.stringify(pStructure)); } catch (e) {} mirrorSettings(); }
 
         let pCollapsedGroups = new Set();
         try { pCollapsedGroups = new Set(JSON.parse(localStorage.getItem('pedido_collapsed_groups') || '[]')); } catch (e) {}
@@ -5127,7 +5232,7 @@
         // opciones se ofrecen al elegir, así que filas ya existentes con un valor no siguen intactas si se
         // renombra/elimina esa opción de la lista.
         let pedidoVersionOptions = ['FAN', 'PLAYER', 'RETRO'];
-        function saveVersionOptions() { try { localStorage.setItem('pedido_version_opciones_v1', JSON.stringify(pedidoVersionOptions)); } catch (e) {} }
+        function saveVersionOptions() { try { localStorage.setItem('pedido_version_opciones_v1', JSON.stringify(pedidoVersionOptions)); } catch (e) {} mirrorSettings(); }
         function renderVersionCellInner(row) {
             const val = row.version || '';
             const btn = `<button type="button" data-version-trigger onclick="setSelectedImgCell('${row.id}','version'); openVersionDropdown(versionRowTarget('${row.id}'), event)" class="cell-text w-full h-full min-w-[3.5rem] text-center bg-transparent border-0 rounded-xl px-1 text-gray-900 cursor-pointer hover:bg-gray-100 flex items-center justify-center">${val ? escapeHtml(val) : '<span data-empty-hint class="text-gray-300 normal-case font-normal">Elegir ▾</span>'}</button>`;
@@ -5685,7 +5790,7 @@
             const raw = JSON.parse(localStorage.getItem('pedidos_direcciones_v1') || '[]');
             if (Array.isArray(raw)) savedAddresses = raw;
         } catch (e) {}
-        function saveSavedAddresses() { try { localStorage.setItem('pedidos_direcciones_v1', JSON.stringify(savedAddresses)); } catch (e) {} }
+        function saveSavedAddresses() { try { localStorage.setItem('pedidos_direcciones_v1', JSON.stringify(savedAddresses)); } catch (e) {} mirrorSettings(); }
         function renderAddrSavedSelect() {
             const sel = document.getElementById('addr-saved-select');
             if (!sel) return;
@@ -6096,8 +6201,8 @@
             renderPedidosTab();
         }
         async function savePedidosArchivo() { try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {} }
-        function saveClientes() { try { localStorage.setItem('pedidos_clientes_v1', JSON.stringify(pedidosClientes)); } catch (e) {} }
-        function saveProveedores() { try { localStorage.setItem('pedidos_proveedores_v1', JSON.stringify(pedidosProveedores)); } catch (e) {} }
+        function saveClientes() { try { localStorage.setItem('pedidos_clientes_v1', JSON.stringify(pedidosClientes)); } catch (e) {} mirrorSettings(); }
+        function saveProveedores() { try { localStorage.setItem('pedidos_proveedores_v1', JSON.stringify(pedidosProveedores)); } catch (e) {} mirrorSettings(); }
 
         // Tabla de precios por cliente: consulta/edición rápida desde "Crear Pedido" (botón 💰), independiente
         // de la hoja en sí - solo un chuletario de referencia, no afecta a ninguna fila/precio de la plantilla.
@@ -6116,7 +6221,7 @@
             { key: 'parche', label: 'PARCHE' },
             { key: 'personalizacion', label: 'PERSONALIZACIÓN' },
         ];
-        function savePreciosClientes() { try { localStorage.setItem('pedidos_precios_clientes_v1', JSON.stringify(pedidosPreciosClientes)); } catch (e) {} }
+        function savePreciosClientes() { try { localStorage.setItem('pedidos_precios_clientes_v1', JSON.stringify(pedidosPreciosClientes)); } catch (e) {} mirrorSettings(); }
         window.openPreciosClienteModal = function(event) {
             if (event) event.stopPropagation();
             const sel = document.getElementById('precios-cliente-select');
@@ -6835,9 +6940,19 @@
         };
 
         window.onload = async function() {
+            // El espejo de ajustes se lee ANTES de que nada pueda sobrescribirlo (ver "AJUSTES" más arriba).
+            let settingsMirror = null;
+            try { settingsMirror = await localforage.getItem('settings_mirror_v1'); } catch (e) {}
             await loadDB();
             await loadPedido();
             await loadPedidosArchivo();
+            const recovered = recoverSettingsFromMirror(settingsMirror);
+            mirrorEnabled = true;
+            mirrorSettings();
+            if (recovered) {
+                // Se recargó algo que faltaba en localStorage pero seguía en el espejo: se recarga una sola vez para pintarlo todo.
+                try { if (!sessionStorage.getItem('settings_recovered_reload')) { sessionStorage.setItem('settings_recovered_reload', '1'); location.reload(); return; } } catch (e) {}
+            }
             let savedTab = 'wishlist';
             try { savedTab = localStorage.getItem('wishlist_active_tab') || 'wishlist'; } catch (e) {}
             switchTab(savedTab);
