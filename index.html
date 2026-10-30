@@ -19,6 +19,7 @@
         html { scroll-behavior: smooth; }
         body { background-color: #000000; color: #e5e7eb; font-family: 'Poppins', ui-sans-serif, system-ui, sans-serif !important; }
         .hidden { display: none !important; }
+        [data-zsync=badge] { left: auto !important; right: 12px; }
         
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #000000; }
@@ -222,7 +223,7 @@
             <div class="grid grid-cols-2 gap-2">
                 <button onclick="exportBackupJSON()" class="w-full py-1.5 border border-zinc-700 text-zinc-400 text-[10px] uppercase rounded-full hover:border-blue-400 hover:text-blue-400 transition-colors flex flex-col items-center cursor-pointer" title="Guarda Wishlist, la biblioteca de Crear Pedido y los Pedidos guardados, todo en un archivo">
                     <span>💾</span>
-                    <span>Descargar JSON</span>
+                    <span>Exportar todo (JSON)</span>
                 </button>
                 <label class="w-full py-1.5 border border-zinc-700 text-zinc-400 text-[10px] uppercase rounded-full hover:border-yellow-400 hover:text-yellow-400 transition-colors flex flex-col items-center cursor-pointer" title="Restaurar datos desde copia JSON">
                     <span>📂</span>
@@ -671,6 +672,7 @@
         </div>
     </div>
 
+    <script src="zenvyx-sync.js"></script>
     <script>
         localforage.config({ name: 'WishlistApp', storeName: 'images_db' });
 
@@ -949,8 +951,8 @@
         }
 
         function saveStructure() { localStorage.setItem('wishlist_structure_v2', JSON.stringify(structure)); mirrorSettings(); }
-        async function saveDB() { await localforage.setItem('ninjagoal_db_v3', db); updateAll(); }
-        async function saveDBQuiet() { try { await localforage.setItem('ninjagoal_db_v3', db); } catch (e) {} }
+        async function saveDB() { await localforage.setItem('ninjagoal_db_v3', db); zsTouch(); updateAll(); }
+        async function saveDBQuiet() { try { await localforage.setItem('ninjagoal_db_v3', db); } catch (e) {} zsTouch(); }
         // Repinta SOLO la cuadrícula de una (sub)colección concreta (y su contador), en vez de reconstruir TODA
         // la app como hace updateAll() - usado tras arrastrar una foto para reordenar/mover, que si no se nota
         // muy lento con muchas fotos (updateAll repinta cada cuadrícula de cada colección, esté visible o no).
@@ -1073,7 +1075,7 @@
                 __backup: 'wishlist-full-v1',
                 exportedAt: new Date().toISOString(),
                 wishlist: { db, structure },
-                biblioteca: { pDb, pStructure },
+                biblioteca: { pDb, pStructure, pTeamCrests },
                 pedidos: { pOrders, pedidosArchivo, pedidosClientes, pedidosProveedores, pedidosPreciosClientes, savedAddresses },
                 ajustes: { versionOptions: pedidoVersionOptions }
             };
@@ -1091,6 +1093,7 @@
         }
         let mirrorEnabled = false, _mirrorTimer = null;
         function mirrorSettings() {
+            zsTouch();
             if (!mirrorEnabled) return;
             clearTimeout(_mirrorTimer);
             _mirrorTimer = setTimeout(() => {
@@ -1182,6 +1185,10 @@
             }
             if (parsed.biblioteca) {
                 pDb = parsed.biblioteca.pDb || {};
+                if (parsed.biblioteca.pTeamCrests && typeof parsed.biblioteca.pTeamCrests === "object") {
+                    pTeamCrests = { ...pTeamCrests, ...parsed.biblioteca.pTeamCrests };
+                    await savePTeamCrests();
+                }
                 mergeStructure(pStructure, parsed.biblioteca.pStructure);
                 pSaveStructure();
             }
@@ -1275,6 +1282,7 @@
                         db = imported; // copia antigua: solo contenía la wishlist
                         await saveDB();
                     }
+                    zsMarkImportApproved();
                     location.reload(); // el propio reload ya es la señal de éxito, no depende de un alert()
                 }, null, { title: 'Confirmar Importación', confirmLabel: 'IMPORTAR', theme: 'blue', icon: '📥' });
             };
@@ -3485,7 +3493,7 @@
 
         // Escudos reales de cada equipo/selección, subidos por el usuario (no emojis) - por colección, en su propio store.
         let pTeamCrests = {};
-        async function savePTeamCrests() { try { await localforage.setItem('pedido_crests_v1', pTeamCrests); } catch (e) {} }
+        async function savePTeamCrests() { try { await localforage.setItem('pedido_crests_v1', pTeamCrests); } catch (e) {} zsTouch(); }
         // Mientras el usuario no suba el escudo real de un equipo, se genera un "escudo" provisional (iniciales +
         // color, siempre el mismo para el mismo nombre) para no dejar el hueco vacío - un solo clic encima lo
         // sustituye por la imagen real de siempre.
@@ -3588,10 +3596,11 @@
 
         async function pSaveDB() {
             try { await localforage.setItem('pedido_db_v1', pDb); } catch (e) {}
+            zsTouch();
             pRenderSidebarBadges();
             pRenderLibraryBody();
         }
-        async function pSaveDBQuiet() { try { await localforage.setItem('pedido_db_v1', pDb); } catch (e) {} }
+        async function pSaveDBQuiet() { try { await localforage.setItem('pedido_db_v1', pDb); } catch (e) {} zsTouch(); }
 
         // range=[lo,hi] opcional: igual que refreshGridAfterDrop en Wishlist, solo reconstruye las tarjetas cuyo
         // índice cambió de verdad tras un arrastre, en vez de repintar TODA la biblioteca (pRenderLibraryBody),
@@ -4838,11 +4847,13 @@
                 if (p) {
                     p.total = (p.rows || []).reduce((s, r) => s + (parseFloat(r.price) || 0), 0);
                     try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {}
+                    zsTouch();
                     renderMorosos();
                 }
                 return;
             }
             try { await localforage.setItem('pedido_orders_v2', pOrders); } catch (e) {}
+            zsTouch();
         }
 
         // Menú de opciones de hoja: un único menú fixed compartido (no se puede anidar dentro de la
@@ -6200,7 +6211,7 @@
             renderProveedoresChips();
             renderPedidosTab();
         }
-        async function savePedidosArchivo() { try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {} }
+        async function savePedidosArchivo() { try { await localforage.setItem('pedidos_archivo_v1', pedidosArchivo); } catch (e) {} zsTouch(); }
         function saveClientes() { try { localStorage.setItem('pedidos_clientes_v1', JSON.stringify(pedidosClientes)); } catch (e) {} mirrorSettings(); }
         function saveProveedores() { try { localStorage.setItem('pedidos_proveedores_v1', JSON.stringify(pedidosProveedores)); } catch (e) {} mirrorSettings(); }
 
@@ -6939,6 +6950,479 @@
             }
         };
 
+        // --- SINCRONIZACIÓN ENTRE DISPOSITIVOS (zenvyx-sync) ---
+        // Todo se sigue guardando en este navegador como siempre; esto además lo copia a la nube y trae los cambios de
+        // otros dispositivos. Cada foto, hoja, pedido y ajuste es un registro aparte; las imágenes se suben como archivos
+        // (img/<hash>) y en el registro solo va { $img: ruta }. zsSnapshot = lo que hay en la nube según este dispositivo.
+        // `var` a propósito: zsTouch() se llama desde los guardados y no puede fallar aunque esto aún no se haya ejecutado.
+        var zsSnapshot = null, zsSnapshotUser = null, zsApplying = false, zsTouchTimer = null, zsReady = false, zsGeneration = 0;
+        var zsImgIndex = { hashToPath: {}, uploaded: {} };
+        var zsSrcToPath = new Map(), zsPathToSrc = new Map(), zsUnresolved = new Set(), zsPendingLocal = new Set();
+        var zsChain = Promise.resolve(), zsFirstMerge = false, zsDeletePromptOpen = false, zsForceDelete = false, zsKicked = false;
+        const ZS_MISSING = new Error('zs-missing-image');
+        const ZS_DOMAIN = { wl_group: 'settings', wl_folder: 'settings', wl_collection: 'settings', wl_sub: 'settings', pl_group: 'settings', pl_folder: 'settings', pl_collection: 'settings', pl_sub: 'settings', cliente: 'settings', proveedor: 'settings', version: 'settings', address: 'settings', price: 'settings', sheet_row: 'orders', pedido_row: 'pedidos', wl_item: 'wl', wl_order: 'wl', pl_item: 'pl', pl_order: 'pl', crest: 'crest', sheet: 'orders', pedido: 'pedidos', settings: 'settings' };
+
+        function zsRun(fn) { const p = zsChain.then(() => fn()); zsChain = p.catch(e => console.error('[sync]', e)); return p; }
+        function zsCanSync() { return zsReady && !!window.ZSync && !!ZSync.user && !!zsSnapshot && zsSnapshotUser === ZSync.user.id; }
+        function zsTouch() {
+            zsGeneration++;
+            if (zsApplying || !zsSnapshot) return;
+            clearTimeout(zsTouchTimer);
+            zsTouchTimer = setTimeout(() => zsRun(zsDiffInner), 1500);
+        }
+        function zsMarkImportApproved() { try { localStorage.setItem('zs_wishlist_import_ok', String(Date.now())); } catch (e) {} }
+        function zsImportApproved() { const t = +(localStorage.getItem('zs_wishlist_import_ok') || 0); return Date.now() - t < 30 * 60 * 1000; }
+        // Ids de registro solo con caracteres seguros para los filtros de Supabase.
+        function zsId(s) { s = String(s); return /^[A-Za-z0-9_-]{1,200}$/.test(s) ? s : 'h_' + Array.from(new TextEncoder().encode(s), b => b.toString(16).padStart(2, '0')).join(''); }
+        function zsSplitKey(key) { const i = key.indexOf('/'); return [key.slice(0, i), key.slice(i + 1)]; }
+        function zsDomain(c, id) { return c === 'meta' ? (id === 'orders' ? 'orders' : id === 'pedidos' ? 'pedidos' : null) : ZS_DOMAIN[c] || null; }
+        function zsDomainOfKey(key) { const [c, id] = zsSplitKey(key); return zsDomain(c, id); }
+        function zsNewId(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+
+        function zsPack(v) {
+            if (typeof v === 'string') {
+                if (!v.startsWith('data:image')) return v;
+                const p = zsSrcToPath.get(v);
+                if (!p) throw ZS_MISSING;
+                return { $img: p };
+            }
+            if (Array.isArray(v)) return v.map(zsPack);
+            if (v && typeof v === 'object') { const o = {}; for (const k in v) if (v[k] !== undefined && typeof v[k] !== 'function') o[k] = zsPack(v[k]); return o; }
+            return v;
+        }
+        function zsIsRef(v) { return v && typeof v === 'object' && !Array.isArray(v) && typeof v.$img === 'string' && Object.keys(v).length === 1; }
+        function zsUnpack(v) {
+            if (Array.isArray(v)) return v.map(zsUnpack);
+            if (v && typeof v === 'object') {
+                if (zsIsRef(v)) { const s = zsPathToSrc.get(v.$img); if (s == null) throw ZS_MISSING; return s; }
+                const o = {}; for (const k in v) o[k] = zsUnpack(v[k]); return o;
+            }
+            return v;
+        }
+        function zsRefs(v, out) {
+            if (Array.isArray(v)) v.forEach(x => zsRefs(x, out));
+            else if (v && typeof v === 'object') { if (zsIsRef(v)) out.add(v.$img); else for (const k in v) zsRefs(v[k], out); }
+        }
+        function zsWalkImages(v, out) {
+            if (typeof v === 'string') { if (v.startsWith('data:image')) out.add(v); }
+            else if (Array.isArray(v)) v.forEach(x => zsWalkImages(x, out));
+            else if (v && typeof v === 'object') for (const k in v) zsWalkImages(v[k], out);
+        }
+        function zsAllImages() { const s = new Set(); [db, pDb, pTeamCrests, pOrders, pedidosArchivo].forEach(x => zsWalkImages(x, s)); return s; }
+
+        // Cada foto necesita un id estable (_sid). Una copia con el mismo id (foto duplicada) recibe uno nuevo.
+        function zsAssignStoreIds(store, prefix) {
+            let changed = false; const seen = new Set();
+            Object.keys(store || {}).forEach(col => {
+                const arr = store[col]; if (!Array.isArray(arr)) return;
+                arr.forEach((it, i) => {
+                    if (!it || typeof it !== 'object') return;
+                    if (!it._sid) { it._sid = zsNewId(prefix); changed = true; }
+                    else if (seen.has(it._sid)) { arr[i] = { ...it, _sid: zsNewId(prefix) }; changed = true; }
+                    seen.add(arr[i]._sid);
+                });
+            });
+            return changed;
+        }
+        function zsAssignListIds(list, prefix) {
+            let changed = false; const seen = new Set();
+            (list || []).forEach(x => {
+                if (!x || typeof x !== 'object') return;
+                if (!x.id || seen.has(x.id)) { x.id = zsNewId(prefix); changed = true; }
+                seen.add(x.id);
+            });
+            return changed;
+        }
+        async function zsAssignIds() {
+            if (zsAssignStoreIds(db, 'w')) await saveDBQuiet();
+            if (zsAssignStoreIds(pDb, 'p')) await pSaveDBQuiet();
+            const s = zsAssignListIds(pOrders.sheets, 'sheet-');
+            const a = zsAssignListIds(pedidosArchivo, 'ped-');
+            pOrders.sheets.forEach(x => zsAssignListIds(x.rows, 'row-'));
+            pedidosArchivo.forEach(x => zsAssignListIds(x.rows, 'row-'));
+            zsAssignListIds(savedAddresses, 'addr-');
+            if (s) { try { await localforage.setItem('pedido_orders_v2', pOrders); } catch (e) {} }
+            if (a) await savePedidosArchivo();
+        }
+
+        async function zsHash(str) {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+            return Array.from(new Uint8Array(buf).slice(0, 16), b => b.toString(16).padStart(2, '0')).join('');
+        }
+        async function zsUploadBlob(src) {
+            const orig = await (await fetch(src)).blob();
+            if (orig.type === 'image/webp') return orig;
+            const webp = await new Promise(res => {
+                const im = new Image();
+                im.onload = () => {
+                    const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+                    c.getContext('2d').drawImage(im, 0, 0);
+                    c.toBlob(b => res(b), 'image/webp', 0.85);
+                };
+                im.onerror = () => res(null);
+                im.src = src;
+            });
+            return webp && webp.type === 'image/webp' && webp.size < orig.size ? webp : orig;
+        }
+        function zsBlobToDataURL(blob) {
+            return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(blob); });
+        }
+        function zsProgress(text) {
+            let el = document.getElementById('zs-progress');
+            if (!text) { if (el) el.remove(); return; }
+            if (!el) {
+                el = document.createElement('div'); el.id = 'zs-progress';
+                el.style.cssText = 'position:fixed;right:12px;bottom:48px;z-index:2147483000;font:12px system-ui,sans-serif;color:#fff;background:rgba(15,15,20,.9);border:1px solid rgba(57,255,20,.45);border-radius:999px;padding:6px 12px';
+                document.body.appendChild(el);
+            }
+            el.textContent = text;
+        }
+        async function zsSaveIndex() { try { await localforage.setItem('zs_wishlist_images_v1', zsImgIndex); } catch (e) {} }
+        async function zsSaveSnapshot() { try { await localforage.setItem('zs_wishlist_snapshot_v1', { user: zsSnapshotUser, snap: zsSnapshot }); } catch (e) {} }
+        async function zsPool(items, n, fn) {
+            let i = 0;
+            const results = await Promise.allSettled(Array.from({ length: Math.min(n, items.length) }, async () => { while (i < items.length) { const x = items[i++]; await fn(x); } }));
+            const failed = results.find(x => x.status === 'rejected');
+            if (failed) throw failed.reason;
+        }
+
+        // Asegura que cada imagen local tiene su archivo en la nube (sube solo las que faltan).
+        async function zsEnsurePaths(srcs) {
+            const todo = [...srcs].filter(s => !zsSrcToPath.has(s));
+            if (!todo.length) return;
+            const toUpload = [];
+            for (const s of todo) {
+                const h = await zsHash(s);
+                const known = zsImgIndex.hashToPath[h];
+                if (known && zsImgIndex.uploaded[known]) { zsSrcToPath.set(s, known); if (!zsPathToSrc.has(known)) zsPathToSrc.set(known, s); }
+                else toUpload.push([s, h]);
+            }
+            if (!toUpload.length) return;
+            let done = 0;
+            zsProgress(`☁️ Subiendo fotos 0/${toUpload.length}`);
+            try {
+                await zsPool(toUpload, 3, async ([s, h]) => {
+                    const path = zsImgIndex.hashToPath[h] || `img/${h}.webp`;
+                    try {
+                        await ZSync.putBlob(path, await zsUploadBlob(s));
+                        zsImgIndex.hashToPath[h] = path; zsImgIndex.uploaded[path] = 1;
+                        zsSrcToPath.set(s, path); if (!zsPathToSrc.has(path)) zsPathToSrc.set(path, s);
+                    } catch (e) { console.error('[sync] subir foto', e); }
+                    done++;
+                    zsProgress(`☁️ Subiendo fotos ${done}/${toUpload.length}`);
+                    if (done % 20 === 0) await zsSaveIndex();
+                });
+            } finally { await zsSaveIndex(); zsProgress(null); }
+        }
+        async function zsDownload(paths) {
+            if (!paths.length) return;
+            let done = 0;
+            zsProgress(`☁️ Descargando fotos 0/${paths.length}`);
+            try {
+                await zsPool(paths, 4, async p => {
+                    try {
+                        const src = await zsBlobToDataURL(await ZSync.getBlob(p));
+                        zsPathToSrc.set(p, src); zsSrcToPath.set(src, p);
+                        zsImgIndex.hashToPath[await zsHash(src)] = p; zsImgIndex.uploaded[p] = 1;
+                    } catch (e) { console.error('[sync] descargar foto', p, e); throw e; }
+                    done++;
+                    zsProgress(`☁️ Descargando fotos ${done}/${paths.length}`);
+                });
+            } finally { await zsSaveIndex(); zsProgress(null); }
+        }
+
+        // Estado local -> registros. `skipped` = registros con alguna imagen aún sin subir (no se tocan en la nube).
+        function zsBuildRecords(raw = false) {
+            const records = new Map(), skipped = new Set();
+            const add = (c, rawId, obj) => {
+                const id = zsId(rawId), key = c + '/' + id;
+                try { const data = raw ? obj : zsPack(obj); records.set(key, { c, id, data, json: JSON.stringify(data) }); }
+                catch (e) { if (e === ZS_MISSING) skipped.add(key); else throw e; }
+            };
+            const addStore = (store, itemC, orderC) => Object.keys(store || {}).forEach(col => {
+                const arr = store[col]; if (!Array.isArray(arr)) return;
+                const ids = arr.filter(it => it && it._sid).map(it => it._sid);
+                if (ids.length) add(orderC, col, { col, ids });
+                arr.forEach(it => { if (it && it._sid) add(itemC, it._sid, { ...it, col }); });
+            });
+            addStore(db, 'wl_item', 'wl_order');
+            addStore(pDb, 'pl_item', 'pl_order');
+            Object.keys(pTeamCrests || {}).forEach(col => { if (pTeamCrests[col]) add('crest', col, { col, src: pTeamCrests[col] }); });
+            const hierarchy = (groups, prefix) => groups.forEach((g, order) => {
+                const { collections, folders, ...data } = g;
+                add(prefix + '_group', g.groupId, { ...data, order });
+                (folders || []).forEach((f, order) => add(prefix + '_folder', f.id, { ...f, parent: g.groupId, order }));
+                (collections || []).forEach((c, order) => {
+                    const { subCols, ...data } = c;
+                    add(prefix + '_collection', c.id, { ...data, parent: g.groupId, order });
+                    (subCols || []).forEach((x, order) => add(prefix + '_sub', x.id, { ...x, parent: c.id, order }));
+                });
+            });
+            hierarchy(structure, 'wl'); hierarchy(pStructure, 'pl');
+            const sheets = (list, kind) => list.forEach((x, order) => {
+                const { rows, ...data } = x;
+                add(kind, x.id, { ...data, order });
+                (rows || []).forEach((r, order) => add(kind + '_row', x.id + '__' + r.id, { ...r, parent: x.id, order }));
+            });
+            sheets(pOrders.sheets, 'sheet'); sheets(pedidosArchivo, 'pedido');
+            const { sheets: ignored, activeSheetId, ...meta } = pOrders;
+            add('meta', 'orders', meta);
+            const names = (list, c) => list.forEach((name, order) => add(c, name, { name, order }));
+            names(pedidosClientes, 'cliente'); names(pedidosProveedores, 'proveedor'); names(pedidoVersionOptions, 'version');
+            savedAddresses.forEach((x, order) => add('address', x.id, { ...x, order }));
+            Object.entries(pedidosPreciosClientes).forEach(([name, prices]) => Object.entries(prices).forEach(([field, value]) => add('price', JSON.stringify([name, field]), { name, field, value })));
+            return { records, skipped };
+        }
+
+        function zsIsBigDeletion(dels) {
+            const kinds = {}, totals = {};
+            dels = dels.filter(k => !/_order\//.test(k));
+            dels.forEach(k => { const c = zsSplitKey(k)[0]; kinds[c] = (kinds[c] || 0) + 1; });
+            Object.keys(zsSnapshot).forEach(k => { if (/_order\//.test(k)) return; const c = zsSplitKey(k)[0]; totals[c] = (totals[c] || 0) + 1; });
+            return Object.keys(kinds).some(c => kinds[c] >= 20 && kinds[c] >= totals[c] * 0.25);
+        }
+
+        // Sube a la nube lo que haya cambiado aquí desde la última vez. Devuelve las claves enviadas.
+        async function zsDiffInner() {
+            const sent = new Set();
+            if (!zsCanSync()) return sent;
+            await zsAssignIds();
+            await zsEnsurePaths(zsAllImages());
+            const { records, skipped } = zsBuildRecords();
+            zsPendingLocal = skipped;
+            const puts = [], dels = [];
+            records.forEach((r, key) => { if (!zsUnresolved.has(key) && zsSnapshot[key] !== r.json) puts.push([key, r]); });
+            Object.keys(zsSnapshot).forEach(key => { if (!records.has(key) && !skipped.has(key) && !zsUnresolved.has(key)) dels.push(key); });
+            let doDels = dels;
+            if (dels.length && !zsForceDelete && !zsImportApproved() && zsIsBigDeletion(dels)) {
+                doDels = [];
+                if (!zsDeletePromptOpen) {
+                    zsDeletePromptOpen = true;
+                    openConfirmDelete(`⚠️ Se van a borrar ${dels.length} elementos (fotos, pedidos…) también en tus otros dispositivos. ¿Es correcto?\n\nSi no lo has hecho tú, pulsa Cancelar y se recuperarán.`,
+                        () => { zsDeletePromptOpen = false; zsRun(async () => { zsForceDelete = true; try { await zsDiffInner(); } finally { zsForceDelete = false; } }); },
+                        () => { zsDeletePromptOpen = false; zsRun(() => zsApply(new Set(['wl', 'pl', 'crest', 'orders', 'pedidos']), false, new Set())); },
+                        { title: 'Confirmar borrado sincronizado', confirmLabel: 'SÍ, BORRAR' });
+                }
+            }
+            try {
+                for (const [key, r] of puts) { ZSync.put(r.c, r.id, r.data); zsSnapshot[key] = r.json; sent.add(key); }
+                for (const key of doDels) { const [c, id] = zsSplitKey(key); ZSync.del(c, id); delete zsSnapshot[key]; sent.add(key); }
+            } finally {
+                if (sent.size) await zsSaveSnapshot();
+            }
+            if (doDels.length && zsImportApproved()) { try { localStorage.removeItem('zs_wishlist_import_ok'); } catch (e) {} }
+            return sent;
+        }
+
+        // Registros (zsSnapshot) -> estado local. Lo que aún no se ha subido nunca (no está en zsSnapshot) se conserva;
+        // si una imagen de la nube no se puede descargar, se deja la versión local que hubiera y se reintenta luego.
+        function zsRebuildStore(itemC, orderC, current, remoteDeleted) {
+            const items = new Map(), orders = {}, oldById = new Map();
+            Object.keys(current || {}).forEach(col => (Array.isArray(current[col]) ? current[col] : []).forEach(it => { if (it && it._sid) oldById.set(it._sid, { it, col }); }));
+            Object.keys(zsSnapshot).forEach(key => {
+                const [c] = zsSplitKey(key);
+                if (c === itemC) {
+                    const raw = JSON.parse(zsSnapshot[key]);
+                    let d;
+                    try { d = zsUnpack(raw); zsUnresolved.delete(key); }
+                    catch (e) {
+                        if (e !== ZS_MISSING) throw e;
+                        zsUnresolved.add(key);
+                        const old = oldById.get(raw._sid); if (!old) return;
+                        d = { ...old.it, col: old.col };
+                    }
+                    if (d && d._sid) items.set(d._sid, d);
+                } else if (c === orderC) {
+                    const d = JSON.parse(zsSnapshot[key]);
+                    if (d && Array.isArray(d.ids)) orders[d.col] = d.ids;
+                }
+            });
+            oldById.forEach(({ it, col }, sid) => {
+                const key = itemC + '/' + zsId(sid);
+                if (zsPendingLocal.has(key) || (!(key in zsSnapshot) && !remoteDeleted.has(key) && !items.has(sid))) items.set(sid, { ...it, col });
+            });
+            const out = {}, placed = new Set();
+            Object.keys(current || {}).forEach(col => { out[col] = []; });
+            const take = d => { const { col, ...rest } = d; return rest; };
+            Object.keys(orders).forEach(col => {
+                if (!out[col]) out[col] = [];
+                orders[col].forEach(sid => { const d = items.get(sid); if (d && d.col === col && !placed.has(sid)) { out[col].push(take(d)); placed.add(sid); } });
+            });
+            items.forEach((d, sid) => { if (placed.has(sid)) return; (out[d.col] = out[d.col] || []).push(take(d)); placed.add(sid); });
+            return out;
+        }
+        function zsRebuildList(itemC, metaId, idsField, current, remoteDeleted) {
+            const byId = new Map(), oldById = new Map((current || []).filter(x => x && x.id).map(x => [x.id, x]));
+            let meta = null;
+            Object.keys(zsSnapshot).forEach(key => {
+                const [c, id] = zsSplitKey(key);
+                if (c === 'meta' && id === metaId) { meta = JSON.parse(zsSnapshot[key]); return; }
+                if (c !== itemC) return;
+                const raw = JSON.parse(zsSnapshot[key]);
+                try { const d = zsUnpack(raw); zsUnresolved.delete(key); if (d && d.id) byId.set(d.id, d); }
+                catch (e) {
+                    if (e !== ZS_MISSING) throw e;
+                    zsUnresolved.add(key);
+                    if (oldById.has(raw.id)) byId.set(raw.id, oldById.get(raw.id));
+                }
+            });
+            oldById.forEach((x, id) => { const key = itemC + '/' + zsId(id); if (zsPendingLocal.has(key) || (!(key in zsSnapshot) && !remoteDeleted.has(key) && !byId.has(id))) byId.set(id, x); });
+            const list = [], placed = new Set();
+            const push = id => { if (!placed.has(id) && byId.has(id)) { list.push(byId.get(id)); placed.add(id); } };
+            ((meta && meta[idsField]) || []).forEach(push);
+            (current || []).forEach(x => x && push(x.id));
+            byId.forEach((x, id) => push(id));
+            return { list, meta };
+        }
+        function zsSetting(id) { const j = zsSnapshot['settings/' + id]; return j == null ? undefined : JSON.parse(j).v; }
+        function zsUnionNames(remote, local) {
+            const out = [...remote]; const norm = s => String(s || '').trim().toLowerCase();
+            (local || []).forEach(x => { if (typeof x === 'string' && !out.some(y => norm(y) === norm(x))) out.push(x); });
+            return out;
+        }
+
+        function zsState() { return { db, pDb, pTeamCrests, pOrders, pedidosArchivo, structure, pStructure, pedidosClientes, pedidosProveedores, pedidoVersionOptions, savedAddresses, pedidosPreciosClientes }; }
+        function zsSetState(x) {
+            ({ db, pDb, pTeamCrests, pOrders, pedidosArchivo, structure, pStructure, pedidosClientes, pedidosProveedores, pedidoVersionOptions, savedAddresses, pedidosPreciosClientes } = x);
+        }
+        async function zsPersist(x, check = () => {}) {
+            for (const [key, value] of [['ninjagoal_db_v3', x.db], ['pedido_db_v1', x.pDb], ['pedido_crests_v1', x.pTeamCrests], ['pedido_orders_v2', x.pOrders], ['pedidos_archivo_v1', x.pedidosArchivo]]) { check(); await localforage.setItem(key, value); check(); }
+            for (const [key, value] of [['wishlist_structure_v2', x.structure], ['pedido_structure_v2', x.pStructure], ['pedidos_clientes_v1', x.pedidosClientes], ['pedidos_proveedores_v1', x.pedidosProveedores], ['pedido_version_opciones_v1', x.pedidoVersionOptions], ['pedidos_direcciones_v1', x.savedAddresses], ['pedidos_precios_clientes_v1', x.pedidosPreciosClientes]]) { check(); localStorage.setItem(key, JSON.stringify(value)); }
+            await localforage.setItem('settings_mirror_v1', { structure: x.structure, pStructure: x.pStructure, clientes: x.pedidosClientes, proveedores: x.pedidosProveedores, addresses: x.savedAddresses, precios: x.pedidosPreciosClientes, versionOptions: x.pedidoVersionOptions });
+        }
+        function zsPrepare(snapshot, remoteDeleted) {
+            const previous = zsSnapshot;
+            zsSnapshot = snapshot;
+            try {
+            const rows = c => Object.entries(zsSnapshot).filter(([key]) => zsSplitKey(key)[0] === c).map(([, j]) => zsUnpack(JSON.parse(j))).sort((a,b) => (a.order || 0) - (b.order || 0));
+            const clean = x => { const { order, parent, ...rest } = x; return rest; };
+            const hierarchy = prefix => rows(prefix + '_group').map(g => ({ ...clean(g), folders: rows(prefix + '_folder').filter(f => f.parent === g.groupId).map(clean), collections: rows(prefix + '_collection').filter(c => c.parent === g.groupId).map(c => ({ ...clean(c), subCols: rows(prefix + '_sub').filter(x => x.parent === c.id).map(clean) })) }));
+            const orders = kind => rows(kind).map(s => ({ ...clean(s), rows: rows(kind + '_row').filter(r => r.parent === s.id).map(clean) }));
+            const next = { ...zsState() };
+            next.db = zsRebuildStore('wl_item', 'wl_order', db, remoteDeleted);
+            next.pDb = zsRebuildStore('pl_item', 'pl_order', pDb, remoteDeleted);
+            next.pTeamCrests = Object.fromEntries(rows('crest').map(x => [x.col, x.src]));
+            next.structure = hierarchy('wl'); next.pStructure = hierarchy('pl');
+            const sheets = orders('sheet');
+            if (!sheets.length) throw new Error('La sincronización no puede dejar la aplicación sin hojas');
+            next.pOrders = { ...(zsSnapshot['meta/orders'] ? JSON.parse(zsSnapshot['meta/orders']) : {}), sheets, activeSheetId: sheets.some(s => s.id === pOrders.activeSheetId) ? pOrders.activeSheetId : sheets[0].id };
+            next.pedidosArchivo = orders('pedido');
+            next.pedidosClientes = rows('cliente').map(x => x.name);
+            next.pedidosProveedores = rows('proveedor').map(x => x.name);
+            next.pedidoVersionOptions = rows('version').map(x => x.name);
+            next.savedAddresses = rows('address').map(clean);
+            next.pedidosPreciosClientes = {};
+            rows('price').forEach(x => { (next.pedidosPreciosClientes[x.name] ||= {})[x.field] = x.value; });
+
+                return next;
+            } finally { zsSnapshot = previous; }
+        }
+        async function zsApply(domains, merge, remoteDeleted) {
+            return zsOnChange([]);
+        }
+        async function zsOnChange(changes) {
+            return zsRun(async () => {
+                if (!zsSnapshot) return;
+                const oldSnapshot = zsSnapshot;
+                const candidate = { ...oldSnapshot }, remoteDeleted = new Set();
+                for (const ch of changes) {
+                    const key = ch.collection + '/' + ch.id;
+                    if (!zsDomain(ch.collection, ch.id)) continue;
+                    if (ch.deleted || ch.data == null) { delete candidate[key]; remoteDeleted.add(key); }
+                    else candidate[key] = JSON.stringify(ch.data);
+                }
+                const need = new Set();
+                Object.values(candidate).forEach(j => zsRefs(JSON.parse(j), need));
+                await zsDownload([...need].filter(p => !zsPathToSrc.has(p)));
+                const local = zsBuildRecords(), raw = zsBuildRecords(true);
+                const effective = { ...candidate };
+                raw.records.forEach((r, key) => {
+                    const packed = local.records.get(key);
+                    if (local.skipped.has(key) || !(key in oldSnapshot) || (!zsFirstMerge && packed && packed.json !== oldSnapshot[key])) effective[key] = r.json;
+                });
+                if (!zsFirstMerge) Object.keys(oldSnapshot).forEach(key => {
+                    if (!raw.records.has(key)) delete effective[key];
+                });
+                const liveJSON = JSON.stringify(zsState()), generation = zsGeneration;
+                const next = zsPrepare(effective, remoteDeleted);
+                const unchanged = () => {
+                    if (generation !== zsGeneration || JSON.stringify(zsState()) !== liveJSON) throw new Error('Edición local durante recepción; se reintentará');
+                };
+                try {
+                    await zsPersist(next, unchanged);
+                    unchanged();
+                    await localforage.setItem('zs_wishlist_snapshot_v1', { user: zsSnapshotUser, snap: candidate });
+                    unchanged();
+                } catch (e) {
+                    try {
+                        await zsPersist(zsState());
+                        await localforage.setItem('zs_wishlist_snapshot_v1', { user: zsSnapshotUser, snap: oldSnapshot });
+                    } catch (rollbackError) { console.error('[sync] restaurar copia local', rollbackError); }
+                    throw e;
+                }
+                zsSetState(next);
+                zsSnapshot = candidate;
+                zsFirstMerge = false;
+                init(); pInit(); renderOrderSheetsBar(); renderOrderTable(); renderClientesChips(); renderProveedoresChips(); renderPedidosTab(); renderMorosos();
+                zsTouch();
+            });
+        }
+
+        async function zsBackupBeforeFirstSync() {
+            const json = JSON.stringify(buildFullBackup());
+            const key = "zs_wishlist_pre_sync_backup_v1";
+            await localforage.setItem(key, JSON.parse(json));
+            const saved = await localforage.getItem(key);
+            if (JSON.stringify(saved) !== json) throw new Error("No se pudo verificar la copia previa");
+            const downloaded = await saveFileUniversal(
+                "wishlist_copia_antes_de_sincronizar_" + new Date().toISOString().split("T")[0] + ".json",
+                new Blob([json], { type: "application/json" })
+            );
+            if (downloaded !== true) throw new Error("No se pudo descargar la copia previa");
+        }
+
+        async function zsStart() {
+            zsReady = true;
+            if (!window.ZSync) return;
+            try {
+                const s = await localforage.getItem('zs_wishlist_snapshot_v1');
+                if (s && s.snap && s.user) { zsSnapshot = s.snap; zsSnapshotUser = s.user; }
+                // Sin copia local del estado de la nube (navegador limpiado a medias): repetir la primera sincronización (unión).
+                else localStorage.removeItem('zsync:wishlist:init');
+                const ix = await localforage.getItem('zs_wishlist_images_v1');
+                if (ix && ix.hashToPath && ix.uploaded) zsImgIndex = ix;
+            } catch (e) {}
+            setInterval(() => {
+                if (!zsUnresolved.size || !zsCanSync()) return;
+                zsRun(() => zsApply(new Set([...zsUnresolved].map(zsDomainOfKey).filter(Boolean)), false, new Set()));
+            }, 60000);
+            try {
+                await ZSync.init({
+                    app: 'wishlist',
+                    beforeFirstSync: zsBackupBeforeFirstSync,
+                    collectLocal: () => zsRun(async () => {
+                        zsSnapshotUser = ZSync.user.id;
+                        zsSnapshot = {};
+                        await zsAssignIds();
+                        await zsEnsurePaths(zsAllImages());
+                        const { records } = zsBuildRecords();
+                        const snap = {}, list = [];
+                        records.forEach((r, key) => { snap[key] = r.json; list.push({ collection: r.c, id: r.id, data: r.data }); });
+                        zsSnapshot = snap; zsUnresolved.clear();
+                        // La primera sincronización de cada dispositivo une lo local con lo de la nube, nunca sustituye.
+                        zsFirstMerge = true;
+                        return list;
+                    }),
+                    onChange: zsOnChange,
+                    onStatus: s => {
+                        if (zsKicked || !ZSync.user || (s !== 'synced' && s !== 'pending')) return;
+                        if (zsSnapshotUser !== ZSync.user.id) return;
+                        zsKicked = true; zsTouch();
+                    },
+                });
+            } catch (e) { console.error('[sync] no se pudo iniciar la sincronización', e); }
+        }
+
         window.onload = async function() {
             // El espejo de ajustes se lee ANTES de que nada pueda sobrescribirlo (ver "AJUSTES" más arriba).
             let settingsMirror = null;
@@ -6962,6 +7446,7 @@
                     document.getElementById('p-lib-toggle').textContent = 'Mostrar ▾';
                 }
             } catch (e) {}
+            zsStart();
         };
     </script>
 </body>
