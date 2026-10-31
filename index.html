@@ -258,7 +258,7 @@
 
             <button onclick="pToggleOnlyTemplateView()" id="p-only-template-btn" class="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-full text-xs font-bold uppercase tracking-wide border border-sky-400/40 text-zinc-400 hover:text-sky-400 hover:border-sky-400 transition-all mb-6 cursor-pointer" title="Ver solo la plantilla de pedido, sin la biblioteca">📦 Plantilla de Pedido</button>
             <nav id="pedido-sidebar-nav" class="space-y-3 flex-1"></nav>
-            <input type="file" accept="image/*" class="hidden" id="p-crest-upload-input" onchange="handleCrestUpload(event)">
+            <input type="file" accept="image/*,.jpg,.jpeg,.jfif,.png,.webp,.gif,.bmp,.avif" class="hidden" id="p-crest-upload-input" onchange="handleCrestUpload(event)">
         </aside>
 
         <main class="flex-1 p-4 md:p-8 overflow-x-hidden relative space-y-6" id="pedido-main-drop-area">
@@ -2511,7 +2511,7 @@
             if (event) event.stopPropagation();
             if (!getModalItem()) return;
             const input = document.createElement('input');
-            input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+            input.type = 'file'; input.accept = 'image/*,.jpg,.jpeg,.jfif,.png,.webp,.gif,.bmp,.avif'; input.multiple = true;
             input.onchange = () => addRelatedFromFiles(input.files);
             input.click();
         };
@@ -2954,7 +2954,7 @@
             if (dz) {
                 dz.addEventListener('click', () => {
                     const input = document.createElement('input');
-                    input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+                    input.type = 'file'; input.accept = 'image/*,.jpg,.jpeg,.jfif,.png,.webp,.gif,.bmp,.avif'; input.multiple = true;
                     input.onchange = () => handleFiles(input.files, subId);
                     input.click();
                 });
@@ -3000,7 +3000,7 @@
             if (dz) {
                 dz.addEventListener('click', () => { 
                     const input = document.createElement('input'); 
-                    input.type = 'file'; input.accept = 'image/*'; input.multiple = true; 
+                    input.type = 'file'; input.accept = 'image/*,.jpg,.jpeg,.jfif,.png,.webp,.gif,.bmp,.avif'; input.multiple = true;
                     input.onchange = () => handleFiles(input.files, colId); 
                     input.click(); 
                 });
@@ -4068,7 +4068,7 @@
             const dz = document.getElementById('p-dropzone-' + subId);
             if (!box) return;
             if (dz) dz.addEventListener('click', () => {
-                const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+                const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*,.jpg,.jpeg,.jfif,.png,.webp,.gif,.bmp,.avif'; input.multiple = true;
                 input.onchange = () => pHandleFiles(input.files, subId); input.click();
             });
             ['dragenter', 'dragover'].forEach(n => box.addEventListener(n, e => {
@@ -4085,7 +4085,7 @@
         function initPedidoStaticListeners() {
             const dz = document.getElementById('p-dropzone');
             dz.addEventListener('click', () => {
-                const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+                const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/*,.jpg,.jpeg,.jfif,.png,.webp,.gif,.bmp,.avif'; input.multiple = true;
                 input.onchange = () => pHandleFiles(input.files, pCurrentView); input.click();
             });
             const area = document.getElementById('pedido-main-drop-area');
@@ -6710,7 +6710,7 @@
         window.pickShipPhoto = function(which) {
             shipModalPasteTarget = which;
             const input = document.createElement('input');
-            input.type = 'file'; input.accept = 'image/*';
+            input.type = 'file'; input.accept = 'image/*,.jpg,.jpeg,.jfif,.png,.webp,.gif,.bmp,.avif';
             input.onchange = async () => {
                 const file = input.files && input.files[0];
                 if (!file) return;
