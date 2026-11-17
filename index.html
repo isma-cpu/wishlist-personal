@@ -301,6 +301,7 @@
                         </div>
                         <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
                         <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
+                        <button onclick="addPatchColumn(event)" class="px-3 py-1.5 border border-amber-400 bg-amber-50 text-amber-700 text-[11px] font-bold uppercase rounded-full hover:bg-amber-400 hover:text-black transition-colors cursor-pointer" title="Añadir una columna de parche (imagen) - como la de 'Nombre y Número', pero para parches">🛡️ Parche</button>
                         <button onclick="openTransferRowsModal()" title="Traspasar filas a otra hoja (sin precios)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">🔁 Traspasar</button>
                         <button onclick="openPreciosClienteModal(event)" title="Tabla de precios por cliente" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-white text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors cursor-pointer text-lg">💰</button>
                         <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
@@ -1334,13 +1335,13 @@
             // (esa usa currentView, que es de la OTRA pestaña y aquí daría un resultado incorrecto).
             const pedidoViewVisible = !document.getElementById('view-pedido').classList.contains('hidden');
             if (pedidoViewVisible) {
-                if (selectedImgCell && (selectedImgCell.field === 'img' || selectedImgCell.field === 'patch')) {
+                if (selectedImgCell && (selectedImgCell.field === 'img' || selectedImgCell.field === 'patch' || isCustomPatchCol(selectedImgCell.field))) {
                     const dt = e.clipboardData || e.originalEvent.clipboardData;
                     const sheet = activeSheet();
                     const row = sheet && sheet.rows.find(r => r.id === selectedImgCell.rowId);
                     const field = selectedImgCell.field;
                     if (row) {
-                        const cellEl = document.getElementById('cell-' + field + '-' + row.id);
+                        const cellEl = orderImgCellEl(field, row.id);
                         const cbItems = dt.items;
                         const files = [];
                         for (let k in cbItems) {
@@ -1350,8 +1351,8 @@
                             e.preventDefault();
                             fileToResizedDataURL(files[0]).then(src => {
                                 pushOrderUndoSnapshot();
-                                row[field] = src; savePOrders();
-                                if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+                                orderImgSet(row, field, src); savePOrders();
+                                if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field, orderImgGet(row, field));
                             }).catch(() => {});
                         } else {
                             const urls = extractImageUrls(dt);
@@ -1362,14 +1363,49 @@
                                     if (f) {
                                         const src = await fileToResizedDataURL(f);
                                         pushOrderUndoSnapshot();
-                                        row[field] = src; savePOrders();
-                                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+                                        orderImgSet(row, field, src); savePOrders();
+                                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field, orderImgGet(row, field));
                                     } else {
                                         alert('No se pudo cargar la imagen pegada (el sitio de origen la bloquea). Prueba a arrastrarla desde el ordenador, o descárgala y pégala de nuevo.');
                                     }
                                 })();
                             }
                         }
+                    }
+                }
+                // No hay celda de foto/parche seleccionada: pegar en la colección de biblioteca activa, si está
+                // a la vista (el usuario la quiere rellenar rápido con Ctrl+V en vez de arrastrar una a una).
+                const libraryVisible = !document.getElementById('pedido-library-section').classList.contains('hidden');
+                if (libraryVisible && pCurrentView) {
+                    const dt = e.clipboardData || e.originalEvent.clipboardData;
+                    const cbItems = dt.items;
+                    const libFiles = [];
+                    for (let k in cbItems) {
+                        if (cbItems[k].kind === 'file' && cbItems[k].type.startsWith('image/')) libFiles.push(cbItems[k].getAsFile());
+                    }
+                    if (libFiles.length) {
+                        e.preventDefault();
+                        pHandleFiles(libFiles, pCurrentView);
+                        pRefreshLibraryViewAfterPaste();
+                        return;
+                    }
+                    const libUrls = extractImageUrls(dt);
+                    if (libUrls.length) {
+                        e.preventDefault();
+                        (async () => {
+                            let ok = false;
+                            for (const u of libUrls) {
+                                if (u.startsWith('data:image/')) {
+                                    try { const b = await (await fetch(u)).blob(); pHandleFiles([new File([b], 'img', { type: b.type })], pCurrentView); ok = true; } catch (err) {}
+                                } else {
+                                    const f = await urlToImageFile(u);
+                                    if (f) { pHandleFiles([f], pCurrentView); ok = true; }
+                                }
+                            }
+                            pRefreshLibraryViewAfterPaste();
+                            if (!ok) alert('No se pudo cargar la imagen pegada (el sitio de origen la bloquea). Descárgala y pégala de nuevo.');
+                        })();
+                        return;
                     }
                 }
                 return;
@@ -4110,6 +4146,13 @@
                 }).catch(() => {});
             });
         }
+        // Tras pegar imágenes en la biblioteca (Ctrl+V), las fotos se añaden de forma asíncrona; refresco la
+        // colección activa y las insignias de la barra lateral en un fotograma posterior para que se vean ya.
+        function pRefreshLibraryViewAfterPaste() {
+            requestAnimationFrame(() => {
+                try { pRenderLibraryBody(); pRenderSidebarBadges(); } catch (err) {}
+            });
+        }
 
         async function pAddDroppedImages(dt, colId) {
             if (!colId) return false;
@@ -4689,7 +4732,7 @@
         // Columnas fijas + columnas personalizadas de la hoja, en un solo orden (aplica sheet.colOrder si el usuario ha arrastrado alguna),
         // y sin las que el usuario haya quitado de esta hoja (sheet.hiddenColumns).
         function getOrderedColumns(sheet) {
-            const all = getOrderColumns(sheet).concat((sheet.customColumns || []).map(c => ({ key: c.id, es: c.label, type: 'custom', w: c.w || 100, isCustom: true })));
+            const all = getOrderColumns(sheet).concat((sheet.customColumns || []).map(c => ({ key: c.id, es: c.label, type: c.kind === 'patch' ? 'patch' : 'custom', kind: c.kind, w: c.w || 100, isCustom: true })));
             let ordered;
             if (Array.isArray(sheet.colOrder) && sheet.colOrder.length) {
                 const map = new Map(all.map(c => [c.key, c]));
@@ -4871,6 +4914,7 @@
                 <button onclick="duplicateOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">📄 Duplicar</button>
                 <button onclick="clearOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-amber-50 text-amber-600">🧹 Limpiar hoja</button>
                 <button onclick="toggleSheetSplitNameNumber('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">${s.splitNameNumber ? '🔗 Combinar nombre y número' : '🔀 Separar nombre y número'}</button>
+                <button onclick="addPatchColumn(event)" class="px-3 py-1.5 text-left text-xs hover:bg-amber-50 text-amber-600">🛡️ Añadir columna de parche</button>
                 <button onclick="moveOrderSheet('${s.id}', -1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
                 <button onclick="moveOrderSheet('${s.id}', 1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === pOrders.sheets.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
                 ${pOrders.sheets.length > 1 ? `<button onclick="deleteOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-red-50 text-red-600">✕ Eliminar</button>` : ''}`;
@@ -5069,6 +5113,23 @@
             activeSheet().customColumns.push({ id: 'col-' + Date.now(), label: name });
             savePOrders(); renderOrderTable();
         }
+        // Añadir una columna de PARCHES (como "Nombre y Número", pero para parches): una columna extra con
+        // recuadro de imagen, la misma celda de foto/parche que la columna fija, pero con su propio nombre.
+        // Cada parche se guarda en row.custom[colId] (no en row.patch, que es el parche fijo) - así se pueden
+        // tener 2, 3 o más parches por producto sin pisarse. Se muestra/oculta/elimina como el resto de
+        // columnas; se renombra con doble clic en la cabecera. Un solo botón, sin diálogos: la 1ª que añades
+        // es "Parche 2", la 2ª "Parche 3", etc.
+        window.addPatchColumn = function(event) {
+            if (event) event.stopPropagation();
+            pushOrderUndoSnapshot();
+            const sheet = activeSheet();
+            const nPatches = sheet.customColumns.filter(c => c.kind === 'patch').length;
+            const label = nPatches ? 'Parche ' + (nPatches + 2) : 'Parche 2';
+            const id = 'pc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+            sheet.customColumns.push({ id, label, kind: 'patch', w: 90 });
+            sheet.rows.forEach(r => { if (!r.custom) r.custom = {}; });
+            savePOrders(); renderOrderTable();
+        };
         window.deleteOrderColumn = function(colId) {
             openConfirmDelete('¿Eliminar esta columna? Se perderá el texto que hayas escrito en ella para todas las filas.', () => {
                 pushOrderUndoSnapshot();
@@ -5133,6 +5194,8 @@
         let selectedImgCell = null; // { rowId, field } de la última celda NO focuseable pulsada (imagen/parche/precio)
         function cellElementFor(rowId, field) {
             if (field === 'priceTotal') return document.getElementById('cell-pricetotal');
+            // Las celdas de parche personalizado se llaman 'cell-patch-<colId>-<rowId>', no 'cell-<colId>-<rowId>'.
+            if (field && isCustomPatchCol(field)) return document.getElementById('cell-patch-' + field + '-' + rowId);
             return document.getElementById('cell-' + field + '-' + rowId);
         }
         window.setSelectedImgCell = function(rowId, field) {
@@ -5373,45 +5436,67 @@
         };
 
         // --- Foto del producto y del parche (el parche puede ser texto libre O una imagen) ---
-        function renderImgCellInner(row, field) {
+        // `src` es opcional: por defecto se lee de row[field], pero una columna de parche personalizada
+        // almacena su imagen en row.custom[colId], así que se pasa explícitamente.
+        // `label` es opcional: el texto del recuadro vacío (para columnas de parche con nombre propio).
+        // `colId` es opcional: cuando es una columna de parche personalizada, indica dónde guardar la imagen
+        // (row.custom[colId]) en vez de en row.patch - así el drop/paste saben a qué columna tocar.
+        function renderImgCellInner(row, field, src, label, colId) {
             field = field || 'img';
-            const src = row[field];
+            if (src == null) src = orderRowImgSource(row, field, colId);
+            // `selField` es lo que se pasa a setSelectedImgCell: el nombre de la columna de parche
+            // personalizado (colId) si la hay, o 'patch'/'img' si no. Así el paste/deshacer/rotar saben
+            // si tocar row[field] o row.custom[colId].
+            const selField = colId || field;
             // La caja se ajusta a la altura real de la fila (menos el padding de la celda) para que la imagen
             // crezca/encoja con ella en vez de quedar fija y dejar márgenes en blanco al agrandar la fila.
             const boxH = Math.max(28, (row.height || ORDER_ROW_DEFAULT_HEIGHT) - 8);
             const boxStyle = `style="height:${boxH}px"`;
+            const isPatch = field === 'patch';
             if (src && src.startsWith('data:image')) {
-                return `<div class="relative group w-full mx-auto" onclick="setSelectedImgCell('${row.id}','${field}')" ${boxStyle}>
+                return `<div class="relative group w-full mx-auto" onclick="setSelectedImgCell('${row.id}','${selField}')" ${boxStyle}>
                     <img src="${src}" class="w-full h-full object-contain mx-auto">
-                    <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${field}')" title="Quitar foto" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
+                    <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${selField}')" title="Quitar foto" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
                     <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
-                        <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','${field}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
-                        <button onclick="event.stopPropagation(); rotateOrderRowImage('${row.id}','${field}')" title="Girar 90°" class="w-6 h-6 bg-white/90 rounded-full text-[13px] flex items-center justify-center">↻</button>
+                        <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','${field}','${colId || ''}')" title="Cambiar" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                        <button onclick="event.stopPropagation(); rotateOrderRowImage('${row.id}','${selField}')" title="Girar 90°" class="w-6 h-6 bg-white/90 rounded-full text-[13px] flex items-center justify-center">↻</button>
                     </div>
                 </div>`;
             }
-            if (field === 'patch') {
+            if (isPatch) {
                 if (src) {
-                    // Parche antiguo guardado como texto libre (antes de que los parches fueran siempre imagen) - se conserva visible.
-                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" onclick="setSelectedImgCell('${row.id}','patch')" ${boxStyle}>
+                    // Parche guardado como texto libre - se conserva visible.
+                    return `<div class="relative group w-full mx-auto flex items-center justify-center text-center px-1" onclick="setSelectedImgCell('${row.id}','${selField}')" ${boxStyle}>
                         <span class="cell-text text-gray-700 break-words leading-tight">${escapeHtml(src)}</span>
-                        <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','patch')" title="Quitar" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
+                        <button onclick="event.stopPropagation(); clearOrderRowImage('${row.id}','${selField}')" title="Quitar" class="del-x-btn del-x-btn-sm absolute top-0.5 right-0.5 print:hidden">✕</button>
                         <div class="absolute inset-0 hidden group-hover:flex print:hidden items-center justify-center bg-black/40 rounded-2xl gap-1">
-                            <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
+                            <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch','${colId || ''}')" title="Cambiar por imagen" class="w-6 h-6 bg-white/90 rounded-full text-[11px] flex items-center justify-center">🔄</button>
                         </div>
                     </div>`;
                 }
                 // El recuadro entero SOLO selecciona la celda (para poder pegar con Ctrl+V sin que salte el
                 // selector); el botón "＋" pequeño de dentro es el único que abre la biblioteca de fotos.
-                return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'patch')" onclick="setSelectedImgCell('${row.id}','patch')" ${boxStyle}
+                // `label` es el texto del recuadro vacío (para columnas de parche con nombre propio).
+                const patchLabel = (label || 'Parche').slice(0, 12);
+                return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', '${selField}')" onclick="setSelectedImgCell('${row.id}','${selField}')" ${boxStyle}
                         class="w-full mx-auto border border-dashed border-amber-300 rounded-2xl flex flex-col items-center justify-center text-amber-400 hover:border-amber-500 hover:text-amber-600 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
-                        <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch')" title="Elegir de la biblioteca" class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform">＋</button>Parche
+                        <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','patch','${colId || ''}')" title="Elegir de la biblioteca" class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform">＋</button>${patchLabel}
                     </div>`;
             }
-            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', 'img')" onclick="setSelectedImgCell('${row.id}','img')" ${boxStyle}
+            return `<div ondragover="orderCellDragOver(event)" ondragleave="orderCellDragLeave(event)" ondrop="handleOrderImageDrop(event, '${row.id}', '${selField}')" onclick="setSelectedImgCell('${row.id}','${selField}')" ${boxStyle}
                     class="w-full mx-auto border border-dashed border-gray-300 rounded-2xl flex flex-col items-center justify-center text-gray-300 hover:border-sky-400 hover:text-sky-500 cursor-pointer text-[9px] text-center leading-tight transition-colors print:hidden">
-                    <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','img')" title="Elegir de la biblioteca" class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform">＋</button>Foto
+                    <button onclick="event.stopPropagation(); openLibraryPicker('${row.id}','img','${colId || ''}')" title="Elegir de la biblioteca" class="text-lg leading-none cursor-pointer hover:scale-110 transition-transform">＋</button>Foto
                 </div>`;
+        }
+        // Leer/escribir la imagen de una celda de foto/parche. Para columnas de parche personalizados
+        // (colId) vive en row.custom[colId]; para las fijas ('img'/'patch'), en row[field].
+        function orderRowImgSource(row, field, colId) {
+            if (colId) return (row.custom ? row.custom[colId] : '') || '';
+            return row[field] || '';
+        }
+        function setOrderRowImgSource(row, field, colId, val) {
+            if (colId) { if (!row.custom) row.custom = {}; row.custom[colId] = val; }
+            else row[field] = val;
         }
 
         function renderAddrCellInner(sheet, readOnly) {
@@ -5450,9 +5535,14 @@
             const priceCell = `<span id="cell-price-${row.id}" onclick="setSelectedImgCell('${row.id}','price')" class="cell-text text-gray-900 cursor-pointer w-full h-full flex items-center justify-center">${formatMoney(computeRowPrice(row))}</span>`;
 
             const tds = getOrderedColumns(sheet).map(c => {
-                if (c.isCustom) return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">
+                if (c.isCustom) {
+                    // Columna de parche personalizada: celda de imagen (mismo motor que el parche fijo), pero
+                    // con su propio nombre en el recuadro vacío y guardada en row.custom[colId].
+                    if (c.kind === 'patch') return `<td id="cell-patch-${c.key}-${row.id}" class="border-b border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'patch', row.custom ? row.custom[c.key] : null, c.label, c.key)}</td>`;
+                    return `<td${cellHStyle} class="border-b border-b-black p-1 align-middle text-center">
                         <input type="text" value="${escAttr(row.custom[c.key] || '')}" oninput="updateOrderCustomField('${row.id}','${c.key}',this.value)" onfocus="clearSelectedImgCell()" data-cell-row="${row.id}" data-cell-field="${c.key}" data-cell-custom="1" class="cell-text w-full h-full min-w-[4rem] text-center bg-transparent border-0 focus:ring-2 focus:ring-sky-400 rounded-xl px-1 text-gray-900 print:border-0">
                     </td>`;
+                }
                 if (c.key === 'version') return `<td id="cell-version-${row.id}"${cellHStyle} class="border-b border-b-black p-1 align-middle text-center relative">${renderVersionCellInner(row)}</td>`;
                 if (c.key === 'img') return `<td id="cell-img-${row.id}" class="border-b border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'img')}</td>`;
                 if (c.key === 'patch') return `<td id="cell-patch-${row.id}" class="border-b border-b-black p-1 align-middle text-center">${renderImgCellInner(row, 'patch')}</td>`;
@@ -5620,6 +5710,12 @@
                 if (imgCell) imgCell.innerHTML = renderImgCellInner(row, 'img');
                 const patchCell = document.getElementById('cell-patch-' + row.id);
                 if (patchCell) patchCell.innerHTML = renderImgCellInner(row, 'patch');
+                // Columnas de parche personalizados: su caja de imagen también crece con la fila.
+                (activeSheet().customColumns || []).forEach(c => {
+                    if (c.kind !== 'patch') return;
+                    const cell = document.getElementById('cell-patch-' + c.id + '-' + row.id);
+                    if (cell) cell.innerHTML = renderImgCellInner(row, 'patch', row.custom ? row.custom[c.id] : null, c.label, c.id);
+                });
             }
         }
         function onRowResizeUp(e) {
@@ -5639,18 +5735,39 @@
             field = field || 'img';
             const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
             pushOrderUndoSnapshot();
-            row[field] = ''; savePOrders();
-            const cell = document.getElementById('cell-' + field + '-' + rowId);
-            if (cell) cell.innerHTML = renderImgCellInner(row, field);
+            orderImgSet(row, field, ''); savePOrders();
+            const cell = orderImgCellEl(field, rowId);
+            if (cell) cell.innerHTML = renderImgCellInner(row, field, orderImgGet(row, field));
         };
+        // Helpers para celdas de foto/parche: las columnas de parche personalizados guardan su imagen en
+        // row.custom[colId] y su celda se llama 'cell-patch-<colId>-<rowId>', no 'cell-<colId>-<rowId>'.
+        function orderImgGet(row, field) {
+            return isCustomPatchCol(field) ? (row.custom ? row.custom[field] : '') : (row[field] || '');
+        }
+        function orderImgSet(row, field, val) {
+            if (isCustomPatchCol(field)) { if (!row.custom) row.custom = {}; row.custom[field] = val; }
+            else row[field] = val;
+        }
+        function orderImgCellEl(field, rowId) {
+            return isCustomPatchCol(field)
+                ? document.getElementById('cell-patch-' + field + '-' + rowId)
+                : document.getElementById('cell-' + field + '-' + rowId);
+        }
+        // ¿Es `field` una columna de parche personalizada (kind: 'patch') de la hoja activa?
+        function isCustomPatchCol(field) {
+            if (!field) return false;
+            const sheet = activeSheet();
+            return !!(sheet && (sheet.customColumns || []).some(c => c.id === field && c.kind === 'patch'));
+        }
         // Gira 90° la foto de producto/parche de una fila - a veces llega vertical cuando debería verse en
         // horizontal (o al revés). Gira la imagen DE VERDAD (redibujada en un canvas), no solo con CSS, para que
         // el giro se vea igual en cualquier sitio donde se use esa foto (la propia celda, el PDF, "Ver"...).
         window.rotateOrderRowImage = function(rowId, field) {
             field = field || 'img';
             const row = activeSheet().rows.find(r => r.id === rowId);
-            if (!row || !row[field] || !row[field].startsWith('data:image')) return;
-            const mimeMatch = row[field].match(/^data:(image\/[a-z]+);/);
+            const cur = orderImgGet(row, field);
+            if (!row || !cur || !cur.startsWith('data:image')) return;
+            const mimeMatch = cur.match(/^data:(image\/[a-z]+);/);
             const mime = (mimeMatch && mimeMatch[1]) || 'image/jpeg';
             pushOrderUndoSnapshot();
             const img = new Image();
@@ -5662,12 +5779,12 @@
                 ctx.translate(canvas.width / 2, canvas.height / 2);
                 ctx.rotate(Math.PI / 2);
                 ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-                row[field] = mime === 'image/jpeg' ? canvas.toDataURL(mime, 0.9) : canvas.toDataURL(mime);
+                orderImgSet(row, field, mime === 'image/jpeg' ? canvas.toDataURL(mime, 0.9) : canvas.toDataURL(mime));
                 savePOrders();
-                const cell = document.getElementById('cell-' + field + '-' + rowId);
-                if (cell) cell.innerHTML = renderImgCellInner(row, field);
+                const cell = orderImgCellEl(field, rowId);
+                if (cell) cell.innerHTML = renderImgCellInner(row, field, orderImgGet(row, field));
             };
-            img.src = row[field];
+            img.src = cur;
         };
 
         window.orderCellDragOver = function(e) { if (dtHasDroppableImage(e.dataTransfer) || libraryDragSrc) { e.preventDefault(); e.currentTarget.classList.add('ring-2', 'ring-sky-400'); } };
@@ -5675,22 +5792,22 @@
         window.handleOrderImageDrop = function(e, rowId, field) {
             field = field || 'img';
             e.preventDefault(); e.stopPropagation();
-            const cellEl = document.getElementById('cell-' + field + '-' + rowId);
+            const cellEl = orderImgCellEl(field, rowId);
             if (cellEl) cellEl.querySelectorAll('.ring-2').forEach(el => el.classList.remove('ring-2', 'ring-sky-400'));
             const row = activeSheet().rows.find(r => r.id === rowId); if (!row) return;
 
             if (libraryDragSrc) {
                 pushOrderUndoSnapshot();
-                row[field] = libraryDragSrc.src; libraryDragSrc = null;
+                orderImgSet(row, field, libraryDragSrc.src); libraryDragSrc = null;
                 savePOrders();
-                if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+                if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field, orderImgGet(row, field));
                 return;
             }
             if (e.dataTransfer.files && e.dataTransfer.files.length) {
                 fileToResizedDataURL(e.dataTransfer.files[0]).then(src => {
                     pushOrderUndoSnapshot();
-                    row[field] = src; savePOrders();
-                    if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+                    orderImgSet(row, field, src); savePOrders();
+                    if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field, orderImgGet(row, field));
                 }).catch(() => {});
                 return;
             }
@@ -5701,8 +5818,8 @@
                     if (f) {
                         const src = await fileToResizedDataURL(f);
                         pushOrderUndoSnapshot();
-                        row[field] = src; savePOrders();
-                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field);
+                        orderImgSet(row, field, src); savePOrders();
+                        if (cellEl) cellEl.innerHTML = renderImgCellInner(row, field, orderImgGet(row, field));
                     } else {
                         alert('No se pudo cargar la imagen arrastrada (el sitio de origen la bloquea). Prueba a elegirla desde la biblioteca (📚) o arrástrala desde el ordenador.');
                     }
@@ -5735,10 +5852,12 @@
             }));
             return html;
         }
-        window.openLibraryPicker = function(rowId, field) {
+        let pickerTargetPatchCol = null; // id de la columna de parche personalizada (customColumns), null si es el parche fijo
+        window.openLibraryPicker = function(rowId, field, patchCol) {
             pickerMode = 'order-row';
             pickerTargetRow = rowId;
             pickerTargetField = field || 'img';
+            pickerTargetPatchCol = patchCol || null;
             pickerImages = [];
             const isPatchField = pickerTargetField === 'patch';
             const body = document.getElementById('lib-picker-body');
@@ -5764,7 +5883,7 @@
             closeLibraryPicker();
             openInput('patch', colId, index, null);
         };
-        window.closeLibraryPicker = function() { document.getElementById('lib-picker-modal').classList.add('hidden'); pickerTargetRow = null; pickerMode = 'order-row'; };
+        window.closeLibraryPicker = function() { document.getElementById('lib-picker-modal').classList.add('hidden'); pickerTargetRow = null; pickerTargetPatchCol = null; pickerMode = 'order-row'; };
         window.pickLibraryImage = function(i) {
             if (pickerMode === 'wishlist-patch') {
                 const { colId, index } = wishlistPatchTarget;
@@ -5787,10 +5906,13 @@
             const row = activeSheet().rows.find(r => r.id === pickerTargetRow);
             if (row && pickerImages[i] != null) {
                 pushOrderUndoSnapshot();
-                row[pickerTargetField] = pickerImages[i]; savePOrders();
-                const cell = document.getElementById('cell-' + pickerTargetField + '-' + row.id);
-                if (cell) cell.innerHTML = renderImgCellInner(row, pickerTargetField);
+                orderImgSet(row, pickerTargetField, pickerImages[i]); savePOrders();
+                const cell = pickerTargetPatchCol
+                    ? document.getElementById('cell-patch-' + pickerTargetPatchCol + '-' + row.id)
+                    : document.getElementById('cell-' + pickerTargetField + '-' + row.id);
+                if (cell) cell.innerHTML = renderImgCellInner(row, pickerTargetField, orderImgGet(row, pickerTargetField));
             }
+            pickerTargetPatchCol = null;
             closeLibraryPicker();
         };
 
