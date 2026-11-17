@@ -301,7 +301,6 @@
                         </div>
                         <button onclick="addOrderRow()" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Fila</button>
                         <button onclick="openInput('add-order-column', null, null, event)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">➕ Columna</button>
-                        <button onclick="addPatchColumn(event)" class="px-3 py-1.5 border border-amber-400 bg-amber-50 text-amber-700 text-[11px] font-bold uppercase rounded-full hover:bg-amber-400 hover:text-black transition-colors cursor-pointer" title="Añadir una columna de parche (imagen) - como la de 'Nombre y Número', pero para parches">🛡️ Parche</button>
                         <button onclick="openTransferRowsModal()" title="Traspasar filas a otra hoja (sin precios)" class="px-3 py-1.5 border border-gray-300 bg-white text-gray-700 text-[11px] font-bold uppercase rounded-full hover:border-black hover:text-black transition-colors cursor-pointer">🔁 Traspasar</button>
                         <button onclick="openPreciosClienteModal(event)" title="Tabla de precios por cliente" class="w-9 h-9 flex items-center justify-center border border-emerald-600 bg-white text-emerald-600 rounded-full hover:bg-emerald-50 transition-colors cursor-pointer text-lg">💰</button>
                         <button onclick="printOrder(event)" title="Descargar PDF" class="w-9 h-9 flex items-center justify-center border border-sky-600 bg-sky-600 rounded-full hover:bg-sky-500 transition-colors cursor-pointer text-lg">🖨️</button>
@@ -4914,7 +4913,6 @@
                 <button onclick="duplicateOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">📄 Duplicar</button>
                 <button onclick="clearOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-amber-50 text-amber-600">🧹 Limpiar hoja</button>
                 <button onclick="toggleSheetSplitNameNumber('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700">${s.splitNameNumber ? '🔗 Combinar nombre y número' : '🔀 Separar nombre y número'}</button>
-                <button onclick="addPatchColumn(event)" class="px-3 py-1.5 text-left text-xs hover:bg-amber-50 text-amber-600">🛡️ Añadir columna de parche</button>
                 <button onclick="moveOrderSheet('${s.id}', -1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === 0 ? 'opacity-30 pointer-events-none' : ''}">◀ Mover a la izquierda</button>
                 <button onclick="moveOrderSheet('${s.id}', 1, event)" class="px-3 py-1.5 text-left text-xs hover:bg-gray-100 text-gray-700 ${si === pOrders.sheets.length - 1 ? 'opacity-30 pointer-events-none' : ''}">▶ Mover a la derecha</button>
                 ${pOrders.sheets.length > 1 ? `<button onclick="deleteOrderSheet('${s.id}', event)" class="px-3 py-1.5 text-left text-xs hover:bg-red-50 text-red-600">✕ Eliminar</button>` : ''}`;
@@ -5117,16 +5115,24 @@
         // recuadro de imagen, la misma celda de foto/parche que la columna fija, pero con su propio nombre.
         // Cada parche se guarda en row.custom[colId] (no en row.patch, que es el parche fijo) - así se pueden
         // tener 2, 3 o más parches por producto sin pisarse. Se muestra/oculta/elimina como el resto de
-        // columnas; se renombra con doble clic en la cabecera. Un solo botón, sin diálogos: la 1ª que añades
-        // es "Parche 2", la 2ª "Parche 3", etc.
+        // columnas; se renombra con doble clic en la cabecera. El botón vive en la propia columna de "Parche"
+        // (como el "Separar nombre y número"). La columna nueva queda JUSTO AL LADO de la de parche, y con el
+        // mismo título (en el idioma del estilo de la hoja) + el número: "Parche 2", "Parche 3"… o "补丁 2".
         window.addPatchColumn = function(event) {
             if (event) event.stopPropagation();
             pushOrderUndoSnapshot();
             const sheet = activeSheet();
             const nPatches = sheet.customColumns.filter(c => c.kind === 'patch').length;
-            const label = nPatches ? 'Parche ' + (nPatches + 2) : 'Parche 2';
+            const num = nPatches + 2; // la fija es la "1ª"
+            const base = sheet.style === 'es' ? 'Parche' : '补丁';
+            const label = base + ' ' + num;
             const id = 'pc-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
             sheet.customColumns.push({ id, label, kind: 'patch', w: 90 });
+            // Colocar la columna nueva justo después de la columna fija de "Parche" (no al final).
+            const keys = getOrderedColumns(sheet).map(c => c.key).filter(k => k !== id);
+            const patchIdx = keys.indexOf('patch');
+            keys.splice(patchIdx === -1 ? keys.length : patchIdx + 1, 0, id);
+            sheet.colOrder = keys;
             sheet.rows.forEach(r => { if (!r.custom) r.custom = {}; });
             savePOrders(); renderOrderTable();
         };
@@ -5598,6 +5604,7 @@
                     <span draggable="true" ondragstart="colDragStart(event, '${c.key}')" class="absolute top-0.5 left-0.5 text-[10px] cursor-grab select-none opacity-60 print:hidden" title="Arrastra para reordenar la columna">⠿</span>
                     <button onclick="event.stopPropagation(); ${c.isCustom ? `deleteOrderColumn('${c.key}')` : `hideOrderColumn('${c.key}')`}" class="del-x-btn del-x-btn-sm opacity-0 group-hover:opacity-100 transition-opacity print:hidden absolute top-0.5 right-0.5" title="${c.isCustom ? 'Eliminar columna' : 'Quitar columna'}">✕</button>
                     ${(c.key === 'nameNumber' || c.key === 'name' || c.key === 'number') ? `<button onclick="event.stopPropagation(); toggleSheetSplitNameNumber('${sheet.id}', event)" class="absolute bottom-0.5 left-0.5 text-[9px] opacity-50 hover:opacity-100 print:hidden" title="${sheet.splitNameNumber ? 'Combinar nombre y número en 1 columna' : 'Separar nombre y número en 2 columnas'}">🔀</button>` : ''}
+                    ${c.key === 'patch' ? `<button onclick="event.stopPropagation(); addPatchColumn(event)" class="absolute bottom-0.5 right-0.5 text-[9px] opacity-50 hover:opacity-100 print:hidden" title="Añadir otra columna de parche (justo al lado, con el mismo título + número)">🛡️＋</button>` : ''}
                     ${c.isCustom ? `
                         <span class="font-bold ${headerText} text-sm uppercase">${escapeHtml(c.es)}</span>` : `
                         <div ondblclick="event.stopPropagation(); openInput('rename-order-column-zh', '${c.key}', 'builtin', event)" title="Doble clic para editar el texto en chino" class="${es ? headerZh + ' text-[10px]' : `font-bold ${headerText} text-sm`} leading-none mb-0.5 cursor-text">${c.zh || ''}</div>
